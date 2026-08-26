@@ -45,7 +45,7 @@ export default async function MenuGuestPage({ params, searchParams }: PageProps)
     redirect(`/menu/invalid?reason=expired_session`)
   }
 
-  // 3. Cargar datos del restaurante y menú
+  // 3. Cargar datos del restaurante y menú (incluyendo PDF y hotspots)
   const restaurant = await prisma.restaurant.findUnique({
     where: { slug: restaurantSlug, isActive: true },
     include: {
@@ -63,6 +63,19 @@ export default async function MenuGuestPage({ params, searchParams }: PageProps)
             },
           },
         },
+      },
+      hotspots: {
+        include: {
+          product: {
+            include: {
+              modifierGroups: {
+                include: { options: true },
+              },
+              ingredients: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'asc' },
       },
     },
   })
@@ -103,6 +116,42 @@ export default async function MenuGuestPage({ params, searchParams }: PageProps)
     })),
   }))
 
+  // Serializar hotspots del PDF
+  const pdfHotspots = restaurant.hotspots.map((hs) => ({
+    id: hs.id,
+    page: hs.page,
+    x: hs.x,
+    y: hs.y,
+    width: hs.width,
+    height: hs.height,
+    product: {
+      id: hs.product.id,
+      name: hs.product.name,
+      description: hs.product.description,
+      basePrice: hs.product.basePrice.toNumber(),
+      imageUrl: hs.product.imageUrl,
+      modifierGroups: hs.product.modifierGroups.map((g) => ({
+        id: g.id,
+        name: g.name,
+        type: g.type as 'SINGLE_SELECT' | 'ADDON',
+        isRequired: g.isRequired,
+        minSelect: g.minSelect,
+        maxSelect: g.maxSelect,
+        options: g.options.map((o) => ({
+          id: o.id,
+          name: o.name,
+          extraPrice: o.extraPrice.toNumber(),
+          isAvailable: o.isAvailable,
+        })),
+      })),
+      ingredients: hs.product.ingredients.map((ing) => ({
+        id: ing.id,
+        name: ing.name,
+        isRemovable: ing.isRemovable,
+      })),
+    },
+  }))
+
   return (
     <MenuPage
       restaurantId={restaurant.id}
@@ -112,6 +161,8 @@ export default async function MenuGuestPage({ params, searchParams }: PageProps)
       sessionToken={token}
       currency={restaurant.currency}
       categories={categories}
+      pdfUrl={restaurant.pdfUrl ?? null}
+      pdfHotspots={pdfHotspots}
     />
   )
 }

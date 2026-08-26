@@ -54,6 +54,7 @@ model Restaurant {
   name      String
   currency  String   @default("USD")
   isActive  Boolean  @default(true)
+  pdfUrl    String?  // URL del PDF del menú subido a Vercel Blob
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -62,6 +63,7 @@ model Restaurant {
   categories Category[]
   products   Product[]
   orders     Order[]
+  hotspots   PdfHotspot[]
 
   @@map("restaurants")
 }
@@ -192,6 +194,7 @@ model Product {
   modifierGroups ModifierGroup[]
   ingredients    ProductIngredient[]
   orderItems     OrderItem[]
+  pdfHotspots    PdfHotspot[]
 
   @@map("products")
 }
@@ -299,4 +302,29 @@ model OrderItemRemovedIngredient {
 
   @@unique([orderItemId, ingredientId])
   @@map("order_item_removed_ingredients")
+}
+
+// ============================================================
+// PDF Menú Interactivo
+// ============================================================
+
+// Zona clickeable definida por el admin sobre el PDF del menú.
+// x, y, width, height son porcentajes (0.0–1.0) del tamaño de la página
+// para ser independientes de resolución de pantalla.
+model PdfHotspot {
+  id           String     @id @default(uuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  page         Int        // Página del PDF (0-indexed)
+  x            Float      // Posición X como fracción del ancho de página (0.0–1.0)
+  y            Float      // Posición Y como fracción del alto de página (0.0–1.0)
+  width        Float      // Ancho como fracción (0.0–1.0)
+  height       Float      // Alto como fracción (0.0–1.0)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([restaurantId])
+  @@map("pdf_hotspots")
 }

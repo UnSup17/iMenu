@@ -5,8 +5,8 @@ import QRCode from 'qrcode'
 import { z } from 'zod'
 
 const CreateSessionSchema = z.object({
-  restaurantId: z.string().uuid(),
-  tableId: z.string().uuid(),
+  restaurantId: z.string().min(1),
+  tableId: z.string().min(1),
   ttlSeconds: z.number().int().positive().default(7200),
 })
 

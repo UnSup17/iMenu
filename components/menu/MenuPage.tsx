@@ -5,6 +5,7 @@ import { useCartStore } from '@/store/cart-store'
 import { ProductModal, type ProductModalData } from './ProductModal'
 import { CartSheet } from './CartSheet'
 import { CallWaiterButton } from '@/components/waiter/CallWaiterButton'
+import { PdfMenuView } from './PdfMenuView'
 
 // ============================================================
 // Types
@@ -16,6 +17,16 @@ interface Category {
   products: ProductModalData[]
 }
 
+interface PdfHotspot {
+  id: string
+  page: number
+  x: number
+  y: number
+  width: number
+  height: number
+  product: ProductModalData
+}
+
 interface MenuPageProps {
   restaurantId: string
   restaurantName: string
@@ -24,7 +35,11 @@ interface MenuPageProps {
   sessionToken: string
   currency: string
   categories: Category[]
+  pdfUrl?: string | null
+  pdfHotspots?: PdfHotspot[]
 }
+
+type ViewMode = 'list' | 'pdf'
 
 // ============================================================
 // Menu Page
@@ -38,10 +53,15 @@ export function MenuPage({
   sessionToken,
   currency,
   categories,
+  pdfUrl,
+  pdfHotspots = [],
 }: MenuPageProps) {
+  const hasPdf = Boolean(pdfUrl)
+
   const [selectedProduct, setSelectedProduct] = useState<ProductModalData | null>(null)
   const [activeCategory, setActiveCategory] = useState<string>(categories[0]?.id ?? '')
   const [cartOpen, setCartOpen] = useState(false)
+  const [viewMode, setViewMode] = useState<ViewMode>(hasPdf ? 'pdf' : 'list')
 
   const totalItems = useCartStore((s) => s.getTotalItemsCount())
 
@@ -73,52 +93,97 @@ export function MenuPage({
           </button>
         </div>
 
-        {/* Category Tabs */}
-        <div className="max-w-2xl mx-auto overflow-x-auto scrollbar-none">
-          <div className="flex gap-1 px-4 pb-3">
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => setActiveCategory(cat.id)}
-                className={`flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold
-                            transition-all duration-150
-                            ${
-                              activeCategory === cat.id
-                                ? 'bg-amber-500 text-white shadow-md shadow-amber-500/30'
-                                : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                            }`}
-              >
-                {cat.name}
-              </button>
-            ))}
+        {/* Toggle PDF / Lista — solo si hay PDF configurado */}
+        {hasPdf && (
+          <div className="max-w-2xl mx-auto px-4 pb-3 flex gap-2">
+            <button
+              onClick={() => setViewMode('pdf')}
+              className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold
+                          transition-all duration-150
+                          ${viewMode === 'pdf'
+                            ? 'bg-amber-500 text-white shadow-md shadow-amber-500/30'
+                            : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                          }`}
+              aria-pressed={viewMode === 'pdf'}
+            >
+              📋 Ver Menú PDF
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold
+                          transition-all duration-150
+                          ${viewMode === 'list'
+                            ? 'bg-amber-500 text-white shadow-md shadow-amber-500/30'
+                            : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                          }`}
+              aria-pressed={viewMode === 'list'}
+            >
+              📂 Ver por Categorías
+            </button>
           </div>
-        </div>
+        )}
+
+        {/* Category Tabs — solo en modo lista */}
+        {viewMode === 'list' && (
+          <div className="max-w-2xl mx-auto overflow-x-auto scrollbar-none">
+            <div className="flex gap-1 px-4 pb-3">
+              {categories.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setActiveCategory(cat.id)}
+                  className={`flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold
+                              transition-all duration-150
+                              ${
+                                activeCategory === cat.id
+                                  ? 'bg-amber-500 text-white shadow-md shadow-amber-500/30'
+                                  : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                              }`}
+                >
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </header>
 
-      {/* ── Product Grid ── */}
-      <main className="max-w-2xl mx-auto px-4 py-4 space-y-6">
-        {categories
-          .filter((cat) => !activeCategory || cat.id === activeCategory)
-          .map((cat) => (
-            <section key={cat.id}>
-              <h2 className="text-base font-bold text-white mb-3 flex items-center gap-2">
-                <span className="w-1 h-4 bg-amber-500 rounded-full" />
-                {cat.name}
-              </h2>
+      {/* ── Vista PDF ── */}
+      {viewMode === 'pdf' && pdfUrl && (
+        <main className="max-w-2xl mx-auto px-2 py-4">
+          <PdfMenuView
+            pdfUrl={pdfUrl}
+            hotspots={pdfHotspots}
+            onSelectProduct={setSelectedProduct}
+          />
+        </main>
+      )}
 
-              <div className="grid grid-cols-1 gap-3">
-                {cat.products.map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    currency={currency}
-                    onSelect={() => setSelectedProduct(product)}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
-      </main>
+      {/* ── Vista Lista por categorías ── */}
+      {viewMode === 'list' && (
+        <main className="max-w-2xl mx-auto px-4 py-4 space-y-6">
+          {categories
+            .filter((cat) => !activeCategory || cat.id === activeCategory)
+            .map((cat) => (
+              <section key={cat.id}>
+                <h2 className="text-base font-bold text-white mb-3 flex items-center gap-2">
+                  <span className="w-1 h-4 bg-amber-500 rounded-full" />
+                  {cat.name}
+                </h2>
+
+                <div className="grid grid-cols-1 gap-3">
+                  {cat.products.map((product) => (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      currency={currency}
+                      onSelect={() => setSelectedProduct(product)}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))}
+        </main>
+      )}
 
       {/* ── Call Waiter (fixed bottom) ── */}
       <div className="fixed bottom-4 left-0 right-0 z-30 px-4 max-w-2xl mx-auto">
@@ -133,7 +198,7 @@ export function MenuPage({
       {/* Padding para el botón fijo */}
       <div className="h-20" />
 
-      {/* ── Product Modal ── */}
+      {/* ── Product Modal (compartido entre vista lista y PDF) ── */}
       {selectedProduct && (
         <ProductModal
           product={selectedProduct}

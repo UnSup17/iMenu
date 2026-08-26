@@ -9,16 +9,16 @@ const prisma = new PrismaClient()
 // ============================================================
 
 export const OrderItemSchema = z.object({
-  productId: z.string().uuid(),
+  productId: z.string().min(1),
   quantity: z.number().int().positive().max(50),
-  selectedModifierOptionIds: z.array(z.string().uuid()).default([]),
-  removedIngredientIds: z.array(z.string().uuid()).default([]),
+  selectedModifierOptionIds: z.array(z.string().min(1)).default([]),
+  removedIngredientIds: z.array(z.string().min(1)).default([]),
   notes: z.string().max(250).optional(),
 })
 
 export const CreateOrderPayloadSchema = z.object({
-  restaurantId: z.string().uuid(),
-  tableId: z.string().uuid(),
+  restaurantId: z.string().min(1),
+  tableId: z.string().min(1),
   sessionToken: z.string().min(10),
   notes: z.string().max(500).optional(),
   items: z.array(OrderItemSchema).min(1, 'El carrito no puede estar vacío'),

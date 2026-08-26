@@ -43,3 +43,6 @@ next-env.d.ts
 # Environment
 .env.local
 .env.*.local
+
+# Uploads locales (desarrollo) — en producción se usa Vercel Blob
+/public/uploads/

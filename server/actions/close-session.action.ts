@@ -4,7 +4,7 @@ import { z } from 'zod'
 
 const CloseSessionSchema = z.object({
   sessionToken: z.string().min(10),
-  restaurantId: z.string().uuid(),
+  restaurantId: z.string().min(1),
 })
 
 /**
