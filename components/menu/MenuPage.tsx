@@ -273,6 +273,7 @@ export function MenuPage({
                 tableId={tableId}
                 sessionToken={sessionToken}
                 currency={currency}
+                onClose={() => setCartOpen(false)}
               />
             </div>
           </div>
