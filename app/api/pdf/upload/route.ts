@@ -5,7 +5,7 @@ import { join } from 'path'
 
 export const runtime = 'nodejs'
 
-const USE_VERCEL_BLOB = Boolean(process.env.BLOB_READ_WRITE_TOKEN)
+const USE_VERCEL_BLOB = Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID)
 
 // ─── POST: subir PDF ──────────────────────────────────────────────────────
 export async function POST(request: Request) {
