@@ -16,6 +16,7 @@ interface CallWaiterButtonProps {
   tableNumber: number
   sessionToken: string
   cooldownSeconds?: number
+  variant?: 'full' | 'compact'
 }
 
 type CallStatus = 'IDLE' | 'CALLING' | 'WAITING_ACK' | 'ON_THE_WAY'
@@ -42,6 +43,7 @@ export function CallWaiterButton({
   tableNumber,
   sessionToken,
   cooldownSeconds = 60,
+  variant = 'full',
 }: CallWaiterButtonProps) {
   const [status, setStatus] = useState<CallStatus>('IDLE')
   const [cooldown, setCooldown] = useState<number>(0)
@@ -119,6 +121,53 @@ export function CallWaiterButton({
   }
 
   const isDisabled = cooldown > 0 || status === 'CALLING'
+ 
+  if (variant === 'compact') {
+    return (
+      <div className="relative flex flex-col items-center">
+        {/* Tooltip con info de mesero en camino */}
+        {status === 'ON_THE_WAY' && acknowledgedInfo && (
+          <div className="absolute bottom-16 bg-zinc-900 border border-emerald-500/30 text-emerald-400 text-xs py-1.5 px-3 rounded-xl shadow-lg whitespace-nowrap animate-bounce flex items-center gap-1">
+            <span>✨ {acknowledgedInfo.waiterName} en camino</span>
+            {acknowledgedInfo.estimatedMinutes ? <span className="text-[10px] text-zinc-400">({acknowledgedInfo.estimatedMinutes}m)</span> : ''}
+          </div>
+        )}
+
+        <button
+          onClick={handleCallWaiter}
+          disabled={isDisabled}
+          aria-label="Llamar al mesero"
+          className={`
+            relative w-14 h-14 rounded-2xl flex items-center justify-center
+            transition-all duration-200 shadow-lg active:scale-95 text-xl
+            ${
+              status === 'ON_THE_WAY'
+                ? 'bg-emerald-500 text-white shadow-emerald-500/20 cursor-default'
+                : isDisabled
+                  ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed shadow-none'
+                  : 'bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-700 hover:bg-zinc-850 cursor-pointer'
+            }
+          `}
+        >
+          {status === 'CALLING' && (
+            <span className="h-5 w-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+          )}
+          {status === 'IDLE' && '🛎️'}
+          {status === 'WAITING_ACK' && (
+            <span className="animate-bounce inline-block">🔔</span>
+          )}
+          {status === 'ON_THE_WAY' && '🏃‍♂️'}
+          
+          {/* Cooldown overlay */}
+          {cooldown > 0 && status !== 'ON_THE_WAY' && (
+            <span className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-2xl text-xs font-bold text-zinc-400">
+              {cooldown}s
+            </span>
+          )}
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col items-center gap-2">

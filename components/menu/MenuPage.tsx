@@ -64,84 +64,92 @@ export function MenuPage({
   const [viewMode, setViewMode] = useState<ViewMode>(hasPdf ? 'pdf' : 'list')
 
   const totalItems = useCartStore((s) => s.getTotalItemsCount())
+  const totalAmount = useCartStore((s) => s.getTotalAmount())
+
+  const formatPrice = (amount: number) =>
+    new Intl.NumberFormat('es-MX', { style: 'currency', currency }).format(amount)
 
   return (
-    <div className="min-h-dvh bg-zinc-950 text-white">
+    <div className="min-h-dvh bg-zinc-950 text-white font-sans selection:bg-amber-500/30">
 
       {/* ── Header ── */}
-      <header className="sticky top-0 z-40 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/60">
-        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-base font-bold text-white leading-tight">{restaurantName}</h1>
-            <p className="text-xs text-zinc-400">Mesa {tableNumber}</p>
+      <header className="sticky top-0 z-40 bg-zinc-950/95 backdrop-blur-md border-b border-zinc-900/80">
+        <div className="max-w-2xl mx-auto px-4 py-3.5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 font-bold text-sm">
+              {restaurantName.charAt(0)}
+            </div>
+            <div>
+              <h1 className="text-sm sm:text-base font-black text-zinc-100 tracking-tight leading-tight">{restaurantName}</h1>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Mesa {tableNumber}</span>
+              </div>
+            </div>
           </div>
 
-          {/* Cart FAB */}
+          {/* Cart Icon in Header for Desktop fallback / Quick View */}
           <button
             onClick={() => setCartOpen(true)}
-            className="relative flex items-center gap-2 bg-amber-500 hover:bg-amber-400
-                       text-white font-semibold px-4 py-2 rounded-xl transition-all
-                       shadow-lg shadow-amber-500/30 active:scale-95 text-sm"
+            className="relative flex items-center justify-center w-10 h-10 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 rounded-xl transition-all duration-200 active:scale-95 text-zinc-300"
             aria-label="Ver carrito"
           >
-            🛒
+            <span className="text-base">🛒</span>
             {totalItems > 0 && (
-              <span className="bg-white text-amber-600 font-bold text-xs rounded-full px-1.5 py-0.5 min-w-[20px] text-center leading-none">
+              <span className="absolute -top-1.5 -right-1.5 bg-amber-500 text-white font-black text-[9px] rounded-full h-5 min-w-[20px] flex items-center justify-center px-1 border-2 border-zinc-950 shadow-md">
                 {totalItems}
               </span>
             )}
           </button>
         </div>
 
-        {/* Toggle PDF / Lista — solo si hay PDF configurado */}
+        {/* Segmented Control PDF / Lista */}
         {hasPdf && (
-          <div className="max-w-2xl mx-auto px-4 pb-3 flex gap-2">
-            <button
-              onClick={() => setViewMode('pdf')}
-              className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold
-                          transition-all duration-150
-                          ${viewMode === 'pdf'
-                            ? 'bg-amber-500 text-white shadow-md shadow-amber-500/30'
-                            : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                          }`}
-              aria-pressed={viewMode === 'pdf'}
-            >
-              📋 Ver Menú PDF
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold
-                          transition-all duration-150
-                          ${viewMode === 'list'
-                            ? 'bg-amber-500 text-white shadow-md shadow-amber-500/30'
-                            : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                          }`}
-              aria-pressed={viewMode === 'list'}
-            >
-              📂 Ver por Categorías
-            </button>
+          <div className="max-w-2xl mx-auto px-4 pb-3">
+            <div className="bg-zinc-900/60 p-1 rounded-2xl flex gap-1 border border-zinc-900/80">
+              <button
+                onClick={() => setViewMode('pdf')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-xl text-xs font-semibold transition-all duration-200
+                  ${viewMode === 'pdf'
+                    ? 'bg-amber-500 text-white shadow-md shadow-amber-500/10'
+                    : 'text-zinc-400 hover:text-zinc-200'}`}
+                aria-pressed={viewMode === 'pdf'}
+              >
+                📋 Menú Interactivo PDF
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-xl text-xs font-semibold transition-all duration-200
+                  ${viewMode === 'list'
+                    ? 'bg-amber-500 text-white shadow-md shadow-amber-500/10'
+                    : 'text-zinc-400 hover:text-zinc-200'}`}
+                aria-pressed={viewMode === 'list'}
+              >
+                🍔 Lista por Categorías
+              </button>
+            </div>
           </div>
         )}
 
-        {/* Category Tabs — solo en modo lista */}
+        {/* Category Tabs */}
         {viewMode === 'list' && (
-          <div className="max-w-2xl mx-auto overflow-x-auto scrollbar-none">
-            <div className="flex gap-1 px-4 pb-3">
-              {categories.map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => setActiveCategory(cat.id)}
-                  className={`flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold
-                              transition-all duration-150
-                              ${
-                                activeCategory === cat.id
-                                  ? 'bg-amber-500 text-white shadow-md shadow-amber-500/30'
-                                  : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                              }`}
-                >
-                  {cat.name}
-                </button>
-              ))}
+          <div className="max-w-2xl mx-auto overflow-x-auto scrollbar-none border-t border-zinc-900/40">
+            <div className="flex gap-2 px-4 py-3">
+              {categories.map((cat) => {
+                const isActive = activeCategory === cat.id
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => setActiveCategory(cat.id)}
+                    className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-all duration-200 border
+                      ${isActive
+                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 font-bold'
+                        : 'bg-zinc-900 border-zinc-850 text-zinc-400 hover:text-zinc-200'}`}
+                  >
+                    {cat.name}
+                  </button>
+                )
+              })}
             </div>
           </div>
         )}
@@ -165,8 +173,8 @@ export function MenuPage({
             .filter((cat) => !activeCategory || cat.id === activeCategory)
             .map((cat) => (
               <section key={cat.id}>
-                <h2 className="text-base font-bold text-white mb-3 flex items-center gap-2">
-                  <span className="w-1 h-4 bg-amber-500 rounded-full" />
+                <h2 className="text-sm font-black uppercase tracking-wider text-zinc-400 mb-3.5 flex items-center gap-2">
+                  <span className="w-1.5 h-3 bg-amber-500 rounded-full" />
                   {cat.name}
                 </h2>
 
@@ -185,18 +193,54 @@ export function MenuPage({
         </main>
       )}
 
-      {/* ── Call Waiter (fixed bottom) ── */}
-      <div className="fixed bottom-4 left-0 right-0 z-30 px-4 max-w-2xl mx-auto">
-        <CallWaiterButton
-          restaurantId={restaurantId}
-          tableId={tableId}
-          tableNumber={tableNumber}
-          sessionToken={sessionToken}
-        />
+      {/* ── Bottom Floating Bar (Waiter & Cart) ── */}
+      <div className="fixed bottom-6 left-0 right-0 z-30 px-4 max-w-2xl mx-auto flex items-end gap-3 pointer-events-none">
+        
+        {/* Call Waiter Compact Button */}
+        <div className="pointer-events-auto">
+          <CallWaiterButton
+            restaurantId={restaurantId}
+            tableId={tableId}
+            tableNumber={tableNumber}
+            sessionToken={sessionToken}
+            variant="compact"
+          />
+        </div>
+
+        {/* Unified Cart/Pedido Button */}
+        <div className="flex-1 pointer-events-auto">
+          {totalItems > 0 ? (
+            <button
+              onClick={() => setCartOpen(true)}
+              className="w-full bg-amber-500 hover:bg-amber-400 text-white rounded-2xl flex items-center justify-between px-5 py-4 shadow-xl shadow-amber-500/20 active:scale-98 transition-all font-bold text-sm sm:text-base group"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🛒</span>
+                <span>Ver Pedido</span>
+              </div>
+              <div className="flex items-center gap-2 bg-black/15 py-1 px-3 rounded-lg text-xs sm:text-sm font-semibold border border-white/10">
+                <span>{totalItems} {totalItems === 1 ? 'item' : 'items'}</span>
+                <span className="w-1 h-1 bg-white/40 rounded-full" />
+                <span>{formatPrice(totalAmount)}</span>
+              </div>
+            </button>
+          ) : (
+            <button
+              onClick={() => setCartOpen(true)}
+              className="w-full bg-zinc-900/90 border border-zinc-800 text-zinc-400 hover:text-zinc-200 rounded-2xl flex items-center justify-between px-5 py-4 shadow-xl active:scale-98 transition-all font-semibold text-sm"
+            >
+              <div className="flex items-center gap-2">
+                <span>🛒</span>
+                <span>Ver Pedido (vacío)</span>
+              </div>
+              <span className="text-xs text-zinc-500">Sin items</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Padding para el botón fijo */}
-      <div className="h-20" />
+      <div className="h-28" />
 
       {/* ── Product Modal (compartido entre vista lista y PDF) ── */}
       {selectedProduct && (
@@ -210,9 +254,9 @@ export function MenuPage({
       {/* ── Cart Drawer ── */}
       {cartOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setCartOpen(false)} />
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setCartOpen(false)} />
           <div className="relative w-full max-w-sm bg-zinc-900 border-l border-zinc-800 h-full
-                          flex flex-col shadow-2xl overflow-hidden">
+                          flex flex-col shadow-2xl overflow-hidden animate-slide-in">
             <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800 flex-shrink-0">
               <h2 className="font-bold text-white text-base">Tu Pedido</h2>
               <button
@@ -260,55 +304,53 @@ function ProductCard({
   return (
     <button
       onClick={onSelect}
-      className="w-full text-left bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800/60
-                 hover:border-amber-500/30 rounded-xl overflow-hidden transition-all duration-200
-                 active:scale-[0.99] group"
+      className="w-full text-left bg-zinc-900/40 backdrop-blur-sm hover:bg-zinc-900 border border-zinc-900/60
+                 hover:border-zinc-850 rounded-2xl overflow-hidden transition-all duration-300
+                 hover:shadow-md hover:shadow-black/20 hover:scale-[1.01] active:scale-[0.99] group p-3.5"
     >
-      <div className="flex items-stretch gap-0">
-        {/* Image */}
-        {product.imageUrl ? (
-          <div className="w-28 h-28 flex-shrink-0 overflow-hidden">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={product.imageUrl}
-              alt={product.name}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            />
-          </div>
-        ) : (
-          <div className="w-28 h-28 flex-shrink-0 bg-zinc-800 flex items-center justify-center">
-            <span className="text-3xl">🍽️</span>
-          </div>
-        )}
-
+      <div className="flex items-center gap-4">
         {/* Content */}
-        <div className="flex-1 p-3 flex flex-col justify-between min-w-0">
+        <div className="flex-1 min-w-0 flex flex-col justify-between h-full">
           <div>
-            <p className="font-semibold text-white text-sm leading-tight">{product.name}</p>
+            <h3 className="font-bold text-zinc-100 group-hover:text-amber-400 transition-colors text-sm sm:text-base leading-snug">
+              {product.name}
+            </h3>
             {product.description && (
-              <p className="text-xs text-zinc-400 mt-0.5 leading-relaxed line-clamp-2">
+              <p className="text-xs text-zinc-400 mt-1 leading-relaxed line-clamp-2">
                 {product.description}
               </p>
             )}
           </div>
 
-          <div className="flex items-center justify-between mt-2">
-            <span className="font-bold text-amber-400 text-sm">
+          <div className="flex items-center justify-between mt-3">
+            <span className="font-extrabold text-amber-400 text-sm sm:text-base">
               {formatPrice(product.basePrice)}
             </span>
 
-            <span className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
               {hasModifiers && (
-                <span className="text-[10px] text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded-full">
+                <span className="text-[9px] font-extrabold tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-md uppercase">
                   Personalizable
                 </span>
               )}
-              <span className="text-amber-500 group-hover:translate-x-0.5 transition-transform text-sm">
-                →
+              <span className="w-7 h-7 rounded-lg bg-zinc-800/80 border border-zinc-700/50 group-hover:bg-amber-500 group-hover:border-amber-400 text-zinc-400 group-hover:text-white flex items-center justify-center text-xs font-bold transition-all shadow-sm">
+                +
               </span>
-            </span>
+            </div>
           </div>
         </div>
+
+        {/* Image */}
+        {product.imageUrl && (
+          <div className="w-20 h-20 sm:w-24 sm:h-24 flex-shrink-0 rounded-xl overflow-hidden border border-zinc-900 shadow-inner bg-zinc-800">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={product.imageUrl}
+              alt={product.name}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            />
+          </div>
+        )}
       </div>
     </button>
   )
