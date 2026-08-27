@@ -54,7 +54,16 @@ export function PdfMenuEditor({
       formData.append('pdf', file)
 
       const res = await fetch('/api/pdf/upload', { method: 'POST', body: formData })
-      const data = await res.json()
+      
+      let data: any = {}
+      const contentType = res.headers.get('content-type')
+      if (contentType && contentType.includes('application/json')) {
+        data = await res.json()
+      } else {
+        const text = await res.text()
+        throw new Error(text.substring(0, 100) || `Error del servidor (${res.status})`)
+      }
+
       if (!res.ok) throw new Error(data.error ?? 'Error al subir el archivo')
 
       setPdfUrl(data.url)

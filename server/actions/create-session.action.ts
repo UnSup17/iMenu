@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { storeTableSession, type RedisSessionData } from '@/lib/redis'
 import { randomUUID } from 'crypto'
+import { headers } from 'next/headers'
 import QRCode from 'qrcode'
 import { z } from 'zod'
 
@@ -75,10 +76,29 @@ export async function createTableSession(
   await storeTableSession(sessionToken, redisData, parsed.ttlSeconds)
 
   // Generar URL del menú y QR
-  const menuUrl = `${process.env.NEXT_PUBLIC_APP_URL}/menu/${table.restaurant.slug}/${parsed.tableId}?token=${sessionToken}`
+  let baseUrl = ''
+  try {
+    const headersList = await headers()
+    const host = headersList.get('host')
+    let proto = headersList.get('x-forwarded-proto') || 'http'
+    if (proto.includes(',')) {
+      proto = proto.split(',')[0].trim()
+    }
+    if (host) {
+      baseUrl = `${proto}://${host}`
+    }
+  } catch {
+    // Fuera de contexto de request (ej. scripts o compilación estática)
+  }
+
+  if (!baseUrl) {
+    baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  }
+
+  const menuUrl = `${baseUrl}/menu/${table.restaurant.slug}/${parsed.tableId}?token=${sessionToken}`
   const qrCodeDataUrl = await QRCode.toDataURL(menuUrl, {
     width: 400,
-    margin: 2,
+    margin: 2, 
     color: { dark: '#1a1a1a', light: '#ffffff' },
   })
 
