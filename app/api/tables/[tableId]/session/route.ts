@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createTableSession } from '@/server/actions/create-session.action'
 import { closeTableSession } from '@/server/actions/close-session.action'
 import { getTableSession } from '@/lib/redis'
+import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 
 interface RouteParams {
@@ -20,7 +21,30 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'Token requerido.' }, { status: 400 })
   }
 
-  const session = await getTableSession(token)
+  let session = await getTableSession(token)
+
+  if (!session) {
+    // Fallback a la Base de Datos (MySQL) si Redis está inalcanzable o expiró en caché
+    const dbSession = await prisma.tableSession.findFirst({
+      where: {
+        sessionToken: token,
+        tableId,
+        status: 'ACTIVE',
+        expiresAt: { gt: new Date() },
+      },
+      include: { table: true },
+    })
+
+    if (dbSession) {
+      session = {
+        sessionId: dbSession.id,
+        tableId: dbSession.tableId,
+        restaurantId: dbSession.table.restaurantId,
+        tableNumber: dbSession.table.tableNumber,
+        expiresAt: dbSession.expiresAt.toISOString(),
+      }
+    }
+  }
 
   if (!session || session.tableId !== tableId) {
     return NextResponse.json({ error: 'Sesión inválida o expirada.' }, { status: 401 })

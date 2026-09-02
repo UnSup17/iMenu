@@ -39,9 +39,10 @@ export default async function MenuGuestPage({ params, searchParams }: PageProps)
     redirect(`/menu/invalid?reason=no_token`)
   }
 
-  // 2. Validar sesión en Redis (rápido)
+  // 2. Validar sesión (Memoria / Redis / DB fallback)
   const redisSession = await getTableSession(token)
   if (!redisSession || redisSession.tableId !== tableId) {
+    console.warn(`[MenuGuestPage] Acceso denegado: sesión inválida o no coincide con mesa ${tableId}`)
     redirect(`/menu/invalid?reason=expired_session`)
   }
 

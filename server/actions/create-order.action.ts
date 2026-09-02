@@ -1,8 +1,8 @@
-import { PrismaClient, Prisma } from '@prisma/client'
+import { Prisma, OrderStatus } from '@prisma/client'
 import { z } from 'zod'
+import { prisma } from '@/lib/prisma'
 import { getTableSession } from '@/lib/redis'
-
-const prisma = new PrismaClient()
+import { type ConfirmedOrderItemPayload } from '@/types/websocket-events'
 
 // ============================================================
 // Esquemas de Validación Zod
@@ -14,6 +14,7 @@ export const OrderItemSchema = z.object({
   selectedModifierOptionIds: z.array(z.string().min(1)).default([]),
   removedIngredientIds: z.array(z.string().min(1)).default([]),
   notes: z.string().max(250).optional(),
+  orderedByNames: z.array(z.string()).optional(),
 })
 
 export const CreateOrderPayloadSchema = z.object({
@@ -29,9 +30,12 @@ export type CreateOrderInput = z.infer<typeof CreateOrderPayloadSchema>
 export interface CreateOrderResult {
   success: true
   orderId: string
+  status: OrderStatus
   tableNumber: number
   totalAmount: number
   itemsCount: number
+  createdAt: string
+  items: ConfirmedOrderItemPayload[]
 }
 
 // ============================================================
@@ -155,12 +159,19 @@ export async function createOrderTransaction(input: CreateOrderInput): Promise<C
       const itemSubtotal = itemPrice.mul(item.quantity)
       calculatedTotal = calculatedTotal.add(itemSubtotal)
 
+      // Formatear notas con los nombres de comensales (ej: "[Para: Zapata, Juan Diego] Sin cebolla")
+      let formattedNotes = item.notes?.trim() || ''
+      if (item.orderedByNames && item.orderedByNames.length > 0) {
+        const namesLabel = `[Para: ${item.orderedByNames.join(', ')}]`
+        formattedNotes = formattedNotes ? `${namesLabel} ${formattedNotes}` : namesLabel
+      }
+
       orderItemsToCreate.push({
         productId: product.id,
         quantity: item.quantity,
         unitPrice: itemPrice,
         subtotal: itemSubtotal,
-        itemNotes: item.notes,
+        itemNotes: formattedNotes || undefined,
         modifiers: modifiersForThisItem,
         removedIngredients: item.removedIngredientIds.map((id) => ({ ingredientId: id })),
       })
@@ -198,17 +209,43 @@ export async function createOrderTransaction(input: CreateOrderInput): Promise<C
       },
       include: {
         items: {
-          include: { modifiers: true, removedIngredients: true },
+          include: {
+            product: { select: { name: true } },
+            modifiers: { include: { modifierOption: { select: { name: true } } } },
+            removedIngredients: true,
+          },
         },
       },
+    })
+
+    const formattedItems: ConfirmedOrderItemPayload[] = order.items.map((i) => {
+      const orderedByMatch = i.itemNotes?.match(/^\[Para:\s*([^\]]+)\]/)
+      const orderedByNames = orderedByMatch
+        ? orderedByMatch[1].split(',').map((n) => n.trim())
+        : []
+      const cleanNotes = i.itemNotes?.replace(/^\[Para:\s*[^\]]+\]\s*/, '').trim()
+
+      return {
+        id: i.id,
+        name: i.product.name,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice.toNumber(),
+        subtotal: i.subtotal.toNumber(),
+        modifiers: i.modifiers.map((m) => m.modifierOption.name),
+        orderedByNames,
+        notes: cleanNotes || undefined,
+      }
     })
 
     return {
       success: true as const,
       orderId: order.id,
+      status: order.status,
       tableNumber: session.table.tableNumber,
       totalAmount: order.totalAmount.toNumber(),
       itemsCount: order.items.reduce((sum, i) => sum + i.quantity, 0),
+      createdAt: order.createdAt.toISOString(),
+      items: formattedItems,
     }
   })
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { io, type Socket } from 'socket.io-client'
 import {
   WsStaffEvent,
@@ -29,9 +29,28 @@ export function OrdersPageClient({ restaurantId, initialOrders }: OrdersPageClie
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(amount)
 
+  const socketRef = useRef<StaffSocket | null>(null)
+
   const dismissAlert = useCallback((tableId: string, timestamp: string) => {
     setAlerts((prev) => prev.filter((a) => !(a.tableId === tableId && a.timestamp === timestamp)))
   }, [])
+
+  const acknowledgeAlert = useCallback(
+    (alert: CallWaiterPayload) => {
+      if (socketRef.current) {
+        socketRef.current.emit(WsStaffEvent.WAITER_ACKNOWLEDGED, {
+          restaurantId,
+          tableId: alert.tableId,
+          waiterId: 'staff-waiter',
+          waiterName: 'Mesero',
+          estimatedMinutes: 2,
+          timestamp: new Date().toISOString(),
+        })
+      }
+      dismissAlert(alert.tableId, alert.timestamp)
+    },
+    [restaurantId, dismissAlert],
+  )
 
   useEffect(() => {
     const socketUrl =
@@ -42,6 +61,8 @@ export function OrdersPageClient({ restaurantId, initialOrders }: OrdersPageClie
       path: '/api/socketio',
       transports: ['websocket', 'polling'],
     })
+
+    socketRef.current = socket
 
     socket.on('connect', () => {
       setConnected(true)
@@ -63,13 +84,35 @@ export function OrdersPageClient({ restaurantId, initialOrders }: OrdersPageClie
 
     return () => {
       socket.disconnect()
+      socketRef.current = null
     }
   }, [restaurantId])
 
-  const alertLabels: Record<string, string> = {
-    HELP_REQUESTED: '🙋 Solicita asistencia',
-    BILL_REQUESTED: '💳 Solicita la cuenta',
-    SPILL_CLEANUP: '🧹 Solicita limpieza',
+  const alertConfig: Record<
+    string,
+    { label: string; bg: string; border: string; text: string; icon: string }
+  > = {
+    HELP_REQUESTED: {
+      label: '🙋 Solicita asistencia',
+      bg: 'bg-amber-500/10',
+      border: 'border-amber-500/30',
+      text: 'text-amber-300',
+      icon: '🙋',
+    },
+    BILL_REQUESTED: {
+      label: '💳 Solicita la cuenta',
+      bg: 'bg-emerald-500/10',
+      border: 'border-emerald-500/30',
+      text: 'text-emerald-300',
+      icon: '💳',
+    },
+    SPILL_CLEANUP: {
+      label: '🧹 Solicita limpieza',
+      bg: 'bg-blue-500/10',
+      border: 'border-blue-500/30',
+      text: 'text-blue-300',
+      icon: '🧹',
+    },
   }
 
   return (
@@ -91,27 +134,43 @@ export function OrdersPageClient({ restaurantId, initialOrders }: OrdersPageClie
             🔔 Alertas ({alerts.length})
           </h2>
           <div className="space-y-2">
-            {alerts.map((alert) => (
-              <div
-                key={`${alert.tableId}-${alert.timestamp}`}
-                className="flex items-center justify-between bg-amber-500/10 border border-amber-500/30
-                           rounded-xl px-4 py-3 animate-pulse"
-              >
-                <div>
-                  <p className="font-semibold text-amber-300 text-sm">
-                    Mesa {alert.tableNumber} — {alertLabels[alert.alertType] ?? alert.alertType}
-                  </p>
-                  <p className="text-xs text-zinc-400">{formatTime(alert.timestamp)}</p>
-                </div>
-                <button
-                  onClick={() => dismissAlert(alert.tableId, alert.timestamp)}
-                  className="text-xs text-zinc-500 hover:text-white bg-zinc-800 hover:bg-zinc-700
-                             px-3 py-1.5 rounded-lg transition-colors"
+            {alerts.map((alert) => {
+              const config = alertConfig[alert.alertType] ?? alertConfig.HELP_REQUESTED
+              return (
+                <div
+                  key={`${alert.tableId}-${alert.timestamp}`}
+                  className={`flex items-center justify-between ${config.bg} border ${config.border}
+                             rounded-xl px-4 py-3 animate-pulse`}
                 >
-                  Reconocer
-                </button>
-              </div>
-            ))}
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{config.icon}</span>
+                    <div>
+                      <p className={`font-semibold ${config.text} text-sm`}>
+                        Mesa {alert.tableNumber} — {config.label}
+                      </p>
+                      <p className="text-xs text-zinc-400">{formatTime(alert.timestamp)}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => acknowledgeAlert(alert)}
+                      className="text-xs font-medium text-emerald-400 hover:text-white bg-emerald-950/60 hover:bg-emerald-800/80 border border-emerald-500/30
+                                 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                    >
+                      Atender
+                    </button>
+                    <button
+                      onClick={() => dismissAlert(alert.tableId, alert.timestamp)}
+                      className="text-xs text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700
+                                 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                      title="Descartar alerta"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </section>
       )}

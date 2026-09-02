@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useCartStore, type CartItem } from '@/store/cart-store'
+import { type ConfirmedOrderItemPayload } from '@/types/websocket-events'
 
 interface CartSheetProps {
   restaurantId: string
@@ -9,7 +10,10 @@ interface CartSheetProps {
   sessionToken: string
   currency?: string
   onClose?: () => void
+  onBroadcastCartUpdate?: (items: CartItem[]) => void
 }
+
+type BillViewMode = 'global' | 'individual'
 
 export function CartSheet({
   restaurantId,
@@ -17,19 +21,61 @@ export function CartSheet({
   sessionToken,
   currency = 'MXN',
   onClose,
+  onBroadcastCartUpdate,
 }: CartSheetProps) {
-  const { items, removeItem, updateQuantity, clearCart, getTotalAmount, getTotalItemsCount } =
-    useCartStore()
+  const {
+    items,
+    confirmedOrders,
+    userAlias,
+    removeItem,
+    updateQuantity,
+    clearCart,
+    addConfirmedOrder,
+    getTotalAmount,
+    getTotalItemsCount,
+    getConfirmedTotalAmount,
+    getConfirmedItemsCount,
+    getGrandTotalAmount,
+    getGrandItemsCount,
+    getBreakdownByUser,
+  } = useCartStore()
 
-  const [isSuccess, setIsSuccess] = useState(false)
+  const [viewMode, setViewMode] = useState<BillViewMode>('global')
+  const [successToast, setSuccessToast] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  const totalAmount = getTotalAmount()
-  const totalItems = getTotalItemsCount()
+  const draftAmount = getTotalAmount()
+  const draftCount = getTotalItemsCount()
+  const confirmedAmount = getConfirmedTotalAmount()
+  const confirmedCount = getConfirmedItemsCount()
+  const grandAmount = getGrandTotalAmount()
+  const grandCount = getGrandItemsCount()
+  const breakdown = getBreakdownByUser()
 
   const formatPrice = (amount: number) =>
     new Intl.NumberFormat('es-MX', { style: 'currency', currency }).format(amount)
+
+  const handleLocalUpdateQuantity = (cartItemId: string, q: number, userName?: string) => {
+    updateQuantity(cartItemId, q, userName)
+    if (onBroadcastCartUpdate) {
+      setTimeout(() => onBroadcastCartUpdate(useCartStore.getState().items), 0)
+    }
+  }
+
+  const handleLocalRemove = (cartItemId: string, userName?: string) => {
+    removeItem(cartItemId, userName)
+    if (onBroadcastCartUpdate) {
+      setTimeout(() => onBroadcastCartUpdate(useCartStore.getState().items), 0)
+    }
+  }
+
+  const handleLocalClear = () => {
+    clearCart()
+    if (onBroadcastCartUpdate) {
+      setTimeout(() => onBroadcastCartUpdate([]), 0)
+    }
+  }
 
   async function handleSubmitOrder() {
     if (items.length === 0 || submitting) return
@@ -46,6 +92,7 @@ export function CartSheet({
         selectedModifierOptionIds: item.selectedModifiers.map((m) => m.optionId),
         removedIngredientIds: item.removedIngredientIds,
         notes: item.notes,
+        orderedByNames: item.orderedBy.map((u) => u.userName),
       })),
     }
 
@@ -63,83 +110,246 @@ export function CartSheet({
         return
       }
 
-      clearCart()
-      setIsSuccess(true)
+      const result = await res.json()
+
+      // 1. Guardar la orden confirmada en el estado local de la mesa
+      if (result.orderId) {
+        addConfirmedOrder({
+          orderId: result.orderId,
+          status: result.status || 'RECEIVED',
+          totalAmount: result.totalAmount,
+          itemsCount: result.itemsCount,
+          createdAt: result.createdAt || new Date().toISOString(),
+          items: result.items || [],
+        })
+      }
+
+      // 2. Limpiar sólo el borrador de la mesa
+      handleLocalClear()
+
+      // 3. Mostrar banner de éxito temporal
+      setSuccessToast(true)
+      setTimeout(() => setSuccessToast(false), 5000)
     } catch {
       setErrorMsg('Error de conexión. Intenta de nuevo.')
+    } finally {
       setSubmitting(false)
     }
   }
 
-  // Vista de pedido enviado con éxito
-  if (isSuccess) {
-    return (
-      <div className="flex flex-col items-center justify-center py-8 text-center h-full">
-        <div className="relative mb-6 flex items-center justify-center">
-          <div className="absolute inset-0 bg-emerald-500/10 rounded-full animate-ping opacity-75" />
-          <div className="relative w-20 h-20 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-full flex items-center justify-center text-4xl shadow-lg shadow-emerald-500/5">
-            ✨
-          </div>
-        </div>
-
-        <h2 className="text-xl font-black text-white leading-tight">¡Pedido Recibido!</h2>
-        <p className="text-xs font-bold uppercase tracking-wider mt-1 text-emerald-400 animate-pulse">
-          Cocina ya está trabajando
-        </p>
-        
-        <p className="text-sm text-zinc-400 mt-4 px-3 leading-relaxed">
-          Tu orden ha sido enviada con éxito. Te avisaremos en cuanto tu comida esté lista para ser servida en tu mesa.
-        </p>
-
-        {/* Decoración del tiempo estimado */}
-        <div className="mt-8 p-4 bg-zinc-800/40 border border-zinc-850 rounded-2xl w-full flex items-center gap-3">
-          <span className="text-2xl">🍳</span>
-          <div className="text-left">
-            <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wide">Tiempo Estimado</h4>
-            <p className="text-[11px] text-zinc-500 mt-0.5">La preparación suele demorar entre 10 y 20 minutos.</p>
-          </div>
-        </div>
-
-        <button
-          onClick={onClose}
-          className="w-full mt-auto py-3.5 bg-zinc-905 hover:bg-zinc-850 border border-zinc-800 text-zinc-300 hover:text-white font-bold rounded-xl transition-all duration-200 active:scale-98 shadow-sm flex items-center justify-center gap-2"
-        >
-          Volver al Menú
-        </button>
-      </div>
-    )
-  }
-
-  // Vista de carrito vacío
-  if (items.length === 0) {
+  // Vista de carrito completamente vacío (sin pedidos previos ni pendientes)
+  if (items.length === 0 && confirmedOrders.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-zinc-500 h-full">
         <span className="text-5xl mb-3">🛒</span>
-        <p className="text-sm font-medium">Tu carrito está vacío</p>
-        <p className="text-xs mt-1 text-zinc-600">Agrega productos del menú</p>
+        <p className="text-sm font-medium">El carrito de la mesa está vacío</p>
+        <p className="text-xs mt-1 text-zinc-600">Agrega productos del menú colaborativamente</p>
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col h-full justify-between">
-      {/* Items */}
-      <div className="flex-1 overflow-y-auto space-y-3 pb-4 scrollbar-none">
-        {items.map((item) => (
-          <CartItemRow
-            key={item.cartItemId}
-            item={item}
-            currency={currency}
-            onRemove={() => removeItem(item.cartItemId)}
-            onQuantityChange={(q) => updateQuantity(item.cartItemId, q)}
-          />
-        ))}
+    <div className="flex flex-col h-full justify-between space-y-3">
+      {/* Toast de Éxito al Enviar Orden */}
+      {successToast && (
+        <div className="bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 p-3 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300 flex-shrink-0">
+          <span className="text-2xl">✨</span>
+          <div className="flex-1 text-xs">
+            <p className="font-bold text-white">¡Ronda enviada a cocina!</p>
+            <p className="text-emerald-400/90 mt-0.5">
+              Tu pedido está en preparación. Puedes seguir agregando más platillos cuando desees.
+            </p>
+          </div>
+          <button
+            onClick={() => setSuccessToast(false)}
+            className="text-emerald-400 hover:text-white text-xs px-1.5 py-0.5 rounded cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Segmented Control Global vs Individual */}
+      <div className="bg-zinc-950 p-1 rounded-xl flex gap-1 border border-zinc-800 flex-shrink-0">
+        <button
+          onClick={() => setViewMode('global')}
+          className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer
+            ${
+              viewMode === 'global'
+                ? 'bg-amber-500 text-white shadow-md'
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+        >
+          <span>🌐</span>
+          <span>Mesa Completa</span>
+        </button>
+
+        <button
+          onClick={() => setViewMode('individual')}
+          className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer
+            ${
+              viewMode === 'individual'
+                ? 'bg-amber-500 text-white shadow-md'
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+        >
+          <span>👤</span>
+          <span>Por Comensal ({breakdown.length})</span>
+        </button>
       </div>
 
-      {/* Footer con total y botón */}
-      <div className="border-t border-zinc-800 pt-4 space-y-3 bg-zinc-900">
-        
-        {/* Error Banner */}
+      {/* Content Area */}
+      <div className="flex-1 overflow-y-auto space-y-4 pr-0.5 scrollbar-none">
+        {/* Vista Global de Mesa */}
+        {viewMode === 'global' && (
+          <div className="space-y-4">
+            {/* SECCIÓN 1: Items en Borrador (Ronda Actual, Editables) */}
+            {items.length > 0 && (
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>🛒</span>
+                    <span>Por Enviar (Ronda Actual)</span>
+                    <span className="bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded text-[10px]">
+                      {draftCount}
+                    </span>
+                  </h3>
+                  <span className="text-[10px] text-zinc-400 font-medium">
+                    Editable antes de enviar
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {items.map((item) => (
+                    <GlobalCartItemRow
+                      key={item.cartItemId}
+                      item={item}
+                      currency={currency}
+                      currentUserAlias={userAlias}
+                      onRemove={(uName) => handleLocalRemove(item.cartItemId, uName)}
+                      onQuantityChange={(q, uName) => handleLocalUpdateQuantity(item.cartItemId, q, uName)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* SECCIÓN 2: Pedidos Confirmados (En Cocina, Solo Lectura) */}
+            {confirmedOrders.length > 0 && (
+              <div className="space-y-2.5 pt-1">
+                <div className="flex items-center justify-between border-t border-zinc-800/80 pt-3">
+                  <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>🍳</span>
+                    <span>Pedidos en Cocina</span>
+                    <span className="bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded text-[10px]">
+                      {confirmedCount} {confirmedCount === 1 ? 'platillo' : 'platillos'}
+                    </span>
+                  </h3>
+                  <span className="text-[10px] text-zinc-500 flex items-center gap-1">
+                    <span>🔒</span>
+                    <span>Solo lectura</span>
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  {confirmedOrders.map((order, orderIdx) => (
+                    <div key={order.orderId} className="space-y-2">
+                      {confirmedOrders.length > 1 && (
+                        <div className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 px-1">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                          <span>
+                            Ronda {orderIdx + 1} • {new Date(order.createdAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        {order.items.map((item) => (
+                          <ConfirmedOrderItemRow
+                            key={item.id}
+                            item={item}
+                            orderStatus={order.status}
+                            currency={currency}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Vista Individual por Comensal */}
+        {viewMode === 'individual' && (
+          <div className="space-y-4">
+            {breakdown.map((userGroup) => {
+              const isCurrentUser = userGroup.userName === userAlias
+              return (
+                <div
+                  key={userGroup.userName}
+                  className={`rounded-2xl p-3.5 border transition-all ${
+                    isCurrentUser
+                      ? 'bg-amber-500/5 border-amber-500/30'
+                      : 'bg-zinc-800/40 border-zinc-800'
+                  }`}
+                >
+                  <div className="flex items-center justify-between border-b border-zinc-800/60 pb-2 mb-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 text-xs font-black flex items-center justify-center">
+                        {userGroup.userName.charAt(0).toUpperCase()}
+                      </span>
+                      <div>
+                        <h4 className="text-xs font-black text-zinc-100 flex items-center gap-1">
+                          {userGroup.userName}
+                          {isCurrentUser && (
+                            <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded font-bold">
+                              Tú
+                            </span>
+                          )}
+                        </h4>
+                        <p className="text-[10px] text-zinc-400">
+                          {userGroup.itemsCount} {userGroup.itemsCount === 1 ? 'platillo' : 'platillos'}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-extrabold text-amber-400">
+                      {formatPrice(userGroup.totalAmount)}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {userGroup.items.map((line) => (
+                      <div
+                        key={line.cartItemId}
+                        className="flex items-center justify-between text-xs py-1.5 px-2.5 rounded-lg bg-zinc-900/60"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-bold text-amber-400">{line.quantity}x</span>
+                          <span className="text-zinc-200 truncate">{line.name}</span>
+                          {line.isConfirmed ? (
+                            <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-medium flex items-center gap-0.5 shrink-0">
+                              <span>🔒</span> Confirmado
+                            </span>
+                          ) : (
+                            <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-medium shrink-0">
+                              ⏳ Por enviar
+                            </span>
+                          )}
+                        </div>
+                        <span className="font-semibold text-zinc-300 shrink-0 ml-2">
+                          {formatPrice(line.total)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Footer con totales y botón de acción */}
+      <div className="border-t border-zinc-800 pt-3 space-y-3 bg-zinc-900 flex-shrink-0">
         {errorMsg && (
           <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs p-3 rounded-xl flex items-center gap-2">
             <span>⚠️</span>
@@ -147,68 +357,206 @@ export function CartSheet({
           </div>
         )}
 
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-zinc-400">{totalItems} producto{totalItems !== 1 ? 's' : ''}</span>
-          <span className="font-bold text-white text-lg">{formatPrice(totalAmount)}</span>
+        {/* Desglose de totales */}
+        <div className="space-y-1">
+          {items.length > 0 && confirmedOrders.length > 0 && (
+            <div className="flex items-center justify-between text-xs text-zinc-400">
+              <span>Ronda actual por enviar: {formatPrice(draftAmount)}</span>
+              <span>Ya en cocina: {formatPrice(confirmedAmount)}</span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-zinc-400 font-medium">
+              {items.length > 0
+                ? `Total Acumulado Mesa (${grandCount} ${grandCount !== 1 ? 'items' : 'item'})`
+                : `Total Confirmado Mesa (${confirmedCount} ${confirmedCount !== 1 ? 'items' : 'item'})`}
+            </span>
+            <span className="font-black text-white text-lg">
+              {formatPrice(grandAmount)}
+            </span>
+          </div>
         </div>
 
-        <button
-          onClick={handleSubmitOrder}
-          disabled={submitting}
-          className={`w-full py-3.5 font-bold rounded-xl transition-all duration-200 active:scale-95 shadow-lg flex items-center justify-center gap-2
-            ${submitting 
-              ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed shadow-none' 
-              : 'bg-amber-500 hover:bg-amber-400 text-white shadow-amber-500/30'
-            }`}
-        >
-          {submitting ? (
-            <>
-              <span className="h-4 w-4 border-2 border-zinc-500 border-t-transparent rounded-full animate-spin" />
-              <span>Enviando pedido...</span>
-            </>
-          ) : (
-            <span>Enviar Pedido → {formatPrice(totalAmount)}</span>
-          )}
-        </button>
+        {/* Botón Principal */}
+        {items.length > 0 ? (
+          <>
+            <button
+              onClick={handleSubmitOrder}
+              disabled={submitting}
+              className={`w-full py-3.5 font-bold rounded-xl transition-all duration-200 active:scale-95 shadow-lg flex items-center justify-center gap-2 cursor-pointer
+                ${
+                  submitting
+                    ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed shadow-none'
+                    : 'bg-amber-500 hover:bg-amber-400 text-white shadow-amber-500/30'
+                }`}
+            >
+              {submitting ? (
+                <>
+                  <span className="h-4 w-4 border-2 border-zinc-500 border-t-transparent rounded-full animate-spin" />
+                  <span>Enviando a cocina...</span>
+                </>
+              ) : (
+                <span>
+                  {confirmedOrders.length > 0
+                    ? `Enviar Pedido Adicional (${draftCount}) → ${formatPrice(draftAmount)}`
+                    : `Enviar Pedido a Cocina (${draftCount}) → ${formatPrice(draftAmount)}`}
+                </span>
+              )}
+            </button>
 
-        <button
-          onClick={clearCart}
-          disabled={submitting}
-          className="w-full py-2 text-xs text-zinc-500 hover:text-red-400 transition-colors disabled:opacity-50 disabled:hover:text-zinc-500"
-        >
-          Limpiar carrito
-        </button>
+            <button
+              onClick={handleLocalClear}
+              disabled={submitting}
+              className="w-full py-1 text-xs text-zinc-500 hover:text-red-400 transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              Descartar borrador actual
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={onClose}
+            className="w-full py-3.5 bg-amber-500 hover:bg-amber-400 text-white font-bold rounded-xl transition-all duration-200 active:scale-95 shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <span>➕ Agregar más productos al pedido</span>
+          </button>
+        )}
       </div>
     </div>
   )
 }
 
 // ============================================================
-// Cart Item Row
+// Confirmed Cart Item Row (Solo lectura - En Cocina)
 // ============================================================
 
-function CartItemRow({
+function ConfirmedOrderItemRow({
+  item,
+  orderStatus,
+  currency,
+}: {
+  item: ConfirmedOrderItemPayload
+  orderStatus: string
+  currency: string
+}) {
+  const formatPrice = (amount: number) =>
+    new Intl.NumberFormat('es-MX', { style: 'currency', currency }).format(amount)
+
+  const statusBadges: Record<string, { label: string; color: string }> = {
+    RECEIVED: { label: 'Recibido', color: 'bg-amber-500/15 text-amber-300 border-amber-500/30' },
+    PREPARING: { label: 'En preparación', color: 'bg-blue-500/15 text-blue-300 border-blue-500/30' },
+    IN_PREPARATION: { label: 'En preparación', color: 'bg-blue-500/15 text-blue-300 border-blue-500/30' },
+    READY: { label: 'Listo', color: 'bg-purple-500/15 text-purple-300 border-purple-500/30' },
+    DELIVERED: { label: 'Servido', color: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
+    CANCELLED: { label: 'Cancelado', color: 'bg-red-500/15 text-red-300 border-red-500/30' },
+  }
+  const badge = statusBadges[orderStatus] ?? statusBadges.RECEIVED
+
+  return (
+    <div className="bg-zinc-900/90 border border-zinc-800/80 rounded-xl p-3 space-y-2 opacity-95">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-extrabold text-sm text-zinc-200">
+              {item.quantity}x {item.name}
+            </span>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${badge.color}`}>
+              {badge.label}
+            </span>
+          </div>
+
+          {/* Modificadores */}
+          {item.modifiers && item.modifiers.length > 0 && (
+            <p className="text-[11px] text-zinc-400 mt-1">
+              + {item.modifiers.join(', ')}
+            </p>
+          )}
+
+          {/* Notas */}
+          {item.notes && (
+            <p className="text-[11px] text-amber-400/80 italic mt-0.5">
+              &ldquo;{item.notes}&rdquo;
+            </p>
+          )}
+
+          {/* Quién lo ordenó */}
+          {item.orderedByNames && item.orderedByNames.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {item.orderedByNames.map((name) => (
+                <span
+                  key={name}
+                  className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded-md font-medium"
+                >
+                  👤 {name}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Precio solo lectura */}
+        <div className="text-right shrink-0">
+          <span className="font-bold text-sm text-zinc-300">{formatPrice(item.subtotal)}</span>
+          <div className="text-[10px] text-zinc-500 mt-0.5 flex items-center justify-end gap-1">
+            <span>🔒</span>
+            <span>En cocina</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================
+// Global Cart Item Row
+// ============================================================
+
+function GlobalCartItemRow({
   item,
   currency,
+  currentUserAlias,
   onRemove,
   onQuantityChange,
 }: {
   item: CartItem
   currency: string
-  onRemove: () => void
-  onQuantityChange: (q: number) => void
+  currentUserAlias: string
+  onRemove: (userName?: string) => void
+  onQuantityChange: (q: number, userName?: string) => void
 }) {
   const formatPrice = (amount: number) =>
     new Intl.NumberFormat('es-MX', { style: 'currency', currency }).format(amount)
 
+  const userEntry = item.orderedBy.find((u) => u.userName === currentUserAlias)
+  const currentUserQty = userEntry ? userEntry.quantity : 0
+
   return (
-    <div className="bg-zinc-800/60 rounded-xl p-3.5 space-y-1.5 border border-zinc-800/20">
+    <div className="bg-zinc-800/60 rounded-xl p-3.5 space-y-2 border border-zinc-800/30">
       <div className="flex items-start justify-between gap-2">
-        <p className="font-semibold text-sm text-white leading-tight">{item.name}</p>
+        <div className="space-y-1 min-w-0">
+          <p className="font-bold text-sm text-white leading-tight">{item.name}</p>
+
+          {/* Chips con los nombres de quienes pidieron este platillo */}
+          <div className="flex flex-wrap gap-1 pt-0.5">
+            {item.orderedBy.map((u) => (
+              <span
+                key={u.userName}
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                  u.userName === currentUserAlias
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                    : 'bg-zinc-900 text-zinc-400 border-zinc-700'
+                }`}
+              >
+                👤 {u.userName} ({u.quantity}x)
+              </span>
+            ))}
+          </div>
+        </div>
+
         <button
-          onClick={onRemove}
-          className="text-zinc-500 hover:text-red-400 text-xs transition-colors flex-shrink-0 p-0.5"
-          aria-label="Eliminar del carrito"
+          onClick={() => onRemove()}
+          className="text-zinc-500 hover:text-red-400 text-xs transition-colors p-1"
+          title="Eliminar producto completo del carrito de mesa"
         >
           ✕
         </button>
@@ -216,9 +564,9 @@ function CartItemRow({
 
       {/* Modificadores seleccionados */}
       {item.selectedModifiers.length > 0 && (
-        <div className="space-y-0.5">
+        <div className="space-y-0.5 pt-1">
           {item.selectedModifiers.map((mod) => (
-            <p key={mod.optionId} className="text-xs text-zinc-400">
+            <p key={mod.optionId} className="text-[11px] text-zinc-400">
               + {mod.name}
               {mod.extraPrice > 0 && (
                 <span className="text-amber-400"> (+{formatPrice(mod.extraPrice)})</span>
@@ -230,37 +578,42 @@ function CartItemRow({
 
       {/* Ingredientes removidos */}
       {item.removedIngredientIds.length > 0 && (
-        <p className="text-xs text-red-400/70 italic">Sin algunos ingredientes</p>
+        <p className="text-[11px] text-red-400/80 italic">Sin algunos ingredientes</p>
       )}
 
       {/* Notas */}
-      {item.notes && (
-        <p className="text-xs text-zinc-500 italic">&ldquo;{item.notes}&rdquo;</p>
-      )}
+      {item.notes && <p className="text-[11px] text-zinc-400 italic">&ldquo;{item.notes}&rdquo;</p>}
 
       {/* Controles de cantidad y precio */}
-      <div className="flex items-center justify-between mt-2.5">
+      <div className="flex items-center justify-between pt-2 border-t border-zinc-800/40">
         <div className="flex items-center gap-2">
+          <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
+            Tú ({currentUserAlias}):
+          </span>
           <button
-            onClick={() => onQuantityChange(item.quantity - 1)}
-            className="w-6 h-6 rounded-full bg-zinc-700 hover:bg-zinc-600 text-white text-xs
-                       flex items-center justify-center transition-colors"
+            onClick={() => onQuantityChange(currentUserQty - 1, currentUserAlias)}
+            disabled={currentUserQty <= 0}
+            className="w-6 h-6 rounded-lg bg-zinc-700 hover:bg-zinc-600 disabled:opacity-30 text-white text-xs flex items-center justify-center transition-colors font-bold"
           >
             −
           </button>
-          <span className="text-sm font-bold text-white w-4 text-center">{item.quantity}</span>
+          <span className="text-xs font-black text-amber-400 w-4 text-center">
+            {currentUserQty}
+          </span>
           <button
-            onClick={() => onQuantityChange(item.quantity + 1)}
-            className="w-6 h-6 rounded-full bg-zinc-700 hover:bg-zinc-600 text-white text-xs
-                       flex items-center justify-center transition-colors"
+            onClick={() => onQuantityChange(currentUserQty + 1, currentUserAlias)}
+            className="w-6 h-6 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white text-xs flex items-center justify-center transition-colors font-bold"
           >
             +
           </button>
         </div>
 
-        <span className="font-bold text-amber-400 text-sm">
-          {formatPrice(item.unitCalculatedPrice * item.quantity)}
-        </span>
+        <div className="text-right">
+          <span className="text-[10px] text-zinc-500 block">Total Ítem</span>
+          <span className="font-black text-amber-400 text-sm">
+            {formatPrice(item.unitCalculatedPrice * item.quantity)}
+          </span>
+        </div>
       </div>
     </div>
   )

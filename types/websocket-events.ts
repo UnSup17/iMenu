@@ -14,6 +14,7 @@ export enum WsClientEvent {
   CALL_WAITER = 'call_waiter',
   ORDER_SUBMITTED = 'order_submitted',
   JOIN_TABLE_SESSION = 'join_table_session',
+  UPDATE_SHARED_CART = 'update_shared_cart',
 }
 
 // Eventos que el staff emite al servidor
@@ -30,6 +31,9 @@ export enum WsServerEvent {
   WAITER_STATUS_CHANGED = 'waiter_status_changed',
   ORDER_STATUS_UPDATED = 'order_status_updated',
   SESSION_TERMINATED = 'session_terminated',
+  SHARED_CART_UPDATED = 'shared_cart_updated',
+  TABLE_PARTICIPANTS_UPDATED = 'table_participants_updated',
+  TABLE_ORDERS_UPDATED = 'table_orders_updated',
   ERROR = 'ws_error',
 }
 
@@ -43,6 +47,7 @@ export interface JoinTableSessionPayload {
   restaurantId: string
   tableId: string
   sessionToken: string
+  userName?: string
 }
 
 export interface JoinStaffRoomPayload {
@@ -85,6 +90,65 @@ export interface OrderStatusChangedPayload {
   updatedAt: string
 }
 
+export interface SharedCartItemPayload {
+  cartItemId: string
+  productId: string
+  name: string
+  basePrice: number
+  unitCalculatedPrice: number
+  quantity: number
+  selectedModifiers: Array<{
+    groupId: string
+    groupName: string
+    optionId: string
+    name: string
+    extraPrice: number
+  }>
+  removedIngredientIds: string[]
+  notes?: string
+  orderedBy: Array<{
+    userName: string
+    quantity: number
+  }>
+}
+
+export interface UpdateSharedCartPayload {
+  restaurantId: string
+  tableId: string
+  sessionToken: string
+  updatedBy: string
+  items: SharedCartItemPayload[]
+}
+
+export interface TableParticipantsPayload {
+  tableId: string
+  participants: Array<{
+    socketId: string
+    userName: string
+  }>
+}
+
+export interface ConfirmedOrderItemPayload {
+  id: string
+  name: string
+  quantity: number
+  unitPrice: number
+  subtotal: number
+  modifiers: string[]
+  orderedByNames: string[]
+  notes?: string
+}
+
+export interface ConfirmedOrderPayload {
+  orderId: string
+  orderNumber?: number
+  status: 'RECEIVED' | 'PREPARING' | 'READY' | 'DELIVERED' | 'CANCELLED'
+  totalAmount: number
+  itemsCount: number
+  createdAt: string
+  items: ConfirmedOrderItemPayload[]
+}
+
 export interface WsErrorPayload {
   code: string
   message: string
@@ -97,11 +161,21 @@ export interface WsErrorPayload {
 export interface ClientToServerEvents {
   [WsClientEvent.JOIN_TABLE_SESSION]: (
     data: JoinTableSessionPayload,
-    callback: (ack: { success: boolean; error?: string }) => void,
+    callback: (ack: {
+      success: boolean
+      error?: string
+      cart?: SharedCartItemPayload[]
+      participants?: Array<{ socketId: string; userName: string }>
+      confirmedOrders?: ConfirmedOrderPayload[]
+    }) => void,
   ) => void
   [WsClientEvent.CALL_WAITER]: (
     data: CallWaiterPayload,
     callback: (ack: { success: boolean; message?: string }) => void,
+  ) => void
+  [WsClientEvent.UPDATE_SHARED_CART]: (
+    data: UpdateSharedCartPayload,
+    callback?: (ack: { success: boolean; error?: string }) => void,
   ) => void
 }
 
@@ -117,5 +191,9 @@ export interface ServerToClientEvents {
   [WsServerEvent.WAITER_STATUS_CHANGED]: (data: WaiterAcknowledgedPayload) => void
   [WsServerEvent.ORDER_STATUS_UPDATED]: (data: OrderStatusChangedPayload) => void
   [WsServerEvent.SESSION_TERMINATED]: (data: { tableId: string; reason: string }) => void
+  [WsServerEvent.SHARED_CART_UPDATED]: (data: { items: SharedCartItemPayload[]; updatedBy: string }) => void
+  [WsServerEvent.TABLE_PARTICIPANTS_UPDATED]: (data: TableParticipantsPayload) => void
+  [WsServerEvent.TABLE_ORDERS_UPDATED]: (data: ConfirmedOrderPayload) => void
   [WsServerEvent.ERROR]: (data: WsErrorPayload) => void
 }
+

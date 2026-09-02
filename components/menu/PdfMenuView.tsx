@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import type { ProductModalData } from './ProductModal'
 
+import { useCartStore } from '@/store/cart-store'
+
 // pdfjs-dist cargado dinámicamente — tipado con any para compatibilidad
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let pdfjsLib: any = null
@@ -32,8 +34,9 @@ export function PdfMenuView({ pdfUrl, hotspots, onSelectProduct }: PdfMenuViewPr
   const [isLoading, setIsLoading] = useState(true)
   const containerRef = useRef<HTMLDivElement>(null)
 
+  const getOrderedByForProduct = useCartStore((s) => s.getOrderedByForProduct)
+
   const renderAllPages = useCallback(async () => {
-    setIsLoading(true)
     try {
       if (!pdfjsLib) {
         pdfjsLib = await import('pdfjs-dist')
@@ -88,7 +91,7 @@ export function PdfMenuView({ pdfUrl, hotspots, onSelectProduct }: PdfMenuViewPr
         return (
           <div
             key={pageIndex}
-            className="relative border border-zinc-800 rounded-xl overflow-hidden bg-white mx-auto"
+            className="relative border border-zinc-800 rounded-xl overflow-hidden bg-white mx-auto shadow-xl"
             style={{ width: '100%' }}
           >
             {/* Imagen de la página */}
@@ -100,33 +103,48 @@ export function PdfMenuView({ pdfUrl, hotspots, onSelectProduct }: PdfMenuViewPr
               draggable={false}
             />
 
-            {/* Hotspots como botones transparentes */}
-            {pageHotspots.map((hs) => (
-              <button
-                key={hs.id}
-                onClick={() => onSelectProduct(hs.product)}
-                title={`Ver ${hs.product.name}`}
-                style={{
-                  position: 'absolute',
-                  left: `${hs.x * 100}%`,
-                  top: `${hs.y * 100}%`,
-                  width: `${hs.width * 100}%`,
-                  height: `${hs.height * 100}%`,
-                }}
-                className="group rounded transition-all duration-150
-                           hover:bg-amber-500/20 hover:ring-2 hover:ring-amber-500/60
-                           active:bg-amber-500/30 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                aria-label={`Abrir ${hs.product.name}`}
-              >
-                <span
-                  className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100
-                             transition-opacity bg-amber-500 text-white text-[9px] font-bold
-                             px-1.5 py-0.5 rounded-full pointer-events-none leading-none"
+            {/* Hotspots como botones transparentes con badges */}
+            {pageHotspots.map((hs) => {
+              const orderedByNames = getOrderedByForProduct(hs.product.id)
+              const hasOrders = orderedByNames.length > 0
+
+              return (
+                <button
+                  key={hs.id}
+                  onClick={() => onSelectProduct(hs.product)}
+                  title={`Ver ${hs.product.name}`}
+                  style={{
+                    position: 'absolute',
+                    left: `${hs.x * 100}%`,
+                    top: `${hs.y * 100}%`,
+                    width: `${hs.width * 100}%`,
+                    height: `${hs.height * 100}%`,
+                  }}
+                  className={`group rounded transition-all duration-150 relative focus:outline-none focus:ring-2 focus:ring-amber-500 ${
+                    hasOrders
+                      ? 'bg-amber-500/20 ring-2 ring-amber-500 shadow-md'
+                      : 'hover:bg-amber-500/20 hover:ring-2 hover:ring-amber-500/60'
+                  }`}
+                  aria-label={`Abrir ${hs.product.name}`}
                 >
-                  +
-                </span>
-              </button>
-            ))}
+                  {/* Badge de comensales que ordenaron este platillo */}
+                  {hasOrders && (
+                    <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-amber-500 text-white font-extrabold text-[9px] px-2 py-0.5 rounded-full shadow-lg border border-white/20 whitespace-nowrap flex items-center gap-1 z-10 animate-bounce">
+                      <span>🏷️</span>
+                      <span>{orderedByNames.join(', ')}</span>
+                    </div>
+                  )}
+
+                  <span
+                    className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100
+                               transition-opacity bg-amber-500 text-white text-[9px] font-bold
+                               px-1.5 py-0.5 rounded-full pointer-events-none leading-none shadow-md"
+                  >
+                    +
+                  </span>
+                </button>
+              )
+            })}
           </div>
         )
       })}

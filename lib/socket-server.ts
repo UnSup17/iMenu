@@ -20,13 +20,20 @@ import {
   type CallWaiterPayload,
   type WaiterAcknowledgedPayload,
   type OrderStatusChangedPayload,
+  type SharedCartItemPayload,
+  type UpdateSharedCartPayload,
+  type ConfirmedOrderPayload,
 } from '@/types/websocket-events'
-import { getTableSession } from '@/lib/redis'
+import { getTableSession, getSharedTableCart, storeSharedTableCart } from '@/lib/redis'
+import { prisma } from '@/lib/prisma'
 
 type IOServer = SocketIOServer<
   ClientToServerEvents & StaffToServerEvents,
   ServerToClientEvents
 >
+
+// Mapeo en memoria de participantes activos por mesa: tableId -> Map<socketId, userName>
+const activeParticipantsMap = new Map<string, Map<string, string>>()
 
 // Persistir el singleton en globalThis para que sobreviva re-imports de módulo
 // dentro del mismo proceso Node.js (custom server + API routes comparten el mismo pid).
@@ -67,25 +74,156 @@ export function initSocketServer(httpServer: HttpServer): IOServer {
   io.on('connection', (socket: Socket) => {
     console.log(`[Socket.IO] Cliente conectado: ${socket.id}`)
 
+    let joinedTableId: string | null = null
+
     // --------------------------------------------------------
     // Comensal: Unirse a sala de mesa validando sesión
     // --------------------------------------------------------
     socket.on(WsClientEvent.JOIN_TABLE_SESSION, async (data: JoinTableSessionPayload, callback) => {
       try {
-        const session = await getTableSession(data.sessionToken)
+        let session = await getTableSession(data.sessionToken)
+
+        if (!session) {
+          const dbSession = await prisma.tableSession.findFirst({
+            where: {
+              sessionToken: data.sessionToken,
+              tableId: data.tableId,
+              status: 'ACTIVE',
+              expiresAt: { gt: new Date() },
+            },
+            include: { table: true },
+          })
+          if (dbSession) {
+            session = {
+              sessionId: dbSession.id,
+              tableId: dbSession.tableId,
+              restaurantId: dbSession.table.restaurantId,
+              tableNumber: dbSession.table.tableNumber,
+              expiresAt: dbSession.expiresAt.toISOString(),
+            }
+          }
+        }
 
         if (!session || session.tableId !== data.tableId || session.restaurantId !== data.restaurantId) {
           callback({ success: false, error: 'Sesión inválida o expirada.' })
           return
         }
 
+        joinedTableId = data.tableId
         const tableRoom = `restaurant:${data.restaurantId}:table:${data.tableId}`
         await socket.join(tableRoom)
-        console.log(`[Socket.IO] Comensal unido a sala: ${tableRoom}`)
-        callback({ success: true })
+
+        // Guardar participante activo
+        if (!activeParticipantsMap.has(data.tableId)) {
+          activeParticipantsMap.set(data.tableId, new Map())
+        }
+        const userMap = activeParticipantsMap.get(data.tableId)!
+        userMap.set(socket.id, data.userName || 'Comensal')
+
+        const participantsList = Array.from(userMap.entries()).map(([sId, name]) => ({
+          socketId: sId,
+          userName: name,
+        }))
+
+        // Emitir actualización de participantes a la sala
+        io.to(tableRoom).emit(WsServerEvent.TABLE_PARTICIPANTS_UPDATED, {
+          tableId: data.tableId,
+          participants: participantsList,
+        })
+
+        // Obtener carrito guardado en Redis/memoria para esta mesa
+        const savedCart = await getSharedTableCart<SharedCartItemPayload>(data.tableId)
+
+        // Obtener órdenes ya confirmadas para esta sesión de mesa
+        let confirmedOrders: ConfirmedOrderPayload[] = []
+        try {
+          const dbOrders = await prisma.order.findMany({
+            where: {
+              sessionId: session.sessionId,
+              tableId: data.tableId,
+            },
+            orderBy: { createdAt: 'asc' },
+            include: {
+              items: {
+                include: {
+                  product: true,
+                  modifiers: {
+                    include: { modifierOption: true },
+                  },
+                },
+              },
+            },
+          })
+
+          confirmedOrders = dbOrders.map((o) => ({
+            orderId: o.id,
+            status: o.status,
+            totalAmount: o.totalAmount.toNumber(),
+            itemsCount: o.items.reduce((acc, i) => acc + i.quantity, 0),
+            createdAt: o.createdAt.toISOString(),
+            items: o.items.map((i) => {
+              const orderedByMatch = i.itemNotes?.match(/^\[Para:\s*([^\]]+)\]/)
+              const orderedByNames = orderedByMatch
+                ? orderedByMatch[1].split(',').map((n) => n.trim())
+                : []
+              const cleanNotes = i.itemNotes?.replace(/^\[Para:\s*[^\]]+\]\s*/, '').trim()
+
+              return {
+                id: i.id,
+                name: i.product.name,
+                quantity: i.quantity,
+                unitPrice: i.unitPrice.toNumber(),
+                subtotal: i.subtotal.toNumber(),
+                modifiers: i.modifiers.map((m) => m.modifierOption.name),
+                orderedByNames,
+                notes: cleanNotes || undefined,
+              }
+            }),
+          }))
+        } catch (dbErr) {
+          console.error('[Socket.IO] Error al obtener órdenes de mesa:', dbErr)
+        }
+
+        console.log(`[Socket.IO] Comensal "${data.userName || 'Invitado'}" unido a sala: ${tableRoom}`)
+        callback({
+          success: true,
+          cart: savedCart ?? undefined,
+          participants: participantsList,
+          confirmedOrders,
+        })
       } catch (err) {
         console.error('[Socket.IO] Error en JOIN_TABLE_SESSION:', err)
         callback({ success: false, error: 'Error interno del servidor.' })
+      }
+    })
+
+    // --------------------------------------------------------
+    // Comensal: Actualizar Carrito Compartido
+    // --------------------------------------------------------
+    socket.on(WsClientEvent.UPDATE_SHARED_CART, async (data: UpdateSharedCartPayload, callback) => {
+      try {
+        const session = await getTableSession(data.sessionToken)
+        if (!session || session.tableId !== data.tableId) {
+          if (callback) callback({ success: false, error: 'Sesión inválida.' })
+          return
+        }
+
+        const tableRoom = `restaurant:${data.restaurantId}:table:${data.tableId}`
+
+        // Guardar nuevo estado del carrito en Redis
+        await storeSharedTableCart(data.tableId, data.items)
+
+        // Transmitir a todos los clientes de la mesa (incluyendo/excluyendo según corresponda)
+        socket.to(tableRoom).emit(WsServerEvent.SHARED_CART_UPDATED, {
+          items: data.items,
+          updatedBy: data.updatedBy,
+        })
+
+        console.log(`[Socket.IO] Carrito mesa ${data.tableId} actualizado por ${data.updatedBy}`)
+        if (callback) callback({ success: true })
+      } catch (err) {
+        console.error('[Socket.IO] Error en UPDATE_SHARED_CART:', err)
+        if (callback) callback({ success: false, error: 'Error interno del servidor.' })
       }
     })
 
@@ -144,6 +282,24 @@ export function initSocketServer(httpServer: HttpServer): IOServer {
 
     socket.on('disconnect', (reason) => {
       console.log(`[Socket.IO] Cliente desconectado: ${socket.id} (${reason})`)
+
+      if (joinedTableId && activeParticipantsMap.has(joinedTableId)) {
+        const userMap = activeParticipantsMap.get(joinedTableId)!
+        userMap.delete(socket.id)
+        if (userMap.size === 0) {
+          activeParticipantsMap.delete(joinedTableId)
+        } else {
+          const participantsList = Array.from(userMap.entries()).map(([sId, name]) => ({
+            socketId: sId,
+            userName: name,
+          }))
+          // Notificar desconexión a los comensales restantes
+          io.emit(WsServerEvent.TABLE_PARTICIPANTS_UPDATED, {
+            tableId: joinedTableId,
+            participants: participantsList,
+          })
+        }
+      }
     })
   })
 
@@ -174,3 +330,22 @@ export function emitNewOrder(
   io.to(staffRoom).emit(WsServerEvent.ORDER_RECEIVED, payload)
   console.log(`[Socket.IO] emitNewOrder → ${staffRoom}`)
 }
+
+/**
+ * Emite una orden confirmada a la sala de la mesa correspondiente.
+ */
+export function emitOrderConfirmedToTable(
+  restaurantId: string,
+  tableId: string,
+  order: ConfirmedOrderPayload,
+): void {
+  const io = getIO()
+  if (!io) {
+    console.warn('[Socket.IO] emitOrderConfirmedToTable: servidor Socket.IO no disponible.')
+    return
+  }
+  const tableRoom = `restaurant:${restaurantId}:table:${tableId}`
+  io.to(tableRoom).emit(WsServerEvent.TABLE_ORDERS_UPDATED, order)
+  console.log(`[Socket.IO] emitOrderConfirmedToTable → ${tableRoom} (Orden ${order.orderId})`)
+}
+

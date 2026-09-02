@@ -45,9 +45,10 @@ interface ProductModalProps {
   product: ProductModalData
   currency?: string
   onClose: () => void
+  onAdded?: () => void
 }
 
-export function ProductModal({ product, currency = 'MXN', onClose }: ProductModalProps) {
+export function ProductModal({ product, currency = 'MXN', onClose, onAdded }: ProductModalProps) {
   const addItem = useCartStore((s) => s.addItem)
 
   // Estado local de selecciones
@@ -159,6 +160,8 @@ export function ProductModal({ product, currency = 'MXN', onClose }: ProductModa
       removedIngredientIds: Array.from(removedIngredients),
       notes: notes.trim() || undefined,
     })
+
+    if (onAdded) onAdded()
 
     onClose()
   }

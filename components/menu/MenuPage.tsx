@@ -1,11 +1,23 @@
 'use client'
 
-import { useState } from 'react'
-import { useCartStore } from '@/store/cart-store'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { io, type Socket } from 'socket.io-client'
+import { useCartStore, type CartItem } from '@/store/cart-store'
 import { ProductModal, type ProductModalData } from './ProductModal'
 import { CartSheet } from './CartSheet'
 import { CallWaiterButton } from '@/components/waiter/CallWaiterButton'
 import { PdfMenuView } from './PdfMenuView'
+import { UserAliasModal } from './UserAliasModal'
+import { TableParticipantsBadge } from './TableParticipantsBadge'
+import {
+  WsClientEvent,
+  WsServerEvent,
+  type SharedCartItemPayload,
+  type TableParticipantsPayload,
+  type ConfirmedOrderPayload,
+  type ClientToServerEvents,
+  type ServerToClientEvents,
+} from '@/types/websocket-events'
 
 // ============================================================
 // Types
@@ -41,6 +53,22 @@ interface MenuPageProps {
 
 type ViewMode = 'list' | 'pdf'
 
+let menuSocket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null
+
+function getSocket(): Socket<ServerToClientEvents, ClientToServerEvents> {
+  if (!menuSocket) {
+    const socketUrl =
+      process.env.NEXT_PUBLIC_SOCKET_URL ||
+      (typeof window !== 'undefined' ? window.location.origin : '')
+
+    menuSocket = io(socketUrl, {
+      path: '/api/socketio',
+      transports: ['websocket', 'polling'],
+    })
+  }
+  return menuSocket
+}
+
 // ============================================================
 // Menu Page
 // ============================================================
@@ -63,8 +91,134 @@ export function MenuPage({
   const [cartOpen, setCartOpen] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>(hasPdf ? 'pdf' : 'list')
 
+  const userAlias = useCartStore((s) => s.userAlias)
+  const setUserAlias = useCartStore((s) => s.setUserAlias)
+  const setSharedItems = useCartStore((s) => s.setSharedItems)
+  const setConfirmedOrders = useCartStore((s) => s.setConfirmedOrders)
+  const addConfirmedOrder = useCartStore((s) => s.addConfirmedOrder)
+  const getOrderedByForProduct = useCartStore((s) => s.getOrderedByForProduct)
   const totalItems = useCartStore((s) => s.getTotalItemsCount())
   const totalAmount = useCartStore((s) => s.getTotalAmount())
+  const confirmedCount = useCartStore((s) => s.getConfirmedItemsCount())
+  const confirmedTotalAmount = useCartStore((s) => s.getConfirmedTotalAmount())
+
+  const [isAliasModalOpen, setIsAliasModalOpen] = useState(false)
+  const [participants, setParticipants] = useState<Array<{ socketId: string; userName: string }>>([])
+  const isBroadcastingRef = useRef(false)
+
+  // Cargar apodo guardado o solicitarlo
+  useEffect(() => {
+    if (!userAlias) {
+      const savedAlias = localStorage.getItem('imenu_user_alias')
+      if (savedAlias) {
+        setUserAlias(savedAlias)
+      } else {
+        queueMicrotask(() => setIsAliasModalOpen(true))
+      }
+    }
+  }, [userAlias, setUserAlias])
+
+  // Función para retransmitir cambios del carrito por socket
+  const broadcastCartUpdate = useCallback(
+    (newItems: CartItem[]) => {
+      if (!userAlias) return
+      isBroadcastingRef.current = true
+      const socket = getSocket()
+
+      const payloadItems: SharedCartItemPayload[] = newItems.map((item) => ({
+        cartItemId: item.cartItemId,
+        productId: item.productId,
+        name: item.name,
+        basePrice: item.basePrice,
+        unitCalculatedPrice: item.unitCalculatedPrice,
+        quantity: item.quantity,
+        selectedModifiers: item.selectedModifiers,
+        removedIngredientIds: item.removedIngredientIds,
+        notes: item.notes,
+        orderedBy: item.orderedBy,
+      }))
+
+      socket.emit(WsClientEvent.UPDATE_SHARED_CART, {
+        restaurantId,
+        tableId,
+        sessionToken,
+        updatedBy: userAlias,
+        items: payloadItems,
+      })
+
+      setTimeout(() => {
+        isBroadcastingRef.current = false
+      }, 500)
+    },
+    [restaurantId, tableId, sessionToken, userAlias],
+  )
+
+  // Conexión Socket.IO y listeners
+  useEffect(() => {
+    if (!userAlias) return
+    const socket = getSocket()
+
+    // Cargar órdenes confirmadas iniciales vía API
+    fetch(`/api/orders?tableId=${tableId}&sessionToken=${sessionToken}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.orders) {
+          setConfirmedOrders(data.orders)
+        }
+      })
+      .catch((err) => console.error('Error al cargar órdenes de mesa:', err))
+
+    // Unirse a la sesión de mesa enviando el alias
+    socket.emit(
+      WsClientEvent.JOIN_TABLE_SESSION,
+      { restaurantId, tableId, sessionToken, userName: userAlias },
+      (ack) => {
+        if (ack.success) {
+          if (ack.participants) setParticipants(ack.participants)
+          if (ack.cart && ack.cart.length > 0) {
+            setSharedItems(ack.cart)
+          }
+          if (ack.confirmedOrders) {
+            setConfirmedOrders(ack.confirmedOrders)
+          }
+        }
+      },
+    )
+
+    // Listener de actualización de participantes
+    const handleParticipantsUpdate = (data: TableParticipantsPayload) => {
+      if (data.tableId === tableId) {
+        setParticipants(data.participants)
+      }
+    }
+
+    // Listener de actualización del carrito compartido en tiempo real
+    const handleSharedCartUpdate = (data: { items: SharedCartItemPayload[]; updatedBy: string }) => {
+      if (isBroadcastingRef.current) return
+      setSharedItems(data.items)
+    }
+
+    // Listener de nuevas órdenes confirmadas para la mesa
+    const handleTableOrdersUpdate = (order: ConfirmedOrderPayload) => {
+      addConfirmedOrder(order)
+    }
+
+    socket.on(WsServerEvent.TABLE_PARTICIPANTS_UPDATED, handleParticipantsUpdate)
+    socket.on(WsServerEvent.SHARED_CART_UPDATED, handleSharedCartUpdate)
+    socket.on(WsServerEvent.TABLE_ORDERS_UPDATED, handleTableOrdersUpdate)
+
+    return () => {
+      socket.off(WsServerEvent.TABLE_PARTICIPANTS_UPDATED, handleParticipantsUpdate)
+      socket.off(WsServerEvent.SHARED_CART_UPDATED, handleSharedCartUpdate)
+      socket.off(WsServerEvent.TABLE_ORDERS_UPDATED, handleTableOrdersUpdate)
+    }
+  }, [restaurantId, tableId, sessionToken, userAlias, setSharedItems, setConfirmedOrders, addConfirmedOrder])
+
+  const handleSaveAlias = (alias: string) => {
+    localStorage.setItem('imenu_user_alias', alias)
+    setUserAlias(alias)
+    setIsAliasModalOpen(false)
+  }
 
   const formatPrice = (amount: number) =>
     new Intl.NumberFormat('es-MX', { style: 'currency', currency }).format(amount)
@@ -72,23 +226,41 @@ export function MenuPage({
   return (
     <div className="min-h-dvh bg-zinc-950 text-white font-sans selection:bg-amber-500/30">
 
+      {/* Modal para ingresar apodo de comensal */}
+      <UserAliasModal
+        isOpen={isAliasModalOpen}
+        currentAlias={userAlias}
+        onSave={handleSaveAlias}
+        onClose={() => userAlias && setIsAliasModalOpen(false)}
+      />
+
       {/* ── Header ── */}
       <header className="sticky top-0 z-40 bg-zinc-950/95 backdrop-blur-md border-b border-zinc-900/80">
-        <div className="max-w-2xl mx-auto px-4 py-3.5 flex items-center justify-between gap-3">
+        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 font-bold text-sm">
               {restaurantName.charAt(0)}
             </div>
             <div>
-              <h1 className="text-sm sm:text-base font-black text-zinc-100 tracking-tight leading-tight">{restaurantName}</h1>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
-                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Mesa {tableNumber}</span>
+              <h1 className="text-sm sm:text-base font-black text-zinc-100 tracking-tight leading-tight">
+                {restaurantName}
+              </h1>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                  Mesa {tableNumber}
+                </span>
+
+                {/* Badge de comensales activos */}
+                <TableParticipantsBadge
+                  participants={participants}
+                  currentUserAlias={userAlias}
+                  onEditAlias={() => setIsAliasModalOpen(true)}
+                />
               </div>
             </div>
           </div>
 
-          {/* Cart Icon in Header for Desktop fallback / Quick View */}
+          {/* Cart Icon in Header */}
           <button
             onClick={() => setCartOpen(true)}
             className="relative flex items-center justify-center w-10 h-10 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 rounded-xl transition-all duration-200 active:scale-95 text-zinc-300"
@@ -110,9 +282,11 @@ export function MenuPage({
               <button
                 onClick={() => setViewMode('pdf')}
                 className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-xl text-xs font-semibold transition-all duration-200
-                  ${viewMode === 'pdf'
-                    ? 'bg-amber-500 text-white shadow-md shadow-amber-500/10'
-                    : 'text-zinc-400 hover:text-zinc-200'}`}
+                  ${
+                    viewMode === 'pdf'
+                      ? 'bg-amber-500 text-white shadow-md shadow-amber-500/10'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
                 aria-pressed={viewMode === 'pdf'}
               >
                 📋 Menú Interactivo PDF
@@ -120,9 +294,11 @@ export function MenuPage({
               <button
                 onClick={() => setViewMode('list')}
                 className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-xl text-xs font-semibold transition-all duration-200
-                  ${viewMode === 'list'
-                    ? 'bg-amber-500 text-white shadow-md shadow-amber-500/10'
-                    : 'text-zinc-400 hover:text-zinc-200'}`}
+                  ${
+                    viewMode === 'list'
+                      ? 'bg-amber-500 text-white shadow-md shadow-amber-500/10'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
                 aria-pressed={viewMode === 'list'}
               >
                 🍔 Lista por Categorías
@@ -142,9 +318,11 @@ export function MenuPage({
                     key={cat.id}
                     onClick={() => setActiveCategory(cat.id)}
                     className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-all duration-200 border
-                      ${isActive
-                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 font-bold'
-                        : 'bg-zinc-900 border-zinc-850 text-zinc-400 hover:text-zinc-200'}`}
+                      ${
+                        isActive
+                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 font-bold'
+                          : 'bg-zinc-900 border-zinc-850 text-zinc-400 hover:text-zinc-200'
+                      }`}
                   >
                     {cat.name}
                   </button>
@@ -184,6 +362,7 @@ export function MenuPage({
                       key={product.id}
                       product={product}
                       currency={currency}
+                      orderedBy={getOrderedByForProduct(product.id)}
                       onSelect={() => setSelectedProduct(product)}
                     />
                   ))}
@@ -195,7 +374,6 @@ export function MenuPage({
 
       {/* ── Bottom Floating Bar (Waiter & Cart) ── */}
       <div className="fixed bottom-6 left-0 right-0 z-30 px-4 max-w-2xl mx-auto flex items-end gap-3 pointer-events-none">
-        
         {/* Call Waiter Compact Button */}
         <div className="pointer-events-auto">
           <CallWaiterButton
@@ -212,22 +390,41 @@ export function MenuPage({
           {totalItems > 0 ? (
             <button
               onClick={() => setCartOpen(true)}
-              className="w-full bg-amber-500 hover:bg-amber-400 text-white rounded-2xl flex items-center justify-between px-5 py-4 shadow-xl shadow-amber-500/20 active:scale-98 transition-all font-bold text-sm sm:text-base group"
+              className="w-full bg-amber-500 hover:bg-amber-400 text-white rounded-2xl flex items-center justify-between px-5 py-4 shadow-xl shadow-amber-500/20 active:scale-98 transition-all font-bold text-sm sm:text-base group cursor-pointer"
             >
               <div className="flex items-center gap-2">
                 <span className="text-lg">🛒</span>
-                <span>Ver Pedido</span>
+                <span>{confirmedCount > 0 ? 'Ver Ronda Actual' : 'Ver Pedido Mesa'}</span>
               </div>
               <div className="flex items-center gap-2 bg-black/15 py-1 px-3 rounded-lg text-xs sm:text-sm font-semibold border border-white/10">
-                <span>{totalItems} {totalItems === 1 ? 'item' : 'items'}</span>
+                <span>
+                  {totalItems} {totalItems === 1 ? 'item' : 'items'}
+                </span>
                 <span className="w-1 h-1 bg-white/40 rounded-full" />
                 <span>{formatPrice(totalAmount)}</span>
+              </div>
+            </button>
+          ) : confirmedCount > 0 ? (
+            <button
+              onClick={() => setCartOpen(true)}
+              className="w-full bg-zinc-900/95 border border-emerald-500/40 hover:border-emerald-500/70 text-emerald-300 hover:text-white rounded-2xl flex items-center justify-between px-5 py-4 shadow-xl shadow-emerald-500/5 active:scale-98 transition-all font-bold text-sm sm:text-base group cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🍳</span>
+                <span>Ver Pedidos en Cocina</span>
+              </div>
+              <div className="flex items-center gap-2 bg-emerald-500/10 py-1 px-3 rounded-lg text-xs sm:text-sm font-semibold border border-emerald-500/20 text-emerald-300">
+                <span>
+                  {confirmedCount} {confirmedCount === 1 ? 'platillo' : 'platillos'}
+                </span>
+                <span className="w-1 h-1 bg-emerald-400/40 rounded-full" />
+                <span>{formatPrice(confirmedTotalAmount)}</span>
               </div>
             </button>
           ) : (
             <button
               onClick={() => setCartOpen(true)}
-              className="w-full bg-zinc-900/90 border border-zinc-800 text-zinc-400 hover:text-zinc-200 rounded-2xl flex items-center justify-between px-5 py-4 shadow-xl active:scale-98 transition-all font-semibold text-sm"
+              className="w-full bg-zinc-900/90 border border-zinc-800 text-zinc-400 hover:text-zinc-200 rounded-2xl flex items-center justify-between px-5 py-4 shadow-xl active:scale-98 transition-all font-semibold text-sm cursor-pointer"
             >
               <div className="flex items-center gap-2">
                 <span>🛒</span>
@@ -248,17 +445,20 @@ export function MenuPage({
           product={selectedProduct}
           currency={currency}
           onClose={() => setSelectedProduct(null)}
+          onAdded={() => broadcastCartUpdate(useCartStore.getState().items)}
         />
       )}
 
       {/* ── Cart Drawer ── */}
       {cartOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setCartOpen(false)} />
-          <div className="relative w-full max-w-sm bg-zinc-900 border-l border-zinc-800 h-full
-                          flex flex-col shadow-2xl overflow-hidden animate-slide-in">
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setCartOpen(false)}
+          />
+          <div className="relative w-full max-w-sm bg-zinc-900 border-l border-zinc-800 h-full flex flex-col shadow-2xl overflow-hidden animate-slide-in">
             <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800 flex-shrink-0">
-              <h2 className="font-bold text-white text-base">Tu Pedido</h2>
+              <h2 className="font-bold text-white text-base">Pedido de la Mesa</h2>
               <button
                 onClick={() => setCartOpen(false)}
                 className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 transition-colors"
@@ -274,6 +474,7 @@ export function MenuPage({
                 sessionToken={sessionToken}
                 currency={currency}
                 onClose={() => setCartOpen(false)}
+                onBroadcastCartUpdate={broadcastCartUpdate}
               />
             </div>
           </div>
@@ -290,10 +491,12 @@ export function MenuPage({
 function ProductCard({
   product,
   currency,
+  orderedBy = [],
   onSelect,
 }: {
   product: ProductModalData
   currency: string
+  orderedBy?: string[]
   onSelect: () => void
 }) {
   const formatPrice = (amount: number) =>
@@ -302,13 +505,25 @@ function ProductCard({
   const hasModifiers =
     product.modifierGroups.length > 0 || product.ingredients.some((i) => i.isRemovable)
 
+  const hasOrders = orderedBy.length > 0
+
   return (
     <button
       onClick={onSelect}
-      className="w-full text-left bg-zinc-900/40 backdrop-blur-sm hover:bg-zinc-900 border border-zinc-900/60
-                 hover:border-zinc-850 rounded-2xl overflow-hidden transition-all duration-300
-                 hover:shadow-md hover:shadow-black/20 hover:scale-[1.01] active:scale-[0.99] group p-3.5"
+      className={`w-full text-left bg-zinc-900/40 backdrop-blur-sm hover:bg-zinc-900 border
+                 rounded-2xl overflow-hidden transition-all duration-300
+                 hover:shadow-md hover:shadow-black/20 hover:scale-[1.01] active:scale-[0.99] group p-3.5 relative ${
+                   hasOrders ? 'border-amber-500/50 bg-amber-500/5' : 'border-zinc-900/60 hover:border-zinc-850'
+                 }`}
     >
+      {/* Badge flotante indicando qué comensales ordenaron este producto */}
+      {hasOrders && (
+        <div className="mb-2 inline-flex items-center gap-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-md text-[10px] font-bold">
+          <span>🏷️</span>
+          <span>Pedida por: {orderedBy.join(', ')}</span>
+        </div>
+      )}
+
       <div className="flex items-center gap-4">
         {/* Content */}
         <div className="flex-1 min-w-0 flex flex-col justify-between h-full">
