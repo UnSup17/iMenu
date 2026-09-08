@@ -34,6 +34,10 @@ export enum WsServerEvent {
   SHARED_CART_UPDATED = 'shared_cart_updated',
   TABLE_PARTICIPANTS_UPDATED = 'table_participants_updated',
   TABLE_ORDERS_UPDATED = 'table_orders_updated',
+  // Inventario en tiempo real
+  INVENTORY_UPDATED = 'inventory_updated',
+  PRODUCT_UNAVAILABLE = 'product_unavailable',
+  PRODUCT_AVAILABLE = 'product_available',
   ERROR = 'ws_error',
 }
 
@@ -85,10 +89,12 @@ export interface OrderNotificationPayload {
 
 export interface OrderStatusChangedPayload {
   orderId: string
+  restaurantId?: string
   tableId: string
   newStatus: 'PREPARING' | 'READY' | 'DELIVERED' | 'CANCELLED'
   updatedAt: string
 }
+
 
 export interface SharedCartItemPayload {
   cartItemId: string
@@ -154,6 +160,32 @@ export interface WsErrorPayload {
   message: string
 }
 
+// Inventario en tiempo real
+export interface InventoryUpdatedPayload {
+  restaurantId: string
+  inventoryItemId: string
+  inventoryItemName: string
+  currentStock: number
+  minStock: number
+  isLow: boolean      // currentStock <= minStock
+  isEmpty: boolean    // currentStock <= 0
+}
+
+// Un producto quedó sin stock de un ingrediente
+export interface ProductUnavailablePayload {
+  restaurantId: string
+  productId: string
+  reason: string      // "Sin stock de Pollo"
+  inventoryItemId: string
+}
+
+// Un producto recuperó disponibilidad (se repuso el ingrediente)
+export interface ProductAvailablePayload {
+  restaurantId: string
+  productId: string
+  inventoryItemId: string
+}
+
 // ============================================================
 // Socket.IO Event Map Interfaces (tipado del servidor)
 // ============================================================
@@ -194,6 +226,9 @@ export interface ServerToClientEvents {
   [WsServerEvent.SHARED_CART_UPDATED]: (data: { items: SharedCartItemPayload[]; updatedBy: string }) => void
   [WsServerEvent.TABLE_PARTICIPANTS_UPDATED]: (data: TableParticipantsPayload) => void
   [WsServerEvent.TABLE_ORDERS_UPDATED]: (data: ConfirmedOrderPayload) => void
+  [WsServerEvent.INVENTORY_UPDATED]: (data: InventoryUpdatedPayload) => void
+  [WsServerEvent.PRODUCT_UNAVAILABLE]: (data: ProductUnavailablePayload) => void
+  [WsServerEvent.PRODUCT_AVAILABLE]: (data: ProductAvailablePayload) => void
   [WsServerEvent.ERROR]: (data: WsErrorPayload) => void
 }
 

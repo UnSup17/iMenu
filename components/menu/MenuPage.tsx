@@ -39,6 +39,12 @@ interface PdfHotspot {
   product: ProductModalData
 }
 
+interface StockIssueItem {
+  productId: string
+  ingredientName: string
+  reason?: string
+}
+
 interface MenuPageProps {
   restaurantId: string
   restaurantName: string
@@ -49,6 +55,7 @@ interface MenuPageProps {
   categories: Category[]
   pdfUrl?: string | null
   pdfHotspots?: PdfHotspot[]
+  initialStockIssues?: StockIssueItem[]
 }
 
 type ViewMode = 'list' | 'pdf'
@@ -83,6 +90,7 @@ export function MenuPage({
   categories,
   pdfUrl,
   pdfHotspots = [],
+  initialStockIssues = [],
 }: MenuPageProps) {
   const hasPdf = Boolean(pdfUrl)
 
@@ -90,6 +98,7 @@ export function MenuPage({
   const [activeCategory, setActiveCategory] = useState<string>(categories[0]?.id ?? '')
   const [cartOpen, setCartOpen] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>(hasPdf ? 'pdf' : 'list')
+  const [stockIssues, setStockIssues] = useState<StockIssueItem[]>(initialStockIssues)
 
   const userAlias = useCartStore((s) => s.userAlias)
   const setUserAlias = useCartStore((s) => s.setUserAlias)
@@ -203,14 +212,30 @@ export function MenuPage({
       addConfirmedOrder(order)
     }
 
+    // Listeners de disponibilidad de stock en tiempo real
+    const handleProductUnavailable = (data: StockIssueItem) => {
+      setStockIssues((prev) => [...prev.filter((si) => si.productId !== data.productId), data])
+    }
+
+    const handleProductAvailable = (data: { productId: string }) => {
+      setStockIssues((prev) => prev.filter((si) => si.productId !== data.productId))
+    }
+
     socket.on(WsServerEvent.TABLE_PARTICIPANTS_UPDATED, handleParticipantsUpdate)
     socket.on(WsServerEvent.SHARED_CART_UPDATED, handleSharedCartUpdate)
     socket.on(WsServerEvent.TABLE_ORDERS_UPDATED, handleTableOrdersUpdate)
-
+    // @ts-ignore custom events
+    socket.on('product:unavailable', handleProductUnavailable)
+    // @ts-ignore custom events
+    socket.on('product:available', handleProductAvailable)
     return () => {
       socket.off(WsServerEvent.TABLE_PARTICIPANTS_UPDATED, handleParticipantsUpdate)
       socket.off(WsServerEvent.SHARED_CART_UPDATED, handleSharedCartUpdate)
       socket.off(WsServerEvent.TABLE_ORDERS_UPDATED, handleTableOrdersUpdate)
+      // @ts-ignore custom events
+      socket.off('product:unavailable', handleProductUnavailable)
+      // @ts-ignore custom events
+      socket.off('product:available', handleProductAvailable)
     }
   }, [restaurantId, tableId, sessionToken, userAlias, setSharedItems, setConfirmedOrders, addConfirmedOrder])
 
@@ -357,15 +382,19 @@ export function MenuPage({
                 </h2>
 
                 <div className="grid grid-cols-1 gap-3">
-                  {cat.products.map((product) => (
-                    <ProductCard
-                      key={product.id}
-                      product={product}
-                      currency={currency}
-                      orderedBy={getOrderedByForProduct(product.id)}
-                      onSelect={() => setSelectedProduct(product)}
-                    />
-                  ))}
+                  {cat.products.map((product) => {
+                    const issue = stockIssues.find((si) => si.productId === product.id)
+                    return (
+                      <ProductCard
+                        key={product.id}
+                        product={product}
+                        currency={currency}
+                        orderedBy={getOrderedByForProduct(product.id)}
+                        stockIssue={issue}
+                        onSelect={() => setSelectedProduct(product)}
+                      />
+                    )
+                  })}
                 </div>
               </section>
             ))}
@@ -444,6 +473,7 @@ export function MenuPage({
         <ProductModal
           product={selectedProduct}
           currency={currency}
+          stockIssue={stockIssues.find((si) => si.productId === selectedProduct.id)}
           onClose={() => setSelectedProduct(null)}
           onAdded={() => broadcastCartUpdate(useCartStore.getState().items)}
         />
@@ -492,11 +522,13 @@ function ProductCard({
   product,
   currency,
   orderedBy = [],
+  stockIssue,
   onSelect,
 }: {
   product: ProductModalData
   currency: string
   orderedBy?: string[]
+  stockIssue?: StockIssueItem
   onSelect: () => void
 }) {
   const formatPrice = (amount: number) =>
@@ -506,6 +538,7 @@ function ProductCard({
     product.modifierGroups.length > 0 || product.ingredients.some((i) => i.isRemovable)
 
   const hasOrders = orderedBy.length > 0
+  const isOutOfStock = Boolean(stockIssue)
 
   return (
     <button
@@ -513,10 +546,14 @@ function ProductCard({
       className={`w-full text-left bg-zinc-900/40 backdrop-blur-sm hover:bg-zinc-900 border
                  rounded-2xl overflow-hidden transition-all duration-300
                  hover:shadow-md hover:shadow-black/20 hover:scale-[1.01] active:scale-[0.99] group p-3.5 relative ${
-                   hasOrders ? 'border-amber-500/50 bg-amber-500/5' : 'border-zinc-900/60 hover:border-zinc-850'
+                   isOutOfStock
+                     ? 'border-red-900/50 bg-red-950/20 opacity-80'
+                     : hasOrders
+                     ? 'border-amber-500/50 bg-amber-500/5'
+                     : 'border-zinc-900/60 hover:border-zinc-850'
                  }`}
     >
-      {/* Badge flotante indicando qué comensales ordenaron este producto */}
+      {/* Badge de comensales */}
       {hasOrders && (
         <div className="mb-2 inline-flex items-center gap-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-md text-[10px] font-bold">
           <span>🏷️</span>
@@ -524,11 +561,23 @@ function ProductCard({
         </div>
       )}
 
+      {/* Badge de Sin Stock de ingrediente */}
+      {isOutOfStock && (
+        <div className="mb-2 inline-flex items-center gap-1 bg-red-950/80 text-red-300 border border-red-800 px-2 py-0.5 rounded-md text-[10px] font-bold">
+          <span>⚠️</span>
+          <span>Sin stock de {stockIssue?.ingredientName}</span>
+        </div>
+      )}
+
       <div className="flex items-center gap-4">
         {/* Content */}
         <div className="flex-1 min-w-0 flex flex-col justify-between h-full">
           <div>
-            <h3 className="font-bold text-zinc-100 group-hover:text-amber-400 transition-colors text-sm sm:text-base leading-snug">
+            <h3
+              className={`font-bold transition-colors text-sm sm:text-base leading-snug ${
+                isOutOfStock ? 'text-zinc-400 line-through' : 'text-zinc-100 group-hover:text-amber-400'
+              }`}
+            >
               {product.name}
             </h3>
             {product.description && (
@@ -539,19 +588,29 @@ function ProductCard({
           </div>
 
           <div className="flex items-center justify-between mt-3">
-            <span className="font-extrabold text-amber-400 text-sm sm:text-base">
+            <span
+              className={`font-extrabold text-sm sm:text-base ${
+                isOutOfStock ? 'text-zinc-500' : 'text-amber-400'
+              }`}
+            >
               {formatPrice(product.basePrice)}
             </span>
 
             <div className="flex items-center gap-2">
-              {hasModifiers && (
+              {hasModifiers && !isOutOfStock && (
                 <span className="text-[9px] font-extrabold tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-md uppercase">
                   Personalizable
                 </span>
               )}
-              <span className="w-7 h-7 rounded-lg bg-zinc-800/80 border border-zinc-700/50 group-hover:bg-amber-500 group-hover:border-amber-400 text-zinc-400 group-hover:text-white flex items-center justify-center text-xs font-bold transition-all shadow-sm">
-                +
-              </span>
+              {isOutOfStock ? (
+                <span className="px-2 py-1 bg-red-950/60 border border-red-900 text-red-400 text-[10px] font-bold rounded-lg uppercase">
+                  Agotado
+                </span>
+              ) : (
+                <span className="w-7 h-7 rounded-lg bg-zinc-800/80 border border-zinc-700/50 group-hover:bg-amber-500 group-hover:border-amber-400 text-zinc-400 group-hover:text-white flex items-center justify-center text-xs font-bold transition-all shadow-sm">
+                  +
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -563,7 +622,9 @@ function ProductCard({
             <img
               src={product.imageUrl}
               alt={product.name}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${
+                isOutOfStock ? 'grayscale opacity-60' : ''
+              }`}
             />
           </div>
         )}

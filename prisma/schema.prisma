@@ -13,9 +13,18 @@ generator client {
 
 enum Role {
   SUPERADMIN
+  ORG_ADMIN     // Franquicia: Administra todas las sucursales de su organización
   RESTAURANT_ADMIN
+  ACCOUNTANT    // Solo módulos financieros, sin acceso a operaciones
+  MANAGER       // Operativo completo + inventario, sin contabilidad profunda
   WAITER
   KITCHEN
+}
+
+enum PlanTier {
+  BASIC      // 1 restaurante, facturación básica
+  PRO        // Hasta 5 sucursales, contabilidad completa, inventario
+  ENTERPRISE // Sucursales ilimitadas, API, soporte prioritario
 }
 
 enum TableStatus {
@@ -45,25 +54,125 @@ enum ModifierType {
 }
 
 // ============================================================
+// Enums — Inventario
+// ============================================================
+
+enum InventoryUnit {
+  KG
+  GRAM
+  LITER
+  ML
+  UNIT
+  PORTION
+}
+
+enum MovementType {
+  PURCHASE    // Entrada por compra
+  SALE        // Salida por venta (auto al recibir orden)
+  ADJUSTMENT  // Ajuste manual (merma, inventario físico)
+  WASTE       // Desperdicio registrado
+  TRANSFER    // Transferencia entre sucursales (Fase 3)
+}
+
+// ============================================================
+// Enums — Facturación
+// ============================================================
+
+enum TaxCountry {
+  CO    // Colombia — DIAN, IVA 19%
+  MX    // México — SAT, IVA 16%
+  CL    // Chile — SII, IVA 19%
+  PE    // Perú — SUNAT, IGV 18%
+  OTHER
+}
+
+enum PaymentMethod {
+  CASH
+  DEBIT_CARD
+  CREDIT_CARD
+  TRANSFER      // Transferencia / Nequi / Daviplata
+  QR_CODE       // Código QR (Bancolombia, etc.)
+  SPLIT         // Cuenta dividida
+  ROOM_CHARGE   // Para hoteles
+  OTHER
+}
+
+enum InvoiceStatus {
+  DRAFT     // Cuenta abierta (en curso)
+  ISSUED    // Emitida, pendiente de cobro
+  PAID      // Pagada
+  VOID      // Anulada
+  REFUNDED  // Reembolsada
+}
+
+// ============================================================
+// Organizaciones Multi-Tenant y Suscripciones SaaS (Fase 3)
+// ============================================================
+
+model Organization {
+  id           String        @id @default(uuid())
+  name         String
+  slug         String        @unique
+  logoUrl      String?
+  plan         PlanTier      @default(BASIC)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  restaurants  Restaurant[]
+  users        User[]
+  subscription Subscription?
+
+  @@map("organizations")
+}
+
+model Subscription {
+  id                 String       @id @default(uuid())
+  organizationId     String       @unique
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tier               PlanTier     @default(BASIC)
+  status             String       @default("trialing") // active, past_due, cancelled, trialing
+  currentPeriodStart DateTime     @default(now())
+  currentPeriodEnd   DateTime
+  trialEndsAt        DateTime?
+  stripeCustomerId   String?
+  stripeSubId        String?      @unique
+  cancelAtPeriodEnd  Boolean      @default(false)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@map("subscriptions")
+}
+
+// ============================================================
 // Modelos Core
 // ============================================================
 
 model Restaurant {
-  id        String   @id @default(uuid())
-  slug      String   @unique
-  name      String
-  currency  String   @default("USD")
-  isActive  Boolean  @default(true)
-  pdfUrl    String?  // URL del PDF del menú subido a Vercel Blob
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String        @id @default(uuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  slug           String        @unique
+  name           String
+  currency       String        @default("COP")
+  isActive       Boolean       @default(true)
+  pdfUrl         String?  // URL del PDF del menú subido a Vercel Blob
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
-  users      User[]
-  tables     Table[]
-  categories Category[]
-  products   Product[]
-  orders     Order[]
-  hotspots   PdfHotspot[]
+  users          User[]
+  tables         Table[]
+  categories     Category[]
+  products       Product[]
+  orders         Order[]
+  hotspots       PdfHotspot[]
+  taxConfig      TaxConfig?
+  inventoryItems InventoryItem[]
+  inventoryMovements InventoryMovement[]
+  invoices       Invoice[]
+  expenses                Expense[]
+  cashRegisterCloses      CashRegisterClose[]
+  accountingPeriods       AccountingPeriod[]
+  electronicInvoiceConfig ElectronicInvoiceConfig?
 
   @@map("restaurants")
 }
@@ -110,20 +219,28 @@ model VerificationToken {
 }
 
 model User {
-  id           String     @id @default(uuid())
-  restaurantId String?
-  restaurant   Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  email        String     @unique
-  emailVerified DateTime?
-  passwordHash String?
-  name         String?
-  image        String?
-  role         Role       @default(WAITER)
-  createdAt    DateTime   @default(now())
+  id             String        @id @default(uuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  restaurantId   String?
+  restaurant     Restaurant?   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  email          String        @unique
+  emailVerified  DateTime?
+  passwordHash   String?
+  name           String?
+  image          String?
+  role           Role          @default(WAITER)
+  createdAt      DateTime      @default(now())
 
-  accounts       Account[]
-  sessions       Session[]
-  assignedTables Table[] @relation("WaiterAssignedTables")
+  accounts                Account[]
+  sessions                Session[]
+  assignedTables          Table[]             @relation("WaiterAssignedTables")
+  inventoryMovements      InventoryMovement[]
+  invoicesAsWaiter        Invoice[]           @relation("InvoiceWaiter")
+  paymentsReceived        Payment[]           @relation("PaymentReceiver")
+  expensesCreated         Expense[]           @relation("ExpenseCreator")
+  cashRegisterCloses      CashRegisterClose[] @relation("CashRegisterCloser")
+  accountingPeriodsClosed AccountingPeriod[]  @relation("PeriodCloser")
 
   @@map("users")
 }
@@ -141,6 +258,7 @@ model Table {
 
   sessions TableSession[]
   orders   Order[]
+  invoices Invoice[]
 
   @@unique([restaurantId, tableNumber])
   @@map("tables")
@@ -156,7 +274,8 @@ model TableSession {
   createdAt    DateTime      @default(now())
   closedAt     DateTime?
 
-  orders Order[]
+  orders   Order[]
+  invoices Invoice[]
 
   @@index([sessionToken, status])
   @@map("table_sessions")
@@ -173,6 +292,16 @@ model Category {
   name         String
   orderIndex   Int        @default(0)
   isActive     Boolean    @default(true)
+
+  // ── Ofertas Especiales / Menús Temporales ──────────────────────────────────
+  isSpecialOffer   Boolean   @default(false) // true → aplican las reglas de horario
+  offerLabel       String?   // Etiqueta visual, ej. "🎃 Halloween", "🍱 Ejecutivo"
+  offerStartDate   DateTime? // Fecha de inicio (inclusive). null = sin límite de inicio
+  offerEndDate     DateTime? // Fecha de fin (inclusive). null = sin límite de fin
+  // Días de la semana en JSON, ej. "[1,2,3,4,5]"  (0=Dom, 1=Lun … 6=Sáb). null = todos los días
+  offerActiveDays  String?
+  offerStartTime   String?   // "HH:MM" hora inicio (zona del restaurante). null = sin restricción
+  offerEndTime     String?   // "HH:MM" hora fin   (zona del restaurante). null = sin restricción
 
   products Product[]
 
@@ -191,10 +320,12 @@ model Product {
   isAvailable  Boolean    @default(true)
   imageUrl     String?
 
-  modifierGroups ModifierGroup[]
-  ingredients    ProductIngredient[]
-  orderItems     OrderItem[]
-  pdfHotspots    PdfHotspot[]
+  modifierGroups  ModifierGroup[]
+  ingredients     ProductIngredient[]
+  orderItems      OrderItem[]
+  pdfHotspots     PdfHotspot[]
+  recipeItems     ProductRecipeItem[]   // Ingredientes de inventario que usa
+  stockIssues     ProductStockIssue[]   // Sin stock por ingrediente
 
   @@map("products")
 }
@@ -328,3 +459,350 @@ model PdfHotspot {
   @@index([restaurantId])
   @@map("pdf_hotspots")
 }
+
+// ============================================================
+// Inventario
+// ============================================================
+
+// Ítem de inventario (materia prima / ingrediente)
+model InventoryItem {
+  id           String        @id @default(uuid())
+  restaurantId String
+  restaurant   Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  name         String        // "Pechuga de pollo", "Papa nevada"
+  sku          String?       // Código interno opcional
+  unit         InventoryUnit
+  currentStock Decimal       @default(0) @db.Decimal(10, 3)
+  minStock     Decimal       @default(0) @db.Decimal(10, 3) // Umbral de alerta
+  costPerUnit  Decimal       @default(0) @db.Decimal(10, 4) // Costo unitario (para P&L)
+  supplier     String?
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  productRecipes ProductRecipeItem[]
+  movements      InventoryMovement[]
+  stockIssues    ProductStockIssue[]
+
+  @@map("inventory_items")
+}
+
+// Receta: qué ingredientes y en qué cantidad usa cada producto
+model ProductRecipeItem {
+  id              String        @id @default(uuid())
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  quantity        Decimal       @db.Decimal(10, 3) // Cantidad por 1 unidad del producto
+
+  @@unique([productId, inventoryItemId])
+  @@map("product_recipe_items")
+}
+
+// Historial de movimientos de inventario
+model InventoryMovement {
+  id              String        @id @default(uuid())
+  restaurantId    String
+  restaurant      Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  type            MovementType
+  quantity        Decimal       @db.Decimal(10, 3) // Positivo = entrada, Negativo = salida
+  stockBefore     Decimal       @db.Decimal(10, 3)
+  stockAfter      Decimal       @db.Decimal(10, 3)
+  unitCost        Decimal?      @db.Decimal(10, 4)
+  reference       String?       // orderId, invoiceId, etc.
+  notes           String?
+  createdAt       DateTime      @default(now())
+  createdById     String
+  createdBy       User          @relation(fields: [createdById], references: [id])
+
+  @@index([restaurantId, inventoryItemId])
+  @@index([reference])
+  @@map("inventory_movements")
+}
+
+// Sin stock por ingrediente: por qué un producto no está disponible
+model ProductStockIssue {
+  id              String        @id @default(uuid())
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  restaurantId    String
+  createdAt       DateTime      @default(now())
+  resolvedAt      DateTime?     // Se resuelve al reponer stock
+
+  @@unique([productId, inventoryItemId])
+  @@map("product_stock_issues")
+}
+
+// ============================================================
+// Facturación
+// ============================================================
+
+// Configuración fiscal por restaurante (1 registro por restaurante)
+model TaxConfig {
+  id                   String     @id @default(uuid())
+  restaurantId         String     @unique
+  restaurant           Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  country              TaxCountry @default(CO)
+  currency             String     @default("COP")
+  currencySymbol       String     @default("$")
+
+  // Impuestos
+  vatRate              Decimal    @default(0.19) @db.Decimal(5, 4) // IVA Colombia 19%
+  vatEnabled           Boolean    @default(true)
+  serviceChargeRate    Decimal    @default(0.00) @db.Decimal(5, 4)
+  serviceChargeEnabled Boolean    @default(false)
+
+  // Datos del negocio
+  legalName            String?    // Razón social
+  taxId                String?    // NIT (Colombia), RFC (México), RUT (Chile)
+  address              String?
+  phone                String?
+  email                String?
+  website              String?
+  invoiceFooter        String?    // Texto al pie de facturas
+  invoicePrefix        String     @default("FV")
+  nextInvoiceNumber    Int        @default(1)
+
+  // Configuración de impresión de tickets
+  ticketEnabled        Boolean    @default(true)
+  ticketWidth          Int        @default(80)  // mm: 58 o 80
+  ticketLogoUrl        String?
+  ticketHeader         String?    // Texto libre encabezado
+  ticketFooter         String?    // Texto libre pie (ej: "¡Gracias por su visita!")
+  ticketShowLogo       Boolean    @default(true)
+  ticketShowTax        Boolean    @default(true)
+  ticketShowTable      Boolean    @default(true)
+  ticketShowWaiter     Boolean    @default(true)
+
+  updatedAt            DateTime   @updatedAt
+
+  @@map("tax_configs")
+}
+
+// Factura / Ticket generado al cerrar una mesa
+model Invoice {
+  id             String        @id @default(uuid())
+  restaurantId   String
+  restaurant     Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  tableId        String?
+  table          Table?        @relation(fields: [tableId], references: [id])
+  sessionId      String?
+  session        TableSession? @relation(fields: [sessionId], references: [id])
+  invoiceNumber  String        // FV-0001 (auto-incremental por restaurante)
+  status         InvoiceStatus @default(DRAFT)
+
+  // Montos
+  subtotal       Decimal       @db.Decimal(12, 2)
+  taxAmount      Decimal       @db.Decimal(12, 2)
+  serviceCharge  Decimal       @default(0) @db.Decimal(12, 2)
+  discountAmount Decimal       @default(0) @db.Decimal(12, 2)
+  total          Decimal       @db.Decimal(12, 2)
+
+  // Pago
+  paymentMethod  PaymentMethod?
+  paidAt         DateTime?
+  issuedAt       DateTime      @default(now())
+  voidedAt       DateTime?
+  voidReason     String?
+
+  // Cliente (para factura nominal)
+  customerName   String?
+  customerTaxId  String?       // NIT del cliente
+  customerEmail  String?
+
+  // Mesero que atendió
+  waiterId       String?
+  waiter         User?         @relation("InvoiceWaiter", fields: [waiterId], references: [id])
+
+  notes          String?
+  pdfUrl         String?       // PDF en Vercel Blob
+
+  // Factura electrónica DIAN (Fase 4)
+  electronicInvoiceId     String?
+  electronicInvoiceStatus String?
+  electronicInvoiceLogs   ElectronicInvoiceLog[]
+
+  items    InvoiceItem[]
+  payments Payment[]
+
+  @@index([restaurantId, status])
+  @@index([restaurantId, issuedAt])
+  @@map("invoices")
+}
+
+// Líneas de la factura (snapshot de los order items)
+model InvoiceItem {
+  id          String   @id @default(uuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  productId   String?  // Referencia al producto (null si fue eliminado)
+  description String   // Snapshot: "Hamburguesa clásica + Extra queso"
+  quantity    Int
+  unitPrice   Decimal  @db.Decimal(12, 2)
+  taxRate     Decimal  @db.Decimal(5, 4)
+  taxAmount   Decimal  @db.Decimal(12, 2)
+  subtotal    Decimal  @db.Decimal(12, 2) // unitPrice × qty (sin impuesto)
+
+  @@map("invoice_items")
+}
+
+// Registro de pagos (permite pagos parciales / cuenta dividida)
+model Payment {
+  id             String        @id @default(uuid())
+  invoiceId      String
+  invoice        Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  amount         Decimal       @db.Decimal(12, 2)
+  method         PaymentMethod
+  reference      String?       // Nº autorización tarjeta, referencia QR, etc.
+  receivedAt     DateTime      @default(now())
+  receivedById   String?
+  receivedBy     User?         @relation("PaymentReceiver", fields: [receivedById], references: [id])
+
+  @@map("payments")
+}
+
+// ============================================================
+// Contabilidad (Fase 2)
+// ============================================================
+
+enum ExpenseCategory {
+  FOOD_INGREDIENTS // Costo de insumos / materia prima
+  BEVERAGES        // Bebidas / licores
+  LABOR            // Nómina, prestaciones y propinas
+  UTILITIES        // Servicios públicos (agua, luz, gas, internet)
+  RENT             // Arrendamiento de local
+  EQUIPMENT        // Mantenimiento y compra de equipos
+  MARKETING        // Publicidad y promociones
+  ADMIN            // Papelería, software, honorarios
+  TAXES            // Impuestos y tasas pagadas
+  OTHER            // Otros gastos operativos
+}
+
+// Registro de gastos y compras con soporte contable
+model Expense {
+  id            String          @id @default(uuid())
+  restaurantId  String
+  restaurant    Restaurant      @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  category      ExpenseCategory
+  description   String
+  amount        Decimal         @db.Decimal(12, 2)
+  taxAmount     Decimal         @default(0) @db.Decimal(12, 2) // IVA descontable
+  supplier      String?
+  supplierTaxId String?         // NIT / Identificación fiscal del proveedor
+  receiptUrl    String?         // URL de soporte o factura digital
+  date          DateTime        // Fecha del gasto
+  createdAt     DateTime        @default(now())
+  createdById   String
+  createdBy     User            @relation("ExpenseCreator", fields: [createdById], references: [id])
+
+  @@index([restaurantId, date])
+  @@index([restaurantId, category])
+  @@map("expenses")
+}
+
+// Cierre de caja diario con arqueo y cuadre
+model CashRegisterClose {
+  id             String     @id @default(uuid())
+  restaurantId   String
+  restaurant     Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  date           DateTime   // Fecha correspondiente al turno / día
+  openingBalance Decimal    @db.Decimal(12, 2) // Base inicial en efectivo
+  cashSales      Decimal    @db.Decimal(12, 2) // Ventas cobradas en efectivo
+  cardSales      Decimal    @db.Decimal(12, 2) // Ventas cobradas con tarjeta
+  transferSales  Decimal    @db.Decimal(12, 2) // Ventas por transferencia (Nequi/Daviplata)
+  qrSales        Decimal    @db.Decimal(12, 2) // Ventas QR
+  otherSales     Decimal    @default(0) @db.Decimal(12, 2) // Otros métodos
+  totalIncome    Decimal    @db.Decimal(12, 2) // Total ingresos registrados
+  totalExpenses  Decimal    @db.Decimal(12, 2) // Gastos pagados en efectivo de caja
+  expectedCash   Decimal    @db.Decimal(12, 2) // openingBalance + cashSales - totalExpenses
+  actualCash     Decimal    @db.Decimal(12, 2) // Efectivo físico contado en arqueo
+  difference     Decimal    @db.Decimal(12, 2) // actualCash - expectedCash (Sobrante/Faltante)
+  closedById     String
+  closedBy       User       @relation("CashRegisterCloser", fields: [closedById], references: [id])
+  notes          String?    // Explicación de descuadres o comentarios
+  createdAt      DateTime   @default(now())
+
+  @@index([restaurantId, date])
+  @@map("cash_register_closes")
+}
+
+// Período contable mensual para consolidación y reporte DIAN
+model AccountingPeriod {
+  id           String     @id @default(uuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  year         Int
+  month        Int        // 1 a 12
+  isClosed     Boolean    @default(false)
+  closedAt     DateTime?
+  closedById   String?
+  closedBy     User?      @relation("PeriodCloser", fields: [closedById], references: [id])
+  totalRevenue Decimal    @db.Decimal(14, 2) // Ingresos brutos facturados
+  totalExpenses Decimal   @db.Decimal(14, 2) // Total gastos del período
+  grossProfit  Decimal    @db.Decimal(14, 2) // Utilidad bruta (Revenue - Expenses)
+  vatCollected Decimal    @db.Decimal(14, 2) // IVA generado en ventas
+  vatPaid      Decimal    @db.Decimal(14, 2) // IVA descontable en compras/gastos
+  vatOwed      Decimal    @db.Decimal(14, 2) // Saldo neto de IVA (a pagar o a favor)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([restaurantId, year, month])
+  @@map("accounting_periods")
+}
+
+// ============================================================
+// Facturación Electrónica DIAN Directa (Fase 4)
+// ============================================================
+
+model ElectronicInvoiceConfig {
+  id                  String     @id @default(uuid())
+  restaurantId        String     @unique
+  restaurant          Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  country             TaxCountry @default(CO)
+  testMode            Boolean    @default(true) // true: Set de pruebas, false: Producción
+
+  // Credenciales DIAN
+  softwareId          String?    // Software ID registrado en MUISCA
+  softwarePin         String?    // PIN del software
+  technicalKey        String?    // Clave técnica DIAN para cálculo de CUFE
+  certificateUrl      String?    // URL o path del certificado .p12
+  certificatePassword String?    // Contraseña del certificado digital
+
+  // Resolución de numeración de facturación
+  resolutionNumber    String?    // Nº de autorización DIAN (ej. 18760000001)
+  resolutionPrefix    String?    // Prefijo autorizado (ej. FV, FE)
+  resolutionFrom      Int?       // Rango inicial (ej. 1)
+  resolutionTo        Int?       // Rango final (ej. 5000)
+  resolutionDate      DateTime?  // Fecha expedición
+  resolutionEnd       DateTime?  // Fecha vencimiento
+
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  @@map("electronic_invoice_configs")
+}
+
+model ElectronicInvoiceLog {
+  id           String    @id @default(uuid())
+  invoiceId    String
+  invoice      Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  attempt      Int       @default(1)
+  zipName      String?   // Nombre del paquete ZIP enviado
+  cufe         String?   // Código Único de Factura Electrónica
+  qrCode       String?   @db.Text // Texto o URL de verificación DIAN
+  status       String    @default("pending") // pending, accepted, rejected, error
+  dianResponse String?   @db.Text // ApplicationResponse XML devuelto por DIAN
+  errorMessage String?
+  sentAt       DateTime  @default(now())
+  respondedAt  DateTime?
+
+  @@index([invoiceId])
+  @@index([cufe])
+  @@map("electronic_invoice_logs")
+}
+

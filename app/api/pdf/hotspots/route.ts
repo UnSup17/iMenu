@@ -43,7 +43,8 @@ export async function POST(request: Request) {
     return Response.json({ error: 'No autorizado' }, { status: 401 })
   }
   const sessionUser = session.user as SessionUser
-  if (sessionUser.role !== 'RESTAURANT_ADMIN' && sessionUser.role !== 'SUPERADMIN') {
+  const allowedRoles = ['SUPERADMIN', 'ORG_ADMIN', 'RESTAURANT_ADMIN']
+  if (!allowedRoles.includes(sessionUser.role || '')) {
     return Response.json({ error: 'Permisos insuficientes' }, { status: 403 })
   }
 
@@ -65,15 +66,25 @@ export async function POST(request: Request) {
   // Obtener restaurantId del admin autenticado
   const user = await prisma.user.findUnique({
     where: { id: sessionUser.id! },
-    select: { restaurantId: true },
+    select: { restaurantId: true, organizationId: true },
   })
-  if (!user?.restaurantId) {
+
+  let targetRestaurantId = user?.restaurantId
+  if (!targetRestaurantId && user?.organizationId) {
+    const firstBranch = await prisma.restaurant.findFirst({
+      where: { organizationId: user.organizationId },
+      select: { id: true }
+    })
+    targetRestaurantId = firstBranch?.id ?? null
+  }
+
+  if (!targetRestaurantId) {
     return Response.json({ error: 'Sin restaurante asignado' }, { status: 400 })
   }
 
   const hotspot = await prisma.pdfHotspot.create({
     data: {
-      restaurantId: user.restaurantId,
+      restaurantId: targetRestaurantId,
       productId,
       page,
       x,
@@ -96,7 +107,8 @@ export async function DELETE(request: NextRequest) {
     return Response.json({ error: 'No autorizado' }, { status: 401 })
   }
   const sessionUser = session.user as SessionUser
-  if (sessionUser.role !== 'RESTAURANT_ADMIN' && sessionUser.role !== 'SUPERADMIN') {
+  const allowedRoles = ['SUPERADMIN', 'ORG_ADMIN', 'RESTAURANT_ADMIN']
+  if (!allowedRoles.includes(sessionUser.role || '')) {
     return Response.json({ error: 'Permisos insuficientes' }, { status: 403 })
   }
 

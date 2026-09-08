@@ -15,15 +15,26 @@ export async function POST(request: Request) {
       return Response.json({ error: 'No autorizado' }, { status: 401 })
     }
     const sessionUser = session.user as { id?: string; role?: string }
-    if (sessionUser.role !== 'RESTAURANT_ADMIN' && sessionUser.role !== 'SUPERADMIN') {
+    const allowedRoles = ['SUPERADMIN', 'ORG_ADMIN', 'RESTAURANT_ADMIN']
+    if (!allowedRoles.includes(sessionUser.role || '')) {
       return Response.json({ error: 'Permisos insuficientes' }, { status: 403 })
     }
 
     const user = await prisma.user.findUnique({
       where: { id: sessionUser.id! },
-      select: { restaurantId: true },
+      select: { restaurantId: true, organizationId: true },
     })
-    if (!user?.restaurantId) {
+
+    let targetRestaurantId = user?.restaurantId
+    if (!targetRestaurantId && user?.organizationId) {
+      const firstBranch = await prisma.restaurant.findFirst({
+        where: { organizationId: user.organizationId },
+        select: { id: true },
+      })
+      targetRestaurantId = firstBranch?.id ?? null
+    }
+
+    if (!targetRestaurantId) {
       return Response.json({ error: 'No tienes un restaurante asignado' }, { status: 400 })
     }
 
@@ -44,7 +55,7 @@ export async function POST(request: Request) {
     if (USE_VERCEL_BLOB) {
       // ── Producción: Vercel Blob ──────────────────────────────────────────
       const { put } = await import('@vercel/blob')
-      const blob = await put(`menus/${user.restaurantId}/menu.pdf`, file, {
+      const blob = await put(`menus/${targetRestaurantId}/menu.pdf`, file, {
         access: 'public',
         contentType: 'application/pdf',
       })
@@ -60,14 +71,14 @@ export async function POST(request: Request) {
       // ── Desarrollo local: public/uploads/ ────────────────────────────────
       const bytes = await file.arrayBuffer()
       const buffer = Buffer.from(bytes)
-      const dir = join(process.cwd(), 'public', 'uploads', 'menus', user.restaurantId)
+      const dir = join(process.cwd(), 'public', 'uploads', 'menus', targetRestaurantId)
       await mkdir(dir, { recursive: true })
       await writeFile(join(dir, 'menu.pdf'), buffer)
-      pdfUrl = `/uploads/menus/${user.restaurantId}/menu.pdf`
+      pdfUrl = `/uploads/menus/${targetRestaurantId}/menu.pdf`
     }
 
     await prisma.restaurant.update({
-      where: { id: user.restaurantId },
+      where: { id: targetRestaurantId },
       data: { pdfUrl },
     })
 

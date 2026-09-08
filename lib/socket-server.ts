@@ -23,6 +23,9 @@ import {
   type SharedCartItemPayload,
   type UpdateSharedCartPayload,
   type ConfirmedOrderPayload,
+  type InventoryUpdatedPayload,
+  type ProductUnavailablePayload,
+  type ProductAvailablePayload,
 } from '@/types/websocket-events'
 import { getTableSession, getSharedTableCart, storeSharedTableCart } from '@/lib/redis'
 import { prisma } from '@/lib/prisma'
@@ -274,11 +277,61 @@ export function initSocketServer(httpServer: HttpServer): IOServer {
     // --------------------------------------------------------
     // Staff/KDS: Actualizar estado de orden
     // --------------------------------------------------------
-    socket.on(WsStaffEvent.UPDATE_ORDER_STATUS, (data: OrderStatusChangedPayload) => {
-      const tableRoom = `table:${data.tableId}`
+    socket.on(WsStaffEvent.UPDATE_ORDER_STATUS, async (data: OrderStatusChangedPayload) => {
+      const tableRoom = `restaurant:${data.restaurantId ?? ''}:table:${data.tableId}`
       io?.to(tableRoom).emit(WsServerEvent.ORDER_STATUS_UPDATED, data)
       console.log(`[Socket.IO] Orden ${data.orderId} → ${data.newStatus}`)
+
+      try {
+        // Persistir cambio de estado en DB
+        const order = await prisma.order.update({
+          where: { id: data.orderId },
+          data: { status: data.newStatus },
+          select: { restaurantId: true, id: true },
+        })
+
+        // Si la orden se cancela → restaurar stock de ingredientes
+        if (data.newStatus === 'CANCELLED') {
+          const { restoreStockForOrder } = await import('@/lib/inventory/stock-manager')
+          const { emitInventoryUpdate: emitInvUpdate, emitProductAvailable: emitProdAvailable } = await import('@/lib/socket-server')
+          const result = await restoreStockForOrder(order.id, order.restaurantId, 'system')
+
+          if (result.restoredItems && result.restoredItems.length > 0) {
+            const items = await prisma.inventoryItem.findMany({
+              where: { id: { in: result.restoredItems } },
+            })
+            for (const item of items) {
+              emitInvUpdate(order.restaurantId, {
+                restaurantId: order.restaurantId,
+                inventoryItemId: item.id,
+                inventoryItemName: item.name,
+                currentStock: item.currentStock.toNumber(),
+                minStock: item.minStock.toNumber(),
+                isLow: item.currentStock.toNumber() <= item.minStock.toNumber(),
+                isEmpty: item.currentStock.toNumber() <= 0,
+              })
+            }
+
+            // Emitir disponibilidad recuperada para cada inventoryItem restaurado
+            if (result.resolvedStockIssues && result.resolvedStockIssues.length > 0) {
+              const issues = await prisma.productStockIssue.findMany({
+                where: { inventoryItemId: { in: result.resolvedStockIssues } },
+              })
+              for (const issue of issues) {
+                emitProdAvailable(order.restaurantId, {
+                  restaurantId: order.restaurantId,
+                  productId: issue.productId,
+                  inventoryItemId: issue.inventoryItemId,
+                })
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[Socket.IO] Error al actualizar estado de orden en DB:', err)
+      }
     })
+
 
     socket.on('disconnect', (reason) => {
       console.log(`[Socket.IO] Cliente desconectado: ${socket.id} (${reason})`)
@@ -349,3 +402,46 @@ export function emitOrderConfirmedToTable(
   console.log(`[Socket.IO] emitOrderConfirmedToTable → ${tableRoom} (Orden ${order.orderId})`)
 }
 
+/**
+ * Emite un evento de inventario actualizado a la sala del staff.
+ * Llamado desde stock-manager tras cada movimiento.
+ */
+export function emitInventoryUpdate(
+  restaurantId: string,
+  payload: InventoryUpdatedPayload,
+): void {
+  const io = getIO()
+  if (!io) return
+  const staffRoom = `restaurant:${restaurantId}:staff`
+  io.to(staffRoom).emit(WsServerEvent.INVENTORY_UPDATED, payload)
+  console.log(`[Socket.IO] inventario:${payload.inventoryItemId} stock=${payload.currentStock}`)
+}
+
+/**
+ * Emite un evento de producto sin stock a toda la sala del restaurante
+ * (staff + mesas activas). El menú del cliente lo recibe y deshabilita el item.
+ */
+export function emitProductUnavailable(
+  restaurantId: string,
+  payload: ProductUnavailablePayload,
+): void {
+  const io = getIO()
+  if (!io) return
+  // Emitir a todas las salas del restaurante (staff + mesas)
+  io.emit(WsServerEvent.PRODUCT_UNAVAILABLE, payload)
+  console.log(`[Socket.IO] producto sin stock: ${payload.productId} (${payload.reason})`)
+}
+
+/**
+ * Emite un evento de producto disponible nuevamente.
+ * El menú del cliente lo recibe y reactiva el botón de agregar.
+ */
+export function emitProductAvailable(
+  restaurantId: string,
+  payload: ProductAvailablePayload,
+): void {
+  const io = getIO()
+  if (!io) return
+  io.emit(WsServerEvent.PRODUCT_AVAILABLE, payload)
+  console.log(`[Socket.IO] producto disponible nuevamente: ${payload.productId}`)
+}

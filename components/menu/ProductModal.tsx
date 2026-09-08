@@ -44,12 +44,14 @@ export interface ProductModalData {
 interface ProductModalProps {
   product: ProductModalData
   currency?: string
+  stockIssue?: { productId: string; ingredientName: string; reason?: string }
   onClose: () => void
   onAdded?: () => void
 }
 
-export function ProductModal({ product, currency = 'MXN', onClose, onAdded }: ProductModalProps) {
+export function ProductModal({ product, currency = 'MXN', stockIssue, onClose, onAdded }: ProductModalProps) {
   const addItem = useCartStore((s) => s.addItem)
+  const isOutOfStock = Boolean(stockIssue)
 
   // Estado local de selecciones
   const [singleSelects, setSingleSelects] = useState<Record<string, string>>({}) // groupId → optionId
@@ -329,6 +331,15 @@ export function ProductModal({ product, currency = 'MXN', onClose, onAdded }: Pr
 
         {/* Footer fijo */}
         <div className="flex-shrink-0 px-5 py-4 border-t border-zinc-800 space-y-3 bg-zinc-900">
+          {stockIssue && (
+            <div className="p-2.5 bg-red-950/70 border border-red-800 rounded-lg text-xs text-red-300 flex items-center gap-2">
+              <span>⚠️</span>
+              <span>
+                {stockIssue.reason ?? `Producto no disponible: sin stock de ${stockIssue.ingredientName}`}
+              </span>
+            </div>
+          )}
+
           {error && (
             <p className="text-xs text-red-400 text-center bg-red-500/10 rounded-lg py-2 px-3">
               {error}
@@ -336,35 +347,41 @@ export function ProductModal({ product, currency = 'MXN', onClose, onAdded }: Pr
           )}
 
           {/* Cantidad */}
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-zinc-400">Cantidad</span>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 text-white
-                           flex items-center justify-center transition-colors text-lg"
-              >
-                −
-              </button>
-              <span className="font-bold text-white w-5 text-center">{quantity}</span>
-              <button
-                onClick={() => setQuantity((q) => Math.min(50, q + 1))}
-                className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 text-white
-                           flex items-center justify-center transition-colors text-lg"
-              >
-                +
-              </button>
+          {!isOutOfStock && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-zinc-400">Cantidad</span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                  className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 text-white
+                             flex items-center justify-center transition-colors text-lg"
+                >
+                  −
+                </button>
+                <span className="font-bold text-white w-5 text-center">{quantity}</span>
+                <button
+                  onClick={() => setQuantity((q) => Math.min(50, q + 1))}
+                  className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 text-white
+                             flex items-center justify-center transition-colors text-lg"
+                >
+                  +
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Botón agregar */}
           <button
             onClick={handleAddToCart}
-            className="w-full py-3.5 bg-amber-500 hover:bg-amber-400 text-white font-bold
-                       rounded-xl transition-all duration-200 active:scale-95
-                       shadow-lg shadow-amber-500/30 flex items-center justify-between px-4"
+            disabled={isOutOfStock}
+            className={`w-full py-3.5 text-white font-bold rounded-xl transition-all duration-200
+                       flex items-center justify-between px-4 ${
+                         isOutOfStock
+                           ? 'bg-zinc-800 border border-zinc-700 text-zinc-500 cursor-not-allowed'
+                           : 'bg-amber-500 hover:bg-amber-400 active:scale-95 shadow-lg shadow-amber-500/30'
+                       }`}
           >
-            <span>Agregar al carrito</span>
+            <span>{isOutOfStock ? 'No disponible (Agotado)' : 'Agregar al carrito'}</span>
             <span>{formatPrice(calculatedUnitPrice * quantity)}</span>
           </button>
         </div>

@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { prisma } from '@/lib/prisma'
 import { getTableSession } from '@/lib/redis'
 import { MenuPage } from '@/components/menu/MenuPage'
+import { isCategoryScheduleActive } from '@/lib/menu-schedule'
 
 interface PageProps {
   params: Promise<{ restaurantSlug: string; tableId: string }>
@@ -85,8 +86,32 @@ export default async function MenuGuestPage({ params, searchParams }: PageProps)
     notFound()
   }
 
+  // Fetch unresolved stock issues
+  const rawStockIssues = await prisma.productStockIssue.findMany({
+    where: { restaurantId: restaurant.id, resolvedAt: null },
+    include: { inventoryItem: true },
+  })
+
+  const initialStockIssues = rawStockIssues.map((si) => ({
+    productId: si.productId,
+    ingredientName: si.inventoryItem.name,
+  }))
+
+  // Filtrar categorías de oferta especial que no están activas en este momento
+  const now = new Date()
+  const activeCategories = restaurant.categories.filter((cat) =>
+    isCategoryScheduleActive({
+      isSpecialOffer: cat.isSpecialOffer,
+      offerStartDate: cat.offerStartDate,
+      offerEndDate: cat.offerEndDate,
+      offerActiveDays: cat.offerActiveDays,
+      offerStartTime: cat.offerStartTime,
+      offerEndTime: cat.offerEndTime,
+    }, now),
+  )
+
   // Serializar Decimal → number para el cliente
-  const categories = restaurant.categories.map((cat) => ({
+  const categories = activeCategories.map((cat) => ({
     id: cat.id,
     name: cat.name,
     products: cat.products.map((p) => ({
@@ -164,6 +189,8 @@ export default async function MenuGuestPage({ params, searchParams }: PageProps)
       categories={categories}
       pdfUrl={restaurant.pdfUrl ?? null}
       pdfHotspots={pdfHotspots}
+      initialStockIssues={initialStockIssues}
     />
   )
 }
+

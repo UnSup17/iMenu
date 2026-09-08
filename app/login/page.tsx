@@ -1,34 +1,44 @@
 'use client'
 
-import { useState } from 'react'
-import { signIn } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import bcrypt from 'bcryptjs'
+import { loginWithCredentials } from './actions'
 
 export default function LoginPage() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [demoHash, setDemoHash] = useState<string>('Calculando hash...')
 
-  async function handleSubmit(e: React.FormEvent) {
+  useEffect(() => {
+    bcrypt.hash('admin123', 10).then((hash) => {
+      setDemoHash(hash)
+    })
+  }, [])
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
     setLoading(true)
 
-    const result = await signIn('credentials', {
-      email,
-      password,
-      redirect: false,
-    })
+    const formData = new FormData()
+    formData.append('email', email)
+    formData.append('password', password)
 
-    setLoading(false)
-
-    if (result?.error) {
-      setError('Email o contraseña incorrectos.')
-    } else {
-      router.push('/dashboard/orders')
-      router.refresh()
+    try {
+      const res = await loginWithCredentials(formData)
+      if (res?.error) {
+        setError(res.error)
+        setLoading(false)
+      }
+    } catch (err: unknown) {
+      console.error('[Login submit exception]:', err)
+      const message = err instanceof Error ? err.message : 'Error al iniciar sesión'
+      if (!message.includes('NEXT_REDIRECT')) {
+        setError(message)
+        setLoading(false)
+      }
     }
   }
 
@@ -99,9 +109,15 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="text-center text-xs text-zinc-600">
-          Demo: admin@demo.com / admin123
-        </p>
+        <div className="space-y-2">
+          <p className="text-center text-xs text-zinc-600">
+            Demo: admin@demo.com / admin123
+          </p>
+          <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-3 text-[11px] text-zinc-400 break-all font-mono">
+            <span className="text-amber-400 font-semibold block mb-1">Hash bcrypt de &apos;admin123&apos;:</span>
+            {demoHash}
+          </div>
+        </div>
       </div>
     </div>
   )

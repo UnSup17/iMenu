@@ -11,30 +11,46 @@ export const metadata: Metadata = {
 export default async function MenuPdfPage() {
   const session = await auth()
   if (!session?.user) redirect('/login')
+
   const sessionUser = session.user as { id?: string; role?: string }
-  if (sessionUser.role !== 'RESTAURANT_ADMIN' && sessionUser.role !== 'SUPERADMIN') {
+  const allowedRoles = ['SUPERADMIN', 'ORG_ADMIN', 'RESTAURANT_ADMIN']
+  if (!allowedRoles.includes(sessionUser.role || '')) {
     redirect('/dashboard')
   }
 
-  // Obtener restaurante del admin
+  // Obtener restaurante del admin / franquicia
   const user = await prisma.user.findUnique({
     where: { id: sessionUser.id! },
-    select: { restaurantId: true },
+    select: { restaurantId: true, organizationId: true },
   })
-  if (!user?.restaurantId) redirect('/dashboard')
+
+  let restaurantId = user?.restaurantId
+  if (!restaurantId && user?.organizationId) {
+    const firstOrgRest = await prisma.restaurant.findFirst({
+      where: { organizationId: user.organizationId },
+      select: { id: true },
+    })
+    restaurantId = firstOrgRest?.id ?? null
+  }
+  if (!restaurantId && sessionUser.role === 'SUPERADMIN') {
+    const firstRest = await prisma.restaurant.findFirst({ select: { id: true } })
+    restaurantId = firstRest?.id ?? null
+  }
+
+  if (!restaurantId) redirect('/dashboard')
 
   const [restaurant, products, hotspots] = await Promise.all([
     prisma.restaurant.findUnique({
-      where: { id: user.restaurantId },
+      where: { id: restaurantId },
       select: { id: true, pdfUrl: true },
     }),
     prisma.product.findMany({
-      where: { restaurantId: user.restaurantId, isAvailable: true },
+      where: { restaurantId, isAvailable: true },
       select: { id: true, name: true },
       orderBy: [{ category: { orderIndex: 'asc' } }, { name: 'asc' }],
     }),
     prisma.pdfHotspot.findMany({
-      where: { restaurantId: user.restaurantId },
+      where: { restaurantId },
       select: {
         id: true,
         page: true,

@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createOrderTransaction } from '@/server/actions/create-order.action'
-import { emitNewOrder, emitOrderConfirmedToTable } from '@/lib/socket-server'
+import {
+  emitNewOrder,
+  emitOrderConfirmedToTable,
+  emitInventoryUpdate,
+  emitProductUnavailable,
+} from '@/lib/socket-server'
 import { getTableSession, storeSharedTableCart } from '@/lib/redis'
 import { prisma } from '@/lib/prisma'
+import { deductStockForOrder } from '@/lib/inventory/stock-manager'
 import { type ConfirmedOrderPayload } from '@/types/websocket-events'
 
 /**
@@ -108,6 +114,52 @@ export async function POST(request: NextRequest) {
 
     // 3. Limpiar carrito borrador compartido en Redis/memoria para la mesa
     await storeSharedTableCart(body.tableId, [])
+
+    // 4. Descontar inventario (fire-and-forget: no bloquea la respuesta al cliente)
+    //    Se ejecuta en background; si falla, se registra en logs pero no rompe el pedido.
+    deductStockForOrder(result.orderId, body.restaurantId, 'system')
+      .then(async (deductionResult) => {
+        if (!deductionResult.success) return
+
+        // Emitir actualizaciones de inventario al staff
+        for (const movementId of deductionResult.movements) {
+          // Obtener datos del ítem actualizado para el evento
+          const movement = await prisma.inventoryMovement.findUnique({
+            where: { id: movementId },
+            include: { inventoryItem: true },
+          })
+          if (!movement) continue
+
+          emitInventoryUpdate(body.restaurantId, {
+            restaurantId: body.restaurantId,
+            inventoryItemId: movement.inventoryItemId,
+            inventoryItemName: movement.inventoryItem.name,
+            currentStock: movement.stockAfter.toNumber(),
+            minStock: movement.inventoryItem.minStock.toNumber(),
+            isLow: movement.stockAfter.toNumber() <= movement.inventoryItem.minStock.toNumber(),
+            isEmpty: movement.stockAfter.toNumber() <= 0,
+          })
+        }
+
+        // Emitir productos que quedaron sin stock
+        for (const productId of deductionResult.stockIssues) {
+          const issue = await prisma.productStockIssue.findFirst({
+            where: { productId, restaurantId: body.restaurantId, resolvedAt: null },
+            include: { inventoryItem: true },
+          })
+          if (!issue) continue
+
+          emitProductUnavailable(body.restaurantId, {
+            restaurantId: body.restaurantId,
+            productId,
+            reason: `Sin stock de ${issue.inventoryItem.name}`,
+            inventoryItemId: issue.inventoryItemId,
+          })
+        }
+      })
+      .catch((err) => {
+        console.error('[POST /api/orders] Error en deducción de stock (non-blocking):', err)
+      })
 
     return NextResponse.json(result, { status: 201 })
   } catch (error) {
