@@ -40,6 +40,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         sessionId: dbSession.id,
         tableId: dbSession.tableId,
         restaurantId: dbSession.table.restaurantId,
+        foodCourtId: dbSession.table.foodCourtId,
+        venueType: dbSession.table.foodCourtId ? 'food_court' : 'single',
         tableNumber: dbSession.table.tableNumber,
         expiresAt: dbSession.expiresAt.toISOString(),
       }
@@ -56,7 +58,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 /**
  * POST /api/tables/[tableId]/session
  * Crea una nueva sesión de mesa (solo staff autenticado).
- * Body: { restaurantId: string, ttlSeconds?: number }
+ * Body: { restaurantId?: string, foodCourtId?: string, ttlSeconds?: number }
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   const authSession = await auth()
@@ -70,6 +72,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const result = await createTableSession({
       restaurantId: body.restaurantId,
+      foodCourtId: body.foodCourtId,
       tableId,
       ttlSeconds: body.ttlSeconds ?? 7200,
     })
@@ -85,7 +88,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 /**
  * DELETE /api/tables/[tableId]/session
  * Cierra una sesión activa (solo staff autenticado).
- * Body: { sessionToken: string, restaurantId: string }
+ * Body: { sessionToken: string, restaurantId?: string, foodCourtId?: string, forceClose?: boolean }
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const authSession = await auth()
@@ -100,6 +103,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const result = await closeTableSession({
       sessionToken: body.sessionToken,
       restaurantId: body.restaurantId,
+      foodCourtId: body.foodCourtId,
+      forceClose: body.forceClose,
     })
 
     return NextResponse.json(result)

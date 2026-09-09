@@ -50,7 +50,7 @@ export async function createOrderTransaction(input: CreateOrderInput): Promise<C
   if (
     !redisSession ||
     redisSession.tableId !== parsed.tableId ||
-    redisSession.restaurantId !== parsed.restaurantId
+    (redisSession.venueType === 'single' && redisSession.restaurantId !== parsed.restaurantId)
   ) {
     throw new Error('UNAUTHORIZED_OR_EXPIRED_SESSION: La sesión de mesa es inválida o ha expirado.')
   }
@@ -69,8 +69,26 @@ export async function createOrderTransaction(input: CreateOrderInput): Promise<C
       },
     })
 
-    if (!session || session.table.restaurantId !== parsed.restaurantId) {
+    if (!session) {
       throw new Error('UNAUTHORIZED_OR_EXPIRED_SESSION: La sesión de mesa es inválida o ha expirado.')
+    }
+
+    if (session.table.restaurantId) {
+      if (session.table.restaurantId !== parsed.restaurantId) {
+        throw new Error('UNAUTHORIZED_OR_EXPIRED_SESSION: La mesa no pertenece a este restaurante.')
+      }
+    } else if (session.table.foodCourtId) {
+      // Validar que el restaurante es miembro activo de la plaza
+      const membership = await tx.foodCourtMembership.findFirst({
+        where: {
+          foodCourtId: session.table.foodCourtId,
+          restaurantId: parsed.restaurantId,
+          isActive: true,
+        },
+      })
+      if (!membership) {
+        throw new Error('RESTAURANT_NOT_IN_FOOD_COURT: El restaurante no pertenece a esta plaza gastronómica.')
+      }
     }
 
     // 2. Cargar productos en lote (con modificadores e ingredientes)
@@ -217,6 +235,29 @@ export async function createOrderTransaction(input: CreateOrderInput): Promise<C
         },
       },
     })
+
+    // Si la mesa pertenece a una plaza gastronómica, auto-upsert de FoodCourtTablePayment
+    if (session.table.foodCourtId) {
+      await tx.foodCourtTablePayment.upsert({
+        where: {
+          sessionId_restaurantId: {
+            sessionId: session.id,
+            restaurantId: parsed.restaurantId,
+          },
+        },
+        create: {
+          sessionId: session.id,
+          restaurantId: parsed.restaurantId,
+          status: 'PENDING',
+          totalAmount: order.totalAmount,
+        },
+        update: {
+          totalAmount: {
+            increment: order.totalAmount,
+          },
+        },
+      })
+    }
 
     const formattedItems: ConfirmedOrderItemPayload[] = order.items.map((i) => {
       const orderedByMatch = i.itemNotes?.match(/^\[Para:\s*([^\]]+)\]/)

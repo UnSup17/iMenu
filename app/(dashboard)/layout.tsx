@@ -54,6 +54,13 @@ const NAV_SECTIONS = [
     ],
   },
   {
+    label: 'Plazas Gastronómicas',
+    roles: ['SUPERADMIN', 'ORG_ADMIN', 'RESTAURANT_ADMIN'],
+    items: [
+      { href: '/dashboard/food-courts', label: 'Sedes Compartidas', icon: '🏪' },
+    ],
+  },
+  {
     label: 'Superadmin',
     roles: ['SUPERADMIN'],
     items: [

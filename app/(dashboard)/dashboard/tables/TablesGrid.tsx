@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState } from 'react'
 
@@ -7,7 +7,8 @@ interface Table {
   tableNumber: number
   zone: string | null
   status: string
-  restaurantId: string
+  restaurantId?: string | null
+  foodCourtId?: string | null
 }
 
 interface SessionResult {

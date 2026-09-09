@@ -110,7 +110,8 @@ export async function POST(request: NextRequest) {
       createdAt: result.createdAt,
       items: result.items,
     }
-    emitOrderConfirmedToTable(body.restaurantId, body.tableId, confirmedPayload)
+    const session = await getTableSession(body.sessionToken)
+    emitOrderConfirmedToTable(body.restaurantId, body.tableId, confirmedPayload, session?.foodCourtId)
 
     // 3. Limpiar carrito borrador compartido en Redis/memoria para la mesa
     await storeSharedTableCart(body.tableId, [])

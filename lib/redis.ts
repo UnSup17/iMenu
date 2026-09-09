@@ -109,7 +109,9 @@ export const sessionKeys = {
 export interface RedisSessionData {
   sessionId: string
   tableId: string
-  restaurantId: string
+  restaurantId?: string | null
+  foodCourtId?: string | null
+  venueType: 'single' | 'food_court'
   tableNumber: number
   expiresAt: string
 }
@@ -235,10 +237,13 @@ export async function getTableSession(token: string): Promise<RedisSessionData |
     })
 
     if (dbSession) {
+      const venueType = dbSession.table.foodCourtId ? 'food_court' : 'single'
       const sessionData: RedisSessionData = {
         sessionId: dbSession.id,
         tableId: dbSession.tableId,
         restaurantId: dbSession.table.restaurantId,
+        foodCourtId: dbSession.table.foodCourtId,
+        venueType,
         tableNumber: dbSession.table.tableNumber,
         expiresAt: dbSession.expiresAt.toISOString(),
       }

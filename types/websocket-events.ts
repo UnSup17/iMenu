@@ -7,6 +7,8 @@ export enum SocketChannel {
   RESTAURANT_ZONE = 'restaurant:%s:zone:%s',
   RESTAURANT_KDS = 'restaurant:%s:kds',
   TABLE_ROOM = 'restaurant:%s:table:%s',
+  FOOD_COURT_ROOM = 'food_court:%s',
+  FOOD_COURT_TABLE_ROOM = 'food_court:%s:table:%s',
 }
 
 // Eventos que el comensal emite al servidor
@@ -34,6 +36,8 @@ export enum WsServerEvent {
   SHARED_CART_UPDATED = 'shared_cart_updated',
   TABLE_PARTICIPANTS_UPDATED = 'table_participants_updated',
   TABLE_ORDERS_UPDATED = 'table_orders_updated',
+  // Plazas gastronómicas
+  FOOD_COURT_PAYMENT_UPDATED = 'food_court_payment_updated',
   // Inventario en tiempo real
   INVENTORY_UPDATED = 'inventory_updated',
   PRODUCT_UNAVAILABLE = 'product_unavailable',
@@ -48,14 +52,16 @@ export enum WsServerEvent {
 export type AlertType = 'HELP_REQUESTED' | 'BILL_REQUESTED' | 'SPILL_CLEANUP'
 
 export interface JoinTableSessionPayload {
-  restaurantId: string
+  restaurantId?: string
+  foodCourtId?: string
   tableId: string
   sessionToken: string
   userName?: string
 }
 
 export interface JoinStaffRoomPayload {
-  restaurantId: string
+  restaurantId?: string
+  foodCourtId?: string
   staffToken: string // JWT del staff autenticado
 }
 
@@ -69,7 +75,8 @@ export interface CallWaiterPayload {
 }
 
 export interface WaiterAcknowledgedPayload {
-  restaurantId: string
+  restaurantId?: string
+  foodCourtId?: string
   tableId: string
   waiterId: string
   waiterName: string
@@ -217,6 +224,16 @@ export interface StaffToServerEvents {
   [WsStaffEvent.UPDATE_ORDER_STATUS]: (data: OrderStatusChangedPayload) => void
 }
 
+export interface FoodCourtPaymentUpdatedPayload {
+  foodCourtId: string
+  tableId: string
+  sessionId: string
+  restaurantId: string
+  status: 'PENDING' | 'PAID' | 'VOIDED'
+  totalAmount: number
+  paidAt?: string | null
+}
+
 export interface ServerToClientEvents {
   [WsServerEvent.ALERT_WAITER]: (data: CallWaiterPayload) => void
   [WsServerEvent.ORDER_RECEIVED]: (data: OrderNotificationPayload) => void
@@ -226,6 +243,7 @@ export interface ServerToClientEvents {
   [WsServerEvent.SHARED_CART_UPDATED]: (data: { items: SharedCartItemPayload[]; updatedBy: string }) => void
   [WsServerEvent.TABLE_PARTICIPANTS_UPDATED]: (data: TableParticipantsPayload) => void
   [WsServerEvent.TABLE_ORDERS_UPDATED]: (data: ConfirmedOrderPayload) => void
+  [WsServerEvent.FOOD_COURT_PAYMENT_UPDATED]: (data: FoodCourtPaymentUpdatedPayload) => void
   [WsServerEvent.INVENTORY_UPDATED]: (data: InventoryUpdatedPayload) => void
   [WsServerEvent.PRODUCT_UNAVAILABLE]: (data: ProductUnavailablePayload) => void
   [WsServerEvent.PRODUCT_AVAILABLE]: (data: ProductAvailablePayload) => void

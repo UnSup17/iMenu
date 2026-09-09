@@ -47,6 +47,17 @@ export default async function MenuGuestPage({ params, searchParams }: PageProps)
     redirect(`/menu/invalid?reason=expired_session`)
   }
 
+  // Si la mesa pertenece a una plaza gastronómica, redirigir a la vista de plaza
+  if (redisSession.venueType === 'food_court' && redisSession.foodCourtId) {
+    const fc = await prisma.foodCourt.findUnique({
+      where: { id: redisSession.foodCourtId },
+      select: { slug: true },
+    })
+    if (fc) {
+      redirect(`/plaza/${fc.slug}/${tableId}?token=${token}`)
+    }
+  }
+
   // 3. Cargar datos del restaurante y menú (incluyendo PDF y hotspots)
   const restaurant = await prisma.restaurant.findUnique({
     where: { slug: restaurantSlug, isActive: true },

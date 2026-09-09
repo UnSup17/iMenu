@@ -105,6 +105,12 @@ enum InvoiceStatus {
   REFUNDED  // Reembolsada
 }
 
+enum FoodCourtPaymentStatus {
+  PENDING   // Aún sin cobrar a este restaurante
+  PAID      // Pagado y registrado en su factura
+  VOIDED    // Anulado
+}
+
 // ============================================================
 // Organizaciones Multi-Tenant y Suscripciones SaaS (Fase 3)
 // ============================================================
@@ -119,6 +125,7 @@ model Organization {
   updatedAt    DateTime      @updatedAt
 
   restaurants  Restaurant[]
+  foodCourts   FoodCourt[]
   users        User[]
   subscription Subscription?
 
@@ -153,26 +160,31 @@ model Restaurant {
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   slug           String        @unique
   name           String
+  logoUrl        String?       // Logo del restaurante (usado en mosaico de plaza)
+  description    String?       // Descripción corta (visible en mosaico)
+  cuisineType    String?       // Tipo de cocina: "Hamburguesas", "Italiana", etc.
   currency       String        @default("COP")
   isActive       Boolean       @default(true)
-  pdfUrl         String?  // URL del PDF del menú subido a Vercel Blob
+  pdfUrl         String?       @db.VarChar(512) // URL del PDF del menú subido a Vercel Blob
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
-  users          User[]
-  tables         Table[]
-  categories     Category[]
-  products       Product[]
-  orders         Order[]
-  hotspots       PdfHotspot[]
-  taxConfig      TaxConfig?
-  inventoryItems InventoryItem[]
-  inventoryMovements InventoryMovement[]
-  invoices       Invoice[]
+  users                   User[]
+  tables                  Table[]
+  categories              Category[]
+  products                Product[]
+  orders                  Order[]
+  hotspots                PdfHotspot[]
+  taxConfig               TaxConfig?
+  inventoryItems          InventoryItem[]
+  inventoryMovements      InventoryMovement[]
+  invoices                Invoice[]
   expenses                Expense[]
   cashRegisterCloses      CashRegisterClose[]
   accountingPeriods       AccountingPeriod[]
   electronicInvoiceConfig ElectronicInvoiceConfig?
+  foodCourtMemberships    FoodCourtMembership[]     // Plazas a las que pertenece
+  foodCourtPayments       FoodCourtTablePayment[]   // Registros de pago en plazas
 
   @@map("restaurants")
 }
@@ -224,6 +236,9 @@ model User {
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   restaurantId   String?
   restaurant     Restaurant?   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  // Mesero/staff asignado a una plaza (mutuamente excluyente con restaurantId para meseros de plaza)
+  foodCourtId    String?
+  foodCourt      FoodCourt?    @relation(fields: [foodCourtId], references: [id], onDelete: SetNull)
   email          String        @unique
   emailVerified  DateTime?
   passwordHash   String?
@@ -247,10 +262,13 @@ model User {
 
 model Table {
   id           String      @id @default(uuid())
-  restaurantId String
-  restaurant   Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  // Pertenece a un restaurante exclusivo O a una plaza (uno de los dos, nunca ambos)
+  restaurantId String?
+  restaurant   Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  foodCourtId  String?
+  foodCourt    FoodCourt?  @relation(fields: [foodCourtId], references: [id], onDelete: Cascade)
   tableNumber  Int
-  zone         String? // Ej. Terraza, Salón Principal
+  zone         String?     // Ej. Terraza, Patio Central
   status       TableStatus @default(AVAILABLE)
 
   assignedWaiterId String?
@@ -260,7 +278,9 @@ model Table {
   orders   Order[]
   invoices Invoice[]
 
+  // Número único dentro del restaurante O de la plaza
   @@unique([restaurantId, tableNumber])
+  @@unique([foodCourtId, tableNumber])
   @@map("tables")
 }
 
@@ -274,8 +294,9 @@ model TableSession {
   createdAt    DateTime      @default(now())
   closedAt     DateTime?
 
-  orders   Order[]
-  invoices Invoice[]
+  orders              Order[]
+  invoices            Invoice[]
+  foodCourtPayments   FoodCourtTablePayment[] // Un registro por restaurante al que se le pidió
 
   @@index([sessionToken, status])
   @@map("table_sessions")
@@ -627,8 +648,9 @@ model Invoice {
   electronicInvoiceStatus String?
   electronicInvoiceLogs   ElectronicInvoiceLog[]
 
-  items    InvoiceItem[]
-  payments Payment[]
+  items              InvoiceItem[]
+  payments           Payment[]
+  foodCourtPayment   FoodCourtTablePayment? // Si fue generada desde un pago de plaza
 
   @@index([restaurantId, status])
   @@index([restaurantId, issuedAt])
@@ -806,3 +828,63 @@ model ElectronicInvoiceLog {
   @@map("electronic_invoice_logs")
 }
 
+// ============================================================
+// Plazas Gastronómicas — Food Courts (Sedes Compartidas)
+// ============================================================
+
+model FoodCourt {
+  id             String        @id @default(uuid())
+  organizationId String?       // Opcional: si la plaza la opera una franquicia
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  name           String
+  slug           String        @unique
+  description    String?       @db.Text
+  logoUrl        String?
+  currency       String        @default("COP")
+  isActive       Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  tables       Table[]
+  memberships  FoodCourtMembership[]
+  users        User[]          // Meseros y staff asignados a la plaza
+
+  @@index([organizationId])
+  @@map("food_courts")
+}
+
+model FoodCourtMembership {
+  id           String     @id @default(uuid())
+  foodCourtId  String
+  foodCourt    FoodCourt  @relation(fields: [foodCourtId], references: [id], onDelete: Cascade)
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  orderIndex   Int        @default(0)  // Posición en el mosaico de logos
+  isActive     Boolean    @default(true)
+  joinedAt     DateTime   @default(now())
+
+  @@unique([foodCourtId, restaurantId])
+  @@index([foodCourtId])
+  @@index([restaurantId])
+  @@map("food_court_memberships")
+}
+
+model FoodCourtTablePayment {
+  id           String                  @id @default(uuid())
+  sessionId    String
+  session      TableSession            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  restaurantId String
+  restaurant   Restaurant              @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  status       FoodCourtPaymentStatus  @default(PENDING)
+  totalAmount  Decimal                 @db.Decimal(10, 2)  // Suma de sus órdenes en esta sesión
+  invoiceId    String?                 @unique // 1:1 con Invoice cuando se emite factura
+  invoice      Invoice?                @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  paidAt       DateTime?
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+
+  @@unique([sessionId, restaurantId])
+  @@index([restaurantId])
+  @@index([sessionId])
+  @@map("food_court_table_payments")
+}

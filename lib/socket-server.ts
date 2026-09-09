@@ -26,6 +26,7 @@ import {
   type InventoryUpdatedPayload,
   type ProductUnavailablePayload,
   type ProductAvailablePayload,
+  type FoodCourtPaymentUpdatedPayload,
 } from '@/types/websocket-events'
 import { getTableSession, getSharedTableCart, storeSharedTableCart } from '@/lib/redis'
 import { prisma } from '@/lib/prisma'
@@ -101,20 +102,32 @@ export function initSocketServer(httpServer: HttpServer): IOServer {
               sessionId: dbSession.id,
               tableId: dbSession.tableId,
               restaurantId: dbSession.table.restaurantId,
+              foodCourtId: dbSession.table.foodCourtId,
+              venueType: dbSession.table.foodCourtId ? 'food_court' : 'single',
               tableNumber: dbSession.table.tableNumber,
               expiresAt: dbSession.expiresAt.toISOString(),
             }
           }
         }
 
-        if (!session || session.tableId !== data.tableId || session.restaurantId !== data.restaurantId) {
+        const isFoodCourt = session?.venueType === 'food_court'
+        const isRestaurantMatch = Boolean(session?.restaurantId && session.restaurantId === data.restaurantId)
+        const isFoodCourtMatch = Boolean(isFoodCourt && (session?.foodCourtId === data.foodCourtId || !data.foodCourtId))
+
+        if (!session || session.tableId !== data.tableId || (!isRestaurantMatch && !isFoodCourtMatch)) {
           callback({ success: false, error: 'Sesión inválida o expirada.' })
           return
         }
 
         joinedTableId = data.tableId
-        const tableRoom = `restaurant:${data.restaurantId}:table:${data.tableId}`
+        const tableRoom = isFoodCourt && session.foodCourtId
+          ? `food_court:${session.foodCourtId}:table:${data.tableId}`
+          : `restaurant:${data.restaurantId}:table:${data.tableId}`
         await socket.join(tableRoom)
+
+        if (isFoodCourt && session.foodCourtId) {
+          await socket.join(`food_court:${session.foodCourtId}`)
+        }
 
         // Guardar participante activo
         if (!activeParticipantsMap.has(data.tableId)) {
@@ -211,16 +224,26 @@ export function initSocketServer(httpServer: HttpServer): IOServer {
           return
         }
 
-        const tableRoom = `restaurant:${data.restaurantId}:table:${data.tableId}`
+        const tableRoom = session.foodCourtId
+          ? `food_court:${session.foodCourtId}:table:${data.tableId}`
+          : `restaurant:${data.restaurantId}:table:${data.tableId}`
 
         // Guardar nuevo estado del carrito en Redis
         await storeSharedTableCart(data.tableId, data.items)
 
-        // Transmitir a todos los clientes de la mesa (incluyendo/excluyendo según corresponda)
+        // Transmitir a todos los clientes de la mesa (sala principal)
         socket.to(tableRoom).emit(WsServerEvent.SHARED_CART_UPDATED, {
           items: data.items,
           updatedBy: data.updatedBy,
         })
+
+        // Si es plaza, asegurar emisión también a la sala del restaurante específico
+        if (session.foodCourtId && data.restaurantId) {
+          socket.to(`restaurant:${data.restaurantId}:table:${data.tableId}`).emit(WsServerEvent.SHARED_CART_UPDATED, {
+            items: data.items,
+            updatedBy: data.updatedBy,
+          })
+        }
 
         console.log(`[Socket.IO] Carrito mesa ${data.tableId} actualizado por ${data.updatedBy}`)
         if (callback) callback({ success: true })
@@ -242,8 +265,14 @@ export function initSocketServer(httpServer: HttpServer): IOServer {
           return
         }
 
-        const staffRoom = `restaurant:${data.restaurantId}:staff`
-        io?.to(staffRoom).emit(WsServerEvent.ALERT_WAITER, data)
+        if (session.foodCourtId) {
+          // Notificar tanto al personal de la plaza como al restaurante seleccionado
+          io?.to(`food_court:${session.foodCourtId}`).emit(WsServerEvent.ALERT_WAITER, data)
+          io?.to(`restaurant:${data.restaurantId}:staff`).emit(WsServerEvent.ALERT_WAITER, data)
+        } else {
+          const staffRoom = `restaurant:${data.restaurantId}:staff`
+          io?.to(staffRoom).emit(WsServerEvent.ALERT_WAITER, data)
+        }
 
         console.log(
           `[Socket.IO] Alerta mesero → Mesa ${data.tableNumber} | Tipo: ${data.alertType}`,
@@ -256,21 +285,33 @@ export function initSocketServer(httpServer: HttpServer): IOServer {
     })
 
     // --------------------------------------------------------
-    // Staff: Unirse a sala del restaurante
+    // Staff: Unirse a sala del restaurante o de la plaza
     // --------------------------------------------------------
-    socket.on(WsStaffEvent.JOIN_STAFF_ROOM, (data: { restaurantId: string; staffToken: string }) => {
+    socket.on(WsStaffEvent.JOIN_STAFF_ROOM, (data: { restaurantId?: string; foodCourtId?: string; staffToken: string }) => {
       // TODO: Validar staffToken (JWT) antes de unir
-      const staffRoom = `restaurant:${data.restaurantId}:staff`
-      socket.join(staffRoom)
-      console.log(`[Socket.IO] Staff unido a sala: ${staffRoom}`)
+      if (data.restaurantId) {
+        const staffRoom = `restaurant:${data.restaurantId}:staff`
+        socket.join(staffRoom)
+        console.log(`[Socket.IO] Staff unido a sala: ${staffRoom}`)
+      }
+      if (data.foodCourtId) {
+        const foodCourtRoom = `food_court:${data.foodCourtId}`
+        socket.join(foodCourtRoom)
+        console.log(`[Socket.IO] Staff unido a plaza gastronómica: ${foodCourtRoom}`)
+      }
     })
 
     // --------------------------------------------------------
     // Staff: Mesero confirmó que va en camino
     // --------------------------------------------------------
     socket.on(WsStaffEvent.WAITER_ACKNOWLEDGED, (data: WaiterAcknowledgedPayload) => {
-      const tableRoom = `restaurant:${data.restaurantId}:table:${data.tableId}`
-      io?.to(tableRoom).emit(WsServerEvent.WAITER_STATUS_CHANGED, data)
+      if (data.foodCourtId) {
+        io?.to(`food_court:${data.foodCourtId}:table:${data.tableId}`).emit(WsServerEvent.WAITER_STATUS_CHANGED, data)
+      }
+      if (data.restaurantId) {
+        const tableRoom = `restaurant:${data.restaurantId}:table:${data.tableId}`
+        io?.to(tableRoom).emit(WsServerEvent.WAITER_STATUS_CHANGED, data)
+      }
       console.log(`[Socket.IO] Mesero ${data.waiterName} confirmó mesa ${data.tableId}`)
     })
 
@@ -391,6 +432,7 @@ export function emitOrderConfirmedToTable(
   restaurantId: string,
   tableId: string,
   order: ConfirmedOrderPayload,
+  foodCourtId?: string | null,
 ): void {
   const io = getIO()
   if (!io) {
@@ -399,7 +441,25 @@ export function emitOrderConfirmedToTable(
   }
   const tableRoom = `restaurant:${restaurantId}:table:${tableId}`
   io.to(tableRoom).emit(WsServerEvent.TABLE_ORDERS_UPDATED, order)
+  if (foodCourtId) {
+    io.to(`food_court:${foodCourtId}:table:${tableId}`).emit(WsServerEvent.TABLE_ORDERS_UPDATED, order)
+  }
   console.log(`[Socket.IO] emitOrderConfirmedToTable → ${tableRoom} (Orden ${order.orderId})`)
+}
+
+/**
+ * Emite actualización de estado de pago de un restaurante en una plaza gastronómica.
+ */
+export function emitFoodCourtPaymentUpdated(
+  foodCourtId: string,
+  tableId: string,
+  payload: FoodCourtPaymentUpdatedPayload,
+): void {
+  const io = getIO()
+  if (!io) return
+  io.to(`food_court:${foodCourtId}`).emit(WsServerEvent.FOOD_COURT_PAYMENT_UPDATED, payload)
+  io.to(`food_court:${foodCourtId}:table:${tableId}`).emit(WsServerEvent.FOOD_COURT_PAYMENT_UPDATED, payload)
+  console.log(`[Socket.IO] emitFoodCourtPaymentUpdated → food_court:${foodCourtId} (rest: ${payload.restaurantId}, status: ${payload.status})`)
 }
 
 /**

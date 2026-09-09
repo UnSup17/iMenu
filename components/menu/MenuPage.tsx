@@ -56,6 +56,13 @@ interface MenuPageProps {
   pdfUrl?: string | null
   pdfHotspots?: PdfHotspot[]
   initialStockIssues?: StockIssueItem[]
+  // Soporte de contexto de Plaza Gastronómica
+  foodCourtSlug?: string
+  foodCourtName?: string
+  onBackToMosaic?: () => void
+  onNavigateRestaurant?: (direction: 'next' | 'prev') => void
+  hasPrevRestaurant?: boolean
+  hasNextRestaurant?: boolean
 }
 
 type ViewMode = 'list' | 'pdf'
@@ -91,6 +98,12 @@ export function MenuPage({
   pdfUrl,
   pdfHotspots = [],
   initialStockIssues = [],
+  foodCourtSlug,
+  foodCourtName,
+  onBackToMosaic,
+  onNavigateRestaurant,
+  hasPrevRestaurant = false,
+  hasNextRestaurant = false,
 }: MenuPageProps) {
   const hasPdf = Boolean(pdfUrl)
 
@@ -264,6 +277,21 @@ export function MenuPage({
       <header className="sticky top-0 z-40 bg-zinc-950/95 backdrop-blur-md border-b border-zinc-800">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
+            {/* Botón Volver al mosaico si estamos en contexto de plaza */}
+            {onBackToMosaic && (
+              <button
+                id="btn-back-to-mosaic"
+                onClick={onBackToMosaic}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-amber-400 text-xs font-bold transition-all border border-zinc-700/60 active:scale-95 shrink-0"
+                aria-label={`Volver al mosaico de ${foodCourtName || 'la plaza'}`}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                </svg>
+                <span>Plaza</span>
+              </button>
+            )}
+
             {/* Logo inicial del restaurante */}
             <div
               className="w-11 h-11 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold text-lg"
@@ -272,9 +300,37 @@ export function MenuPage({
               {restaurantName.charAt(0)}
             </div>
             <div>
-              <h1 className="text-base sm:text-lg font-black text-white tracking-tight leading-tight">
-                {restaurantName}
-              </h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-base sm:text-lg font-black text-white tracking-tight leading-tight">
+                  {restaurantName}
+                </h1>
+                {onNavigateRestaurant && (
+                  <div className="flex items-center gap-1">
+                    {hasPrevRestaurant && (
+                      <button
+                        onClick={() => onNavigateRestaurant('prev')}
+                        className="p-1 rounded-md bg-zinc-800 text-zinc-400 hover:text-white"
+                        aria-label="Restaurante anterior"
+                      >
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                        </svg>
+                      </button>
+                    )}
+                    {hasNextRestaurant && (
+                      <button
+                        onClick={() => onNavigateRestaurant('next')}
+                        className="p-1 rounded-md bg-zinc-800 text-zinc-400 hover:text-white"
+                        aria-label="Siguiente restaurante"
+                      >
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="text-sm font-semibold text-zinc-300">
                   Mesa {tableNumber}
