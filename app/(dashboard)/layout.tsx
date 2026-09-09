@@ -1,7 +1,9 @@
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
 import { SignOutButton } from '@/components/dashboard/SignOutButton'
+import { getResolvedBrandTheme } from '@/lib/branding/resolver'
+import { BrandThemeInjector } from '@/components/branding/BrandThemeInjector'
+import { DashboardSidebarNav } from '@/components/dashboard/DashboardSidebarNav'
 
 const NAV_SECTIONS = [
   {
@@ -102,8 +104,23 @@ export default async function DashboardLayout({
   const session = await auth()
   if (!session?.user) redirect('/login')
 
-  const user = session.user as { email?: string | null; name?: string | null; role?: string }
+  const user = session.user as {
+    id?: string
+    email?: string | null
+    name?: string | null
+    role?: string
+    restaurantId?: string | null
+    restaurantSlug?: string | null
+    organizationId?: string | null
+    foodCourtId?: string | null
+  }
   const role = user.role ?? 'WAITER'
+
+  const brandTheme = await getResolvedBrandTheme({
+    restaurantId: user.restaurantId,
+    foodCourtId: user.foodCourtId,
+    organizationId: user.organizationId,
+  })
 
   const visibleSections = NAV_SECTIONS.map((section) => ({
     ...section,
@@ -115,42 +132,54 @@ export default async function DashboardLayout({
   })).filter((s) => s.roles.includes(role) && s.items.length > 0)
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white flex">
+    <div
+      className="min-h-screen bg-zinc-950 text-white flex transition-colors duration-200"
+      style={{
+        backgroundColor: 'var(--brand-bg, #09090b)',
+        color: 'var(--brand-text, #ffffff)',
+      }}
+    >
+      <BrandThemeInjector theme={brandTheme} id="brand-theme-layout-styles" />
+
       {/* Sidebar */}
-      <aside className="w-60 border-r border-zinc-800/60 flex flex-col bg-zinc-950 shrink-0">
+      <aside
+        className="w-64 border-r border-zinc-800/60 flex flex-col bg-zinc-900/90 backdrop-blur-md shrink-0 transition-colors duration-200"
+        style={{
+          backgroundColor: 'var(--brand-surface, #18181b)',
+        }}
+      >
         {/* Logo / restaurante */}
-        <div className="px-4 py-5 border-b border-zinc-800/60">
-          <p className="text-sm font-bold text-amber-500 tracking-widest uppercase">iMenu</p>
-          <p className="text-xs text-zinc-500 mt-0.5 truncate">{user.name ?? user.email}</p>
-          <span className="mt-1.5 inline-block text-[10px] font-semibold uppercase tracking-wider
-                           bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full">
-            {role.replace('_', ' ')}
-          </span>
+        <div className="px-5 py-5 border-b border-zinc-800/60">
+          <div className="flex items-center gap-3">
+            {brandTheme.logoUrl ? (
+              <img
+                src={brandTheme.logoUrl}
+                alt="Logo"
+                className="w-10 h-10 rounded-xl object-contain bg-zinc-950/40 p-1 border border-zinc-800"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 font-black text-lg shadow-sm">
+                🍽️
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-black text-amber-500 tracking-wider uppercase truncate font-heading">
+                {user.restaurantSlug ? user.restaurantSlug.replace(/-/g, ' ') : 'iMenu'}
+              </p>
+              <p className="text-xs text-zinc-400 truncate">{user.name ?? user.email}</p>
+            </div>
+          </div>
+          <div className="mt-3 flex items-center justify-between">
+            <span className="inline-block text-[10px] font-bold uppercase tracking-wider bg-zinc-800 text-zinc-300 px-2.5 py-0.5 rounded-full border border-zinc-700/60">
+              {role.replace('_', ' ')}
+            </span>
+            <span className="text-[10px] text-zinc-500 font-medium">White-Label</span>
+          </div>
         </div>
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
-          {visibleSections.map((section) => (
-            <div key={section.label}>
-              <p className="px-2 mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-600">
-                {section.label}
-              </p>
-              <div className="space-y-0.5">
-                {section.items.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-400
-                               hover:text-white hover:bg-zinc-800/70 transition-all duration-150
-                               active:scale-[0.98]"
-                  >
-                    <span className="text-base leading-none">{item.icon}</span>
-                    <span>{item.label}</span>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ))}
+          <DashboardSidebarNav sections={visibleSections} />
         </nav>
 
         {/* Sign out */}
@@ -160,9 +189,15 @@ export default async function DashboardLayout({
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto bg-zinc-950">
+      <main
+        className="flex-1 overflow-auto bg-zinc-950 transition-colors duration-200"
+        style={{
+          backgroundColor: 'var(--brand-bg, #09090b)',
+        }}
+      >
         {children}
       </main>
     </div>
   )
 }
+

@@ -94,7 +94,7 @@ export function BrandStudioClient({
   return (
     <div className="space-y-8">
       {/* Dynamic Fonts & Tokens Injector for Live Preview */}
-      <BrandThemeInjector theme={theme} />
+      <BrandThemeInjector theme={theme} id="brand-theme-studio-styles" />
 
       {/* Header Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-zinc-900/60 border border-zinc-800/80 p-6 rounded-3xl backdrop-blur-sm">
