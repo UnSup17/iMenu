@@ -188,6 +188,7 @@ model Restaurant {
   foodCourtMemberships    FoodCourtMembership[]     // Plazas a las que pertenece
   foodCourtPayments       FoodCourtTablePayment[]   // Registros de pago en plazas
   brandTheme              BrandTheme?
+  additions               Addition[]
 
   @@map("restaurants")
 }
@@ -328,6 +329,7 @@ model Category {
   offerEndTime     String?   // "HH:MM" hora fin   (zona del restaurante). null = sin restricción
 
   products Product[]
+  additionCategories AdditionCategory[]
 
   @@map("categories")
 }
@@ -350,6 +352,8 @@ model Product {
   pdfHotspots     PdfHotspot[]
   recipeItems     ProductRecipeItem[]   // Ingredientes de inventario que usa
   stockIssues     ProductStockIssue[]   // Sin stock por ingrediente
+  additionProducts AdditionProduct[]    @relation("ProductAdditions")
+  asRecipeForAdditions Addition[]       @relation("AdditionRecipeProduct")
 
   // Control de stock / cupo diario de platos fuera del menú / festividades
   specialOfferStock     Int?      // Cupo límite de porciones para la festividad/oferta
@@ -403,6 +407,76 @@ model ProductIngredient {
 }
 
 // ============================================================
+// Adiciones & Extras transversales
+// ============================================================
+
+model Addition {
+  id           String     @id @default(uuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  name         String
+  description  String?
+  price        Decimal    @default(0.00) @db.Decimal(10, 2)
+  isAvailable  Boolean    @default(true)
+  imageUrl     String?
+
+  // Origen: Ingrediente de Inventario (materia prima directa)
+  inventoryItemId   String?
+  inventoryItem     InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  inventoryQuantity Decimal?       @db.Decimal(10, 3)
+
+  // Origen: Receta de Producto / Preparación
+  recipeProductId String?
+  recipeProduct   Product?       @relation("AdditionRecipeProduct", fields: [recipeProductId], references: [id], onDelete: SetNull)
+
+  // Alcance
+  categories AdditionCategory[]
+  products   AdditionProduct[]
+  orderItems OrderItemAddition[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([restaurantId])
+  @@map("additions")
+}
+
+model AdditionCategory {
+  id         String   @id @default(uuid())
+  additionId String
+  addition   Addition @relation(fields: [additionId], references: [id], onDelete: Cascade)
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([additionId, categoryId])
+  @@map("addition_categories")
+}
+
+model AdditionProduct {
+  id         String   @id @default(uuid())
+  additionId String
+  addition   Addition @relation(fields: [additionId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product  @relation("ProductAdditions", fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([additionId, productId])
+  @@map("addition_products")
+}
+
+model OrderItemAddition {
+  id           String    @id @default(uuid())
+  orderItemId  String
+  orderItem    OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  additionId   String
+  addition     Addition  @relation(fields: [additionId], references: [id])
+  quantity     Int       @default(1)
+  priceCharged Decimal   @db.Decimal(10, 2)
+
+  @@map("order_item_additions")
+}
+
+
+// ============================================================
 // Pedidos
 // ============================================================
 
@@ -438,6 +512,7 @@ model OrderItem {
 
   modifiers          OrderItemModifier[]
   removedIngredients OrderItemRemovedIngredient[]
+  additions          OrderItemAddition[]
 
   @@map("order_items")
 }
@@ -512,6 +587,7 @@ model InventoryItem {
   productRecipes ProductRecipeItem[]
   movements      InventoryMovement[]
   stockIssues    ProductStockIssue[]
+  additions      Addition[]
 
   @@map("inventory_items")
 }

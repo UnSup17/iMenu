@@ -42,6 +42,9 @@ export async function GET(request: NextRequest) {
             modifiers: {
               include: { modifierOption: true },
             },
+            additions: {
+              include: { addition: true },
+            },
           },
         },
       },
@@ -67,6 +70,12 @@ export async function GET(request: NextRequest) {
           unitPrice: i.unitPrice.toNumber(),
           subtotal: i.subtotal.toNumber(),
           modifiers: i.modifiers.map((m) => m.modifierOption.name),
+          additions: i.additions.map((a) => ({
+            id: a.additionId,
+            name: a.addition.name,
+            quantity: a.quantity,
+            price: a.priceCharged.toNumber(),
+          })),
           orderedByNames,
           notes: cleanNotes || undefined,
         }

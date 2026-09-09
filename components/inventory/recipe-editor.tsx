@@ -306,7 +306,15 @@ export function RecipeEditor({ products: initialProducts, inventoryItems }: Reci
         )}
 
         {selectedProduct && (
-          <div className="pt-4 border-t border-zinc-800 flex justify-end">
+          <div className="pt-4 border-t border-zinc-800 flex items-center justify-between gap-3">
+            <Link
+              href={`/dashboard/additions?createFromRecipe=${selectedProductId}`}
+              className="px-4 py-2 border border-zinc-700 hover:bg-zinc-800 text-zinc-300 hover:text-white font-semibold text-sm rounded-lg transition-colors flex items-center gap-1.5"
+            >
+              <span>➕</span>
+              <span>Convertir en Adición</span>
+            </Link>
+
             <button
               type="button"
               onClick={handleSaveRecipe}

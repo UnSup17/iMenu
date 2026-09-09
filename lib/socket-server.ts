@@ -27,6 +27,7 @@ import {
   type ProductUnavailablePayload,
   type ProductAvailablePayload,
   type FoodCourtPaymentUpdatedPayload,
+  type RecommendProductPayload,
 } from '@/types/websocket-events'
 import { getTableSession, getSharedTableCart, storeSharedTableCart } from '@/lib/redis'
 import { prisma } from '@/lib/prisma'
@@ -249,6 +250,44 @@ export function initSocketServer(httpServer: HttpServer): IOServer {
         if (callback) callback({ success: true })
       } catch (err) {
         console.error('[Socket.IO] Error en UPDATE_SHARED_CART:', err)
+        if (callback) callback({ success: false, error: 'Error interno del servidor.' })
+      }
+    })
+
+    // --------------------------------------------------------
+    // Comensal: Recomendar Platillo a la Mesa
+    // --------------------------------------------------------
+    socket.on(WsClientEvent.RECOMMEND_PRODUCT, async (data: RecommendProductPayload, callback) => {
+      try {
+        const session = await getTableSession(data.sessionToken)
+        if (!session || session.tableId !== data.tableId) {
+          if (callback) callback({ success: false, error: 'Sesión inválida.' })
+          return
+        }
+
+        const tableRoom = session.foodCourtId
+          ? `food_court:${session.foodCourtId}:table:${data.tableId}`
+          : `restaurant:${data.restaurantId}:table:${data.tableId}`
+
+        const enrichedPayload: RecommendProductPayload = {
+          ...data,
+          fromSocketId: socket.id,
+          timestamp: data.timestamp || Date.now(),
+        }
+
+        if (data.targetSocketId && data.targetSocketId !== 'ALL') {
+          // Recomendar a un comensal específico
+          io.to(data.targetSocketId).emit(WsServerEvent.PRODUCT_RECOMMENDED, enrichedPayload)
+          console.log(`[Socket.IO] Platillo "${data.productName}" recomendado por "${data.fromUserName}" al comensal "${data.targetUserName}" (${data.targetSocketId})`)
+        } else {
+          // Recomendar a toda la mesa (a todos los comensales excepto el emisor)
+          socket.to(tableRoom).emit(WsServerEvent.PRODUCT_RECOMMENDED, enrichedPayload)
+          console.log(`[Socket.IO] Platillo "${data.productName}" recomendado por "${data.fromUserName}" a toda la mesa (${tableRoom})`)
+        }
+
+        if (callback) callback({ success: true })
+      } catch (err) {
+        console.error('[Socket.IO] Error en RECOMMEND_PRODUCT:', err)
         if (callback) callback({ success: false, error: 'Error interno del servidor.' })
       }
     })

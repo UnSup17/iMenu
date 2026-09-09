@@ -25,7 +25,7 @@ export async function deductStockForOrder(
   restaurantId: string,
   createdById: string,
 ): Promise<StockDeductionResult> {
-  // Cargar items de la orden con sus recetas
+  // Cargar items de la orden con sus recetas y adiciones
   const orderItems = await prisma.orderItem.findMany({
     where: { orderId },
     include: {
@@ -38,6 +38,24 @@ export async function deductStockForOrder(
           },
         },
       },
+      additions: {
+        include: {
+          addition: {
+            include: {
+              inventoryItem: true,
+              recipeProduct: {
+                include: {
+                  recipeItems: {
+                    include: {
+                      inventoryItem: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     },
   })
 
@@ -46,10 +64,11 @@ export async function deductStockForOrder(
   }
 
   // Calcular la cantidad total a descontar por ítem de inventario
-  // (puede aparecer en múltiples productos del mismo pedido)
-  const deductions = new Map<string, { item: typeof orderItems[0]['product']['recipeItems'][0]['inventoryItem']; qty: number }>()
+  // (puede aparecer en múltiples productos o adiciones del mismo pedido)
+  const deductions = new Map<string, { item: any; qty: number }>()
 
   for (const orderItem of orderItems) {
+    // 1. Ingredientes de la receta base del producto
     for (const recipeItem of orderItem.product.recipeItems) {
       const totalQty = recipeItem.quantity.toNumber() * orderItem.quantity
       const existing = deductions.get(recipeItem.inventoryItemId)
@@ -60,6 +79,42 @@ export async function deductStockForOrder(
           item: recipeItem.inventoryItem,
           qty: totalQty,
         })
+      }
+    }
+
+    // 2. Ingredientes de las adiciones
+    for (const orderAddition of orderItem.additions) {
+      const addition = orderAddition.addition
+      const totalAdditionCount = orderAddition.quantity * orderItem.quantity
+
+      // 2a. Adición vinculada a un ingrediente de inventario directo
+      if (addition.inventoryItemId && addition.inventoryItem && addition.inventoryQuantity) {
+        const qty = addition.inventoryQuantity.toNumber() * totalAdditionCount
+        const existing = deductions.get(addition.inventoryItemId)
+        if (existing) {
+          existing.qty += qty
+        } else {
+          deductions.set(addition.inventoryItemId, {
+            item: addition.inventoryItem,
+            qty,
+          })
+        }
+      }
+
+      // 2b. Adición vinculada a una receta de producto
+      if (addition.recipeProduct?.recipeItems) {
+        for (const recipeItem of addition.recipeProduct.recipeItems) {
+          const qty = recipeItem.quantity.toNumber() * totalAdditionCount
+          const existing = deductions.get(recipeItem.inventoryItemId)
+          if (existing) {
+            existing.qty += qty
+          } else {
+            deductions.set(recipeItem.inventoryItemId, {
+              item: recipeItem.inventoryItem,
+              qty,
+            })
+          }
+        }
       }
     }
   }

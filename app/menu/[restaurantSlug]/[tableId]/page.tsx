@@ -123,6 +123,32 @@ export default async function MenuGuestPage({ params, searchParams }: PageProps)
     }, now),
   )
 
+  // Cargar adiciones activas del restaurante con sus categorías y productos
+  const rawAdditions = await prisma.addition.findMany({
+    where: { restaurantId: restaurant.id, isAvailable: true },
+    include: {
+      categories: true,
+      products: true,
+      inventoryItem: true,
+    },
+  })
+
+  const getAdditionsForProduct = (categoryId: string, productId: string) => {
+    return rawAdditions
+      .filter(
+        (a) =>
+          a.categories.some((c) => c.categoryId === categoryId) ||
+          a.products.some((pr) => pr.productId === productId),
+      )
+      .map((a) => ({
+        id: a.id,
+        name: a.name,
+        description: a.description,
+        price: a.price.toNumber(),
+        isOutOfStock: a.inventoryItem ? a.inventoryItem.currentStock.toNumber() <= 0 : false,
+      }))
+  }
+
   // Serializar Decimal → number para el cliente
   const categories = activeCategories.map((cat) => ({
     id: cat.id,
@@ -133,6 +159,7 @@ export default async function MenuGuestPage({ params, searchParams }: PageProps)
       description: p.description,
       basePrice: p.basePrice.toNumber(),
       imageUrl: p.imageUrl,
+      additions: getAdditionsForProduct(cat.id, p.id),
       modifierGroups: p.modifierGroups.map((g) => ({
         id: g.id,
         name: g.name,
@@ -169,6 +196,7 @@ export default async function MenuGuestPage({ params, searchParams }: PageProps)
       description: hs.product.description,
       basePrice: hs.product.basePrice.toNumber(),
       imageUrl: hs.product.imageUrl,
+      additions: getAdditionsForProduct(hs.product.categoryId, hs.product.id),
       modifierGroups: hs.product.modifierGroups.map((g) => ({
         id: g.id,
         name: g.name,

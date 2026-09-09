@@ -24,12 +24,18 @@ interface PdfHotspot {
 interface PdfMenuViewProps {
   pdfUrl: string
   hotspots: PdfHotspot[]
+  recommendedMap?: Map<string, { fromUserName: string; note?: string }>
   onSelectProduct: (product: ProductModalData) => void
 }
 
 // ─── Component ────────────────────────────────────────────────────────────
 
-export function PdfMenuView({ pdfUrl, hotspots, onSelectProduct }: PdfMenuViewProps) {
+export function PdfMenuView({
+  pdfUrl,
+  hotspots,
+  recommendedMap,
+  onSelectProduct,
+}: PdfMenuViewProps) {
   const [pageDataUrls, setPageDataUrls] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -96,7 +102,8 @@ export function PdfMenuView({ pdfUrl, hotspots, onSelectProduct }: PdfMenuViewPr
         return (
           <div
             key={pageIndex}
-            className="relative border rounded-xl overflow-hidden bg-white mx-auto shadow-xl"
+            id={`pdf-page-${pageIndex}`}
+            className="relative border rounded-xl overflow-hidden bg-white mx-auto shadow-xl transition-all duration-300"
             style={{
               width: '100%',
               borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
@@ -115,10 +122,13 @@ export function PdfMenuView({ pdfUrl, hotspots, onSelectProduct }: PdfMenuViewPr
             {pageHotspots.map((hs) => {
               const orderedByNames = getOrderedByForProduct(hs.product.id)
               const hasOrders = orderedByNames.length > 0
+              const recommendation = recommendedMap?.get(hs.product.id)
+              const isRecommended = Boolean(recommendation)
 
               return (
                 <button
                   key={hs.id}
+                  id={`pdf-hotspot-${hs.product.id}`}
                   onClick={() => onSelectProduct(hs.product)}
                   title={`Ver ${hs.product.name}`}
                   style={{
@@ -129,14 +139,27 @@ export function PdfMenuView({ pdfUrl, hotspots, onSelectProduct }: PdfMenuViewPr
                     height: `${hs.height * 100}%`,
                   }}
                   className={`group rounded transition-all duration-150 relative focus:outline-none focus:ring-2 ${
-                    hasOrders
+                    isRecommended
+                      ? 'bg-[var(--brand-primary)]/30 ring-4 ring-[var(--brand-primary)] shadow-lg animate-pulse'
+                      : hasOrders
                       ? 'bg-[var(--brand-primary)]/25 ring-2 ring-[var(--brand-primary)] shadow-md'
                       : 'hover:bg-[var(--brand-primary)]/20 hover:ring-2 hover:ring-[var(--brand-primary)]/60'
                   }`}
                   aria-label={`Abrir ${hs.product.name}`}
                 >
+                  {/* Badge de platillo recomendado por un comensal */}
+                  {isRecommended && recommendation && (
+                    <div
+                      className="absolute -top-3.5 left-1/2 -translate-x-1/2 text-white font-black text-[9px] px-2.5 py-0.5 rounded-full shadow-2xl border border-white/40 whitespace-nowrap flex items-center gap-1 z-20 animate-bounce"
+                      style={{ backgroundColor: 'var(--brand-primary, #f59e0b)' }}
+                    >
+                      <span>⭐</span>
+                      <span>{recommendation.fromUserName} recomienda</span>
+                    </div>
+                  )}
+
                   {/* Badge de comensales que ordenaron este platillo */}
-                  {hasOrders && (
+                  {!isRecommended && hasOrders && (
                     <div
                       className="absolute -top-2.5 left-1/2 -translate-x-1/2 text-white font-extrabold text-[9px] px-2 py-0.5 rounded-full shadow-lg border border-white/20 whitespace-nowrap flex items-center gap-1 z-10 animate-bounce"
                       style={{ backgroundColor: 'var(--brand-primary)' }}

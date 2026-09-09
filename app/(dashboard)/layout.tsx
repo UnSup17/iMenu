@@ -12,6 +12,7 @@ const NAV_SECTIONS = [
     items: [
       { href: '/dashboard', label: 'Inicio', icon: '🏠' },
       { href: '/dashboard/menu', label: 'Gestor de Menú', icon: '🍽️' },
+      { href: '/dashboard/additions', label: 'Adiciones & Extras', icon: '➕' },
       { href: '/dashboard/special-offers', label: 'Ofertas & Festividades', icon: '✨' },
       { href: '/dashboard/orders', label: 'Pedidos', icon: '📋' },
       { href: '/dashboard/tables', label: 'Mesas', icon: '🪑' },

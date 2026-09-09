@@ -90,6 +90,10 @@ export function CartSheet({
         productId: item.productId,
         quantity: item.quantity,
         selectedModifierOptionIds: item.selectedModifiers.map((m) => m.optionId),
+        selectedAdditions: (item.selectedAdditions || []).map((a) => ({
+          additionId: a.additionId,
+          quantity: a.quantity,
+        })),
         removedIngredientIds: item.removedIngredientIds,
         notes: item.notes,
         orderedByNames: item.orderedBy.map((u) => u.userName),
@@ -372,9 +376,16 @@ export function CartSheet({
                           <span className="font-bold" style={{ color: 'var(--brand-primary)' }}>
                             {line.quantity}x
                           </span>
-                          <span className="truncate" style={{ color: 'var(--brand-text)' }}>
-                            {line.name}
-                          </span>
+                          <div className="min-w-0">
+                            <span className="truncate block" style={{ color: 'var(--brand-text)' }}>
+                              {line.name}
+                            </span>
+                            {line.selectedAdditions && line.selectedAdditions.length > 0 && (
+                              <p className="text-[10px] font-medium" style={{ color: 'var(--brand-accent)' }}>
+                                + {line.selectedAdditions.map(a => `${a.quantity > 1 ? `${a.quantity}x ` : ''}${a.name}`).join(', ')}
+                              </p>
+                            )}
+                          </div>
                           {line.isConfirmed ? (
                             <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-medium flex items-center gap-0.5 shrink-0">
                               <span>🔒</span> Confirmado
@@ -547,6 +558,17 @@ function ConfirmedOrderItemRow({
             </p>
           )}
 
+          {/* Adiciones */}
+          {item.additions && item.additions.length > 0 && (
+            <div className="space-y-0.5 mt-1">
+              {item.additions.map((add) => (
+                <p key={add.id} className="text-[11px] font-medium" style={{ color: 'var(--brand-accent)' }}>
+                  ✨ + {add.quantity > 1 ? `${add.quantity}x ` : ''}{add.name}
+                </p>
+              ))}
+            </div>
+          )}
+
           {/* Notas */}
           {item.notes && (
             <p
@@ -667,6 +689,20 @@ function GlobalCartItemRow({
               + {mod.name}
               {mod.extraPrice > 0 && (
                 <span style={{ color: 'var(--brand-primary)' }}> (+{formatPrice(mod.extraPrice)})</span>
+              )}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {/* Adiciones seleccionadas */}
+      {item.selectedAdditions && item.selectedAdditions.length > 0 && (
+        <div className="space-y-0.5 pt-1">
+          {item.selectedAdditions.map((add) => (
+            <p key={add.additionId} className="text-[11px] font-medium" style={{ color: 'var(--brand-accent)' }}>
+              ✨ + {add.quantity > 1 ? `${add.quantity}x ` : ''}{add.name}
+              {add.price > 0 && (
+                <span style={{ color: 'var(--brand-primary)' }}> (+{formatPrice(add.price * add.quantity)})</span>
               )}
             </p>
           ))}

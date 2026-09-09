@@ -17,6 +17,7 @@ export enum WsClientEvent {
   ORDER_SUBMITTED = 'order_submitted',
   JOIN_TABLE_SESSION = 'join_table_session',
   UPDATE_SHARED_CART = 'update_shared_cart',
+  RECOMMEND_PRODUCT = 'recommend_product',
 }
 
 // Eventos que el staff emite al servidor
@@ -36,6 +37,7 @@ export enum WsServerEvent {
   SHARED_CART_UPDATED = 'shared_cart_updated',
   TABLE_PARTICIPANTS_UPDATED = 'table_participants_updated',
   TABLE_ORDERS_UPDATED = 'table_orders_updated',
+  PRODUCT_RECOMMENDED = 'product_recommended',
   // Plazas gastronómicas
   FOOD_COURT_PAYMENT_UPDATED = 'food_court_payment_updated',
   // Inventario en tiempo real
@@ -148,6 +150,7 @@ export interface ConfirmedOrderItemPayload {
   unitPrice: number
   subtotal: number
   modifiers: string[]
+  additions?: Array<{ id: string; name: string; quantity: number; price: number }>
   orderedByNames: string[]
   notes?: string
 }
@@ -193,6 +196,24 @@ export interface ProductAvailablePayload {
   inventoryItemId: string
 }
 
+export interface RecommendProductPayload {
+  restaurantId?: string
+  foodCourtId?: string
+  tableId: string
+  sessionToken: string
+  fromUserName: string
+  fromSocketId: string
+  targetSocketId: string | 'ALL'
+  targetUserName: string
+  productId: string
+  productName: string
+  productPrice: number
+  productImageUrl?: string | null
+  pdfPage?: number | null
+  note?: string
+  timestamp: number
+}
+
 // ============================================================
 // Socket.IO Event Map Interfaces (tipado del servidor)
 // ============================================================
@@ -214,6 +235,10 @@ export interface ClientToServerEvents {
   ) => void
   [WsClientEvent.UPDATE_SHARED_CART]: (
     data: UpdateSharedCartPayload,
+    callback?: (ack: { success: boolean; error?: string }) => void,
+  ) => void
+  [WsClientEvent.RECOMMEND_PRODUCT]: (
+    data: RecommendProductPayload,
     callback?: (ack: { success: boolean; error?: string }) => void,
   ) => void
 }
@@ -243,6 +268,7 @@ export interface ServerToClientEvents {
   [WsServerEvent.SHARED_CART_UPDATED]: (data: { items: SharedCartItemPayload[]; updatedBy: string }) => void
   [WsServerEvent.TABLE_PARTICIPANTS_UPDATED]: (data: TableParticipantsPayload) => void
   [WsServerEvent.TABLE_ORDERS_UPDATED]: (data: ConfirmedOrderPayload) => void
+  [WsServerEvent.PRODUCT_RECOMMENDED]: (data: RecommendProductPayload) => void
   [WsServerEvent.FOOD_COURT_PAYMENT_UPDATED]: (data: FoodCourtPaymentUpdatedPayload) => void
   [WsServerEvent.INVENTORY_UPDATED]: (data: InventoryUpdatedPayload) => void
   [WsServerEvent.PRODUCT_UNAVAILABLE]: (data: ProductUnavailablePayload) => void

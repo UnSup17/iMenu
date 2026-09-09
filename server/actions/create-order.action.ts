@@ -12,6 +12,14 @@ export const OrderItemSchema = z.object({
   productId: z.string().min(1),
   quantity: z.number().int().positive().max(50),
   selectedModifierOptionIds: z.array(z.string().min(1)).default([]),
+  selectedAdditions: z
+    .array(
+      z.object({
+        additionId: z.string().min(1),
+        quantity: z.number().int().positive().max(20).default(1),
+      }),
+    )
+    .default([]),
   removedIngredientIds: z.array(z.string().min(1)).default([]),
   notes: z.string().max(250).optional(),
   orderedByNames: z.array(z.string()).optional(),
@@ -116,6 +124,28 @@ export async function createOrderTransaction(input: CreateOrderInput): Promise<C
 
     const productMap = new Map(dbProducts.map((p) => [p.id, p]))
 
+    // 2.5 Cargar adiciones seleccionadas en lote
+    const allAdditionIds = Array.from(
+      new Set(parsed.items.flatMap((i) => i.selectedAdditions.map((a) => a.additionId))),
+    )
+
+    const dbAdditions =
+      allAdditionIds.length > 0
+        ? await tx.addition.findMany({
+            where: {
+              id: { in: allAdditionIds },
+              restaurantId: parsed.restaurantId,
+              isAvailable: true,
+            },
+            include: {
+              categories: true,
+              products: true,
+            },
+          })
+        : []
+
+    const additionMap = new Map(dbAdditions.map((a) => [a.id, a]))
+
     // 3. Validación de reglas de negocio + cálculo de precios (server-side determinista)
     let calculatedTotal = new Prisma.Decimal(0)
 
@@ -126,6 +156,7 @@ export async function createOrderTransaction(input: CreateOrderInput): Promise<C
       subtotal: Prisma.Decimal
       itemNotes?: string
       modifiers: Array<{ modifierOptionId: string; priceCharged: Prisma.Decimal }>
+      additions: Array<{ additionId: string; quantity: number; priceCharged: Prisma.Decimal }>
       removedIngredients: Array<{ ingredientId: string }>
     }> = []
 
@@ -164,6 +195,41 @@ export async function createOrderTransaction(input: CreateOrderInput): Promise<C
         }
       }
 
+      // Validar adiciones seleccionadas
+      const additionsForThisItem: Array<{
+        additionId: string
+        quantity: number
+        priceCharged: Prisma.Decimal
+      }> = []
+
+      for (const sel of item.selectedAdditions) {
+        const addition = additionMap.get(sel.additionId)
+        if (!addition) {
+          throw new Error(
+            `ADDITION_UNAVAILABLE: Una o más adiciones seleccionadas no existen o están agotadas.`,
+          )
+        }
+
+        const isAllowed =
+          addition.categories.some((c) => c.categoryId === product.categoryId) ||
+          addition.products.some((p) => p.productId === product.id)
+
+        if (!isAllowed) {
+          throw new Error(
+            `INVALID_ADDITION: La adición "${addition.name}" no está permitida para el plato "${product.name}".`,
+          )
+        }
+
+        const additionPrice = new Prisma.Decimal(addition.price)
+        itemPrice = itemPrice.add(additionPrice.mul(sel.quantity))
+
+        additionsForThisItem.push({
+          additionId: addition.id,
+          quantity: sel.quantity,
+          priceCharged: additionPrice,
+        })
+      }
+
       // Validar ingredientes removibles pertenecen al producto
       const validIngredientIds = new Set(product.ingredients.map((ing) => ing.id))
       for (const remId of item.removedIngredientIds) {
@@ -184,13 +250,14 @@ export async function createOrderTransaction(input: CreateOrderInput): Promise<C
         formattedNotes = formattedNotes ? `${namesLabel} ${formattedNotes}` : namesLabel
       }
 
-      orderItemsToCreate.push({
+        orderItemsToCreate.push({
         productId: product.id,
         quantity: item.quantity,
         unitPrice: itemPrice,
         subtotal: itemSubtotal,
         itemNotes: formattedNotes || undefined,
         modifiers: modifiersForThisItem,
+        additions: additionsForThisItem,
         removedIngredients: item.removedIngredientIds.map((id) => ({ ingredientId: id })),
       })
     }
@@ -217,6 +284,13 @@ export async function createOrderTransaction(input: CreateOrderInput): Promise<C
                 priceCharged: m.priceCharged,
               })),
             },
+            additions: {
+              create: item.additions.map((a) => ({
+                additionId: a.additionId,
+                quantity: a.quantity,
+                priceCharged: a.priceCharged,
+              })),
+            },
             removedIngredients: {
               create: item.removedIngredients.map((r) => ({
                 ingredientId: r.ingredientId,
@@ -230,6 +304,7 @@ export async function createOrderTransaction(input: CreateOrderInput): Promise<C
           include: {
             product: { select: { name: true } },
             modifiers: { include: { modifierOption: { select: { name: true } } } },
+            additions: { include: { addition: { select: { name: true } } } },
             removedIngredients: true,
           },
         },
@@ -266,17 +341,23 @@ export async function createOrderTransaction(input: CreateOrderInput): Promise<C
         : []
       const cleanNotes = i.itemNotes?.replace(/^\[Para:\s*[^\]]+\]\s*/, '').trim()
 
-      return {
-        id: i.id,
-        name: i.product.name,
-        quantity: i.quantity,
-        unitPrice: i.unitPrice.toNumber(),
-        subtotal: i.subtotal.toNumber(),
-        modifiers: i.modifiers.map((m) => m.modifierOption.name),
-        orderedByNames,
-        notes: cleanNotes || undefined,
-      }
-    })
+        return {
+          id: i.id,
+          name: i.product.name,
+          quantity: i.quantity,
+          unitPrice: i.unitPrice.toNumber(),
+          subtotal: i.subtotal.toNumber(),
+          modifiers: i.modifiers.map((m) => m.modifierOption.name),
+          additions: i.additions.map((a) => ({
+            id: a.additionId,
+            name: a.addition.name,
+            quantity: a.quantity,
+            price: a.priceCharged.toNumber(),
+          })),
+          orderedByNames,
+          notes: cleanNotes || undefined,
+        }
+      })
 
     return {
       success: true as const,

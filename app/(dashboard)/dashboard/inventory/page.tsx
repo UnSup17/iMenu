@@ -154,6 +154,12 @@ export default async function InventoryPage() {
                         >
                           + Compra
                         </Link>
+                        <Link
+                          href={`/dashboard/additions?createFromIngredient=${item.id}`}
+                          className="text-xs text-amber-300 hover:text-amber-200 font-medium"
+                        >
+                          + Adición
+                        </Link>
                       </div>
                     </td>
                   </tr>

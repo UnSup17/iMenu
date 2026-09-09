@@ -31,6 +31,14 @@ interface Ingredient {
   isRemovable: boolean
 }
 
+export interface ProductAdditionOption {
+  id: string
+  name: string
+  description?: string | null
+  price: number
+  isOutOfStock?: boolean
+}
+
 export interface ProductModalData {
   id: string
   name: string
@@ -39,23 +47,35 @@ export interface ProductModalData {
   imageUrl?: string | null
   modifierGroups: ModifierGroup[]
   ingredients: Ingredient[]
+  additions?: ProductAdditionOption[]
 }
 
 interface ProductModalProps {
   product: ProductModalData
   currency?: string
   stockIssue?: { productId: string; ingredientName: string; reason?: string }
+  recommendationInfo?: { fromUserName: string; note?: string } | null
+  onOpenRecommend?: () => void
   onClose: () => void
   onAdded?: () => void
 }
 
-export function ProductModal({ product, currency = 'MXN', stockIssue, onClose, onAdded }: ProductModalProps) {
+export function ProductModal({
+  product,
+  currency = 'MXN',
+  stockIssue,
+  recommendationInfo,
+  onOpenRecommend,
+  onClose,
+  onAdded,
+}: ProductModalProps) {
   const addItem = useCartStore((s) => s.addItem)
   const isOutOfStock = Boolean(stockIssue)
 
   // Estado local de selecciones
   const [singleSelects, setSingleSelects] = useState<Record<string, string>>({}) // groupId → optionId
   const [addons, setAddons] = useState<Set<string>>(new Set()) // Set de optionId
+  const [selectedAdditions, setSelectedAdditions] = useState<Record<string, number>>({}) // additionId → quantity
   const [removedIngredients, setRemovedIngredients] = useState<Set<string>>(new Set())
   const [notes, setNotes] = useState('')
   const [quantity, setQuantity] = useState(1)
@@ -106,8 +126,32 @@ export function ProductModal({ product, currency = 'MXN', stockIssue, onClose, o
         }
       }
     }
+
+    // Sumar adiciones extras seleccionadas
+    if (product.additions) {
+      for (const [additionId, qty] of Object.entries(selectedAdditions)) {
+        if (qty > 0) {
+          const add = product.additions.find((a) => a.id === additionId)
+          if (add) price += add.price * qty
+        }
+      }
+    }
+
     return price
   })()
+
+  function handleAdditionQuantityChange(additionId: string, delta: number) {
+    setSelectedAdditions((prev) => {
+      const current = prev[additionId] || 0
+      const next = Math.max(0, Math.min(10, current + delta))
+      if (next === 0) {
+        const copy = { ...prev }
+        delete copy[additionId]
+        return copy
+      }
+      return { ...prev, [additionId]: next }
+    })
+  }
 
   function handleSingleSelect(groupId: string, optionId: string) {
     setSingleSelects((prev) => ({ ...prev, [groupId]: optionId }))
@@ -178,12 +222,26 @@ export function ProductModal({ product, currency = 'MXN', stockIssue, onClose, o
       }
     }
 
+    // Construir adiciones seleccionadas
+    const additionsList = Object.entries(selectedAdditions)
+      .filter(([_, qty]) => qty > 0)
+      .map(([additionId, qty]) => {
+        const add = product.additions?.find((a) => a.id === additionId)
+        return {
+          additionId,
+          name: add?.name || 'Adición',
+          price: add?.price || 0,
+          quantity: qty,
+        }
+      })
+
     addItem({
       productId: product.id,
       name: product.name,
       basePrice: product.basePrice,
       quantity,
       selectedModifiers,
+      selectedAdditions: additionsList,
       removedIngredientIds: Array.from(removedIngredients),
       notes: notes.trim() || undefined,
     })
@@ -236,6 +294,30 @@ export function ProductModal({ product, currency = 'MXN', stockIssue, onClose, o
           </div>
         )}
 
+        {/* Banner de Recomendación si el platillo fue sugerido */}
+        {recommendationInfo && (
+          <div
+            className="mx-5 mt-4 p-3 rounded-2xl border flex items-start gap-3 animate-in fade-in slide-in-from-top-2"
+            style={{
+              backgroundColor: 'color-mix(in srgb, var(--brand-primary, #f59e0b) 15%, transparent)',
+              borderColor: 'color-mix(in srgb, var(--brand-primary, #f59e0b) 35%, transparent)',
+              boxShadow: '0 0 20px -4px color-mix(in srgb, var(--brand-primary, #f59e0b) 25%, transparent)',
+            }}
+          >
+            <span className="text-xl shrink-0 animate-bounce">⭐</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs sm:text-sm font-bold text-[var(--brand-primary)]">
+                {recommendationInfo.fromUserName} recomienda este platillo
+              </p>
+              {recommendationInfo.note && (
+                <p className="text-xs text-zinc-300 mt-0.5 italic">
+                  "{recommendationInfo.note}"
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex-shrink-0 px-5 pt-5 pb-3">
           <div className="flex items-start justify-between gap-3">
@@ -260,20 +342,39 @@ export function ProductModal({ product, currency = 'MXN', stockIssue, onClose, o
                 </p>
               )}
             </div>
-            {/* Botón cerrar — mínimo 44×44px */}
-            <button
-              ref={closeButtonRef}
-              onClick={onClose}
-              className="flex-shrink-0 w-11 h-11 rounded-xl border flex items-center justify-center text-lg transition-colors focus-visible:outline-none"
-              style={{
-                backgroundColor: 'color-mix(in srgb, var(--brand-surface) 80%, var(--brand-bg) 20%)',
-                borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
-                color: 'var(--brand-text)',
-              }}
-              aria-label="Cerrar"
-            >
-              ✕
-            </button>
+            {/* Acciones de cabecera: Recomendar + Cerrar */}
+            <div className="flex items-center gap-2 shrink-0">
+              {onOpenRecommend && (
+                <button
+                  type="button"
+                  onClick={onOpenRecommend}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all active:scale-95 shadow-sm hover:brightness-110 cursor-pointer"
+                  style={{
+                    backgroundColor: 'color-mix(in srgb, var(--brand-primary, #f59e0b) 15%, transparent)',
+                    borderColor: 'color-mix(in srgb, var(--brand-primary, #f59e0b) 35%, transparent)',
+                    color: 'var(--brand-primary, #f59e0b)',
+                  }}
+                  title="Recomendar este platillo a la mesa"
+                  aria-label="Recomendar platillo a la mesa"
+                >
+                  <span className="text-base leading-none">💡</span>
+                  <span className="inline">Recomendar</span>
+                </button>
+              )}
+              <button
+                ref={closeButtonRef}
+                onClick={onClose}
+                className="w-10 h-10 rounded-xl border flex items-center justify-center text-lg transition-colors focus-visible:outline-none cursor-pointer"
+                style={{
+                  backgroundColor: 'color-mix(in srgb, var(--brand-surface) 80%, var(--brand-bg) 20%)',
+                  borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+                  color: 'var(--brand-text)',
+                }}
+                aria-label="Cerrar"
+              >
+                ✕
+              </button>
+            </div>
           </div>
         </div>
 
@@ -375,6 +476,116 @@ export function ProductModal({ product, currency = 'MXN', stockIssue, onClose, o
               </div>
             </fieldset>
           ))}
+
+          {/* Adiciones & Extras transversales */}
+          {product.additions && product.additions.length > 0 && (
+            <fieldset className="border-0 p-0 m-0">
+              <legend
+                className="text-base font-semibold mb-3 flex items-center justify-between w-full"
+                style={{
+                  color: 'var(--brand-text)',
+                  fontFamily: 'var(--brand-font-heading)',
+                }}
+              >
+                <span>✨ Adiciones & Extras</span>
+                <span className="text-xs font-normal" style={{ color: 'var(--brand-muted)' }}>
+                  Opcional
+                </span>
+              </legend>
+
+              <div className="space-y-2">
+                {product.additions.map((addition) => {
+                  const count = selectedAdditions[addition.id] || 0
+                  const isSelected = count > 0
+
+                  return (
+                    <div
+                      key={addition.id}
+                      className="flex items-center justify-between p-3 rounded-2xl border transition-all"
+                      style={{
+                        backgroundColor: isSelected
+                          ? 'color-mix(in srgb, var(--brand-primary) 12%, var(--brand-surface))'
+                          : 'color-mix(in srgb, var(--brand-surface) 60%, transparent)',
+                        borderColor: isSelected
+                          ? 'var(--brand-primary)'
+                          : 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+                      }}
+                    >
+                      <div className="flex-1 min-w-0 pr-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-white">
+                            {addition.name}
+                          </span>
+                          {addition.isOutOfStock && (
+                            <span className="text-[10px] font-black bg-red-950/80 text-red-400 border border-red-800 px-1.5 py-0.5 rounded">
+                              Agotado
+                            </span>
+                          )}
+                        </div>
+                        {addition.description && (
+                          <p className="text-xs text-zinc-400 mt-0.5 truncate">
+                            {addition.description}
+                          </p>
+                        )}
+                        <span
+                          className="text-xs font-extrabold mt-1 inline-block"
+                          style={{ color: 'var(--brand-primary)' }}
+                        >
+                          +{formatPrice(addition.price)}
+                        </span>
+                      </div>
+
+                      {/* Contador o Estado */}
+                      {addition.isOutOfStock ? (
+                        <span className="text-xs text-zinc-500 font-semibold italic">
+                          Agotado
+                        </span>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          {isSelected ? (
+                            <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-700/80 rounded-xl p-1 shadow-sm">
+                              <button
+                                type="button"
+                                onClick={() => handleAdditionQuantityChange(addition.id, -1)}
+                                className="w-7 h-7 flex items-center justify-center text-sm font-black rounded-lg text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+                                aria-label={`Restar ${addition.name}`}
+                              >
+                                -
+                              </button>
+                              <span className="font-bold text-sm text-white px-1 min-w-[1.25rem] text-center">
+                                {count}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleAdditionQuantityChange(addition.id, 1)}
+                                className="w-7 h-7 flex items-center justify-center text-sm font-black rounded-lg text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+                                aria-label={`Sumar ${addition.name}`}
+                              >
+                                +
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleAdditionQuantityChange(addition.id, 1)}
+                              className="px-3.5 py-1.5 text-xs font-bold rounded-xl border transition-all cursor-pointer shadow-sm"
+                              style={{
+                                backgroundColor: 'color-mix(in srgb, var(--brand-primary) 15%, transparent)',
+                                borderColor: 'color-mix(in srgb, var(--brand-primary) 40%, transparent)',
+                                color: 'var(--brand-primary)',
+                              }}
+                            >
+                              + Agregar
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </fieldset>
+          )}
 
           {/* Ingredientes removibles */}
           {product.ingredients.filter((ing) => ing.isRemovable).length > 0 && (

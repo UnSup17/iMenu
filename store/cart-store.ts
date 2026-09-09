@@ -13,19 +13,27 @@ export interface CartModifierOption {
   extraPrice: number
 }
 
+export interface CartAdditionOption {
+  additionId: string
+  name: string
+  price: number
+  quantity: number
+}
+
 export interface CartItemOrderedBy {
   userName: string
   quantity: number
 }
 
 export interface CartItem {
-  cartItemId: string // Hash único: productId + modificadores + remociones + notas
+  cartItemId: string // Hash único: productId + modificadores + adiciones + remociones + notas
   productId: string
   name: string
   basePrice: number
-  unitCalculatedPrice: number // basePrice + sum(modificadores)
+  unitCalculatedPrice: number // basePrice + sum(modificadores) + sum(adiciones)
   quantity: number
   selectedModifiers: CartModifierOption[]
+  selectedAdditions?: CartAdditionOption[]
   removedIngredientIds: string[]
   notes?: string
   orderedBy: CartItemOrderedBy[]
@@ -40,6 +48,7 @@ export interface IndividualUserBreakdownItem {
   unitCalculatedPrice: number
   total: number
   selectedModifiers?: CartModifierOption[]
+  selectedAdditions?: CartAdditionOption[]
   modifierNames?: string[]
   notes?: string
   isConfirmed: boolean
@@ -91,15 +100,20 @@ function generateCartItemId(
   productId: string,
   modifiers: CartModifierOption[],
   removedIngredientIds: string[],
+  additions: CartAdditionOption[] = [],
   notes?: string,
 ): string {
   const sortedModifiers = [...modifiers]
     .map((m) => m.optionId)
     .sort()
     .join(',')
+  const sortedAdditions = [...additions]
+    .map((a) => `${a.additionId}:${a.quantity}`)
+    .sort()
+    .join(',')
   const sortedRemoved = [...removedIngredientIds].sort().join(',')
   const normalizedNotes = notes?.trim() || ''
-  return `${productId}_[${sortedModifiers}]_[${sortedRemoved}]_[${normalizedNotes}]`
+  return `${productId}_[${sortedModifiers}]_[${sortedAdditions}]_[${sortedRemoved}]_[${normalizedNotes}]`
 }
 
 // ============================================================
@@ -117,14 +131,21 @@ export const useCartStore = create<CartState>()(
 
       addItem: (newItem) => {
         const activeUserName = newItem.userName || get().userAlias || 'Comensal'
-        const unitCalculatedPrice =
-          newItem.basePrice +
-          newItem.selectedModifiers.reduce((sum, mod) => sum + mod.extraPrice, 0)
+        const modifiersExtra = (newItem.selectedModifiers || []).reduce(
+          (sum, mod) => sum + mod.extraPrice,
+          0,
+        )
+        const additionsExtra = (newItem.selectedAdditions || []).reduce(
+          (sum, add) => sum + add.price * add.quantity,
+          0,
+        )
+        const unitCalculatedPrice = newItem.basePrice + modifiersExtra + additionsExtra
 
         const cartItemId = generateCartItemId(
           newItem.productId,
-          newItem.selectedModifiers,
-          newItem.removedIngredientIds,
+          newItem.selectedModifiers || [],
+          newItem.removedIngredientIds || [],
+          newItem.selectedAdditions || [],
           newItem.notes,
         )
 
@@ -326,6 +347,7 @@ export const useCartStore = create<CartState>()(
               unitCalculatedPrice: item.unitCalculatedPrice,
               total: lineTotal,
               selectedModifiers: item.selectedModifiers,
+              selectedAdditions: item.selectedAdditions,
               notes: item.notes,
               isConfirmed: false,
             })

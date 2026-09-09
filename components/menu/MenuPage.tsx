@@ -9,12 +9,15 @@ import { CallWaiterButton } from '@/components/waiter/CallWaiterButton'
 import { PdfMenuView } from './PdfMenuView'
 import { UserAliasModal } from './UserAliasModal'
 import { TableParticipantsBadge } from './TableParticipantsBadge'
+import { RecommendModal } from './RecommendModal'
+import { RecommendationToast } from './RecommendationToast'
 import {
   WsClientEvent,
   WsServerEvent,
   type SharedCartItemPayload,
   type TableParticipantsPayload,
   type ConfirmedOrderPayload,
+  type RecommendProductPayload,
   type ClientToServerEvents,
   type ServerToClientEvents,
 } from '@/types/websocket-events'
@@ -131,6 +134,11 @@ export function MenuPage({
 
   const [isAliasModalOpen, setIsAliasModalOpen] = useState(false)
   const [participants, setParticipants] = useState<Array<{ socketId: string; userName: string }>>([])
+  const [recommendationsMap, setRecommendationsMap] = useState<
+    Map<string, { fromUserName: string; note?: string; timestamp: number }>
+  >(new Map())
+  const [activeToast, setActiveToast] = useState<RecommendProductPayload | null>(null)
+  const [recommendingProduct, setRecommendingProduct] = useState<ProductModalData | null>(null)
   const isBroadcastingRef = useRef(false)
 
   // Cargar apodo guardado o solicitarlo
@@ -239,9 +247,30 @@ export function MenuPage({
       setStockIssues((prev) => prev.filter((si) => si.productId !== data.productId))
     }
 
+    // Listener de recomendaciones entre comensales en tiempo real
+    const handleProductRecommended = (data: RecommendProductPayload) => {
+      // Si el usuario actual fue quien envió la recomendación, no mostrar toast a sí mismo
+      if (userAlias && data.fromUserName.trim().toLowerCase() === userAlias.trim().toLowerCase()) {
+        return
+      }
+
+      setRecommendationsMap((prev) => {
+        const next = new Map(prev)
+        next.set(data.productId, {
+          fromUserName: data.fromUserName,
+          note: data.note,
+          timestamp: data.timestamp,
+        })
+        return next
+      })
+
+      setActiveToast(data)
+    }
+
     socket.on(WsServerEvent.TABLE_PARTICIPANTS_UPDATED, handleParticipantsUpdate)
     socket.on(WsServerEvent.SHARED_CART_UPDATED, handleSharedCartUpdate)
     socket.on(WsServerEvent.TABLE_ORDERS_UPDATED, handleTableOrdersUpdate)
+    socket.on(WsServerEvent.PRODUCT_RECOMMENDED, handleProductRecommended)
     // @ts-ignore custom events
     socket.on('product:unavailable', handleProductUnavailable)
     // @ts-ignore custom events
@@ -250,12 +279,102 @@ export function MenuPage({
       socket.off(WsServerEvent.TABLE_PARTICIPANTS_UPDATED, handleParticipantsUpdate)
       socket.off(WsServerEvent.SHARED_CART_UPDATED, handleSharedCartUpdate)
       socket.off(WsServerEvent.TABLE_ORDERS_UPDATED, handleTableOrdersUpdate)
+      socket.off(WsServerEvent.PRODUCT_RECOMMENDED, handleProductRecommended)
       // @ts-ignore custom events
       socket.off('product:unavailable', handleProductUnavailable)
       // @ts-ignore custom events
       socket.off('product:available', handleProductAvailable)
     }
   }, [restaurantId, tableId, sessionToken, userAlias, setSharedItems, setConfirmedOrders, addConfirmedOrder])
+
+  const handleSendRecommendation = (data: {
+    targetSocketId: string | 'ALL'
+    targetUserName: string
+    note?: string
+  }): boolean => {
+    if (!recommendingProduct || !userAlias) return false
+    const socket = getSocket()
+
+    const hotspot = pdfHotspots.find((h) => h.product.id === recommendingProduct.id)
+
+    const payload: RecommendProductPayload = {
+      restaurantId,
+      tableId,
+      sessionToken,
+      fromUserName: userAlias,
+      fromSocketId: socket.id || '',
+      targetSocketId: data.targetSocketId,
+      targetUserName: data.targetUserName,
+      productId: recommendingProduct.id,
+      productName: recommendingProduct.name,
+      productPrice: recommendingProduct.basePrice,
+      productImageUrl: recommendingProduct.imageUrl,
+      pdfPage: hotspot ? hotspot.page : null,
+      note: data.note,
+      timestamp: Date.now(),
+    }
+
+    socket.emit(WsClientEvent.RECOMMEND_PRODUCT, payload)
+
+    // Guardar también en el mapa local del emisor para ver la decoración distintiva
+    setRecommendationsMap((prev) => {
+      const next = new Map(prev)
+      next.set(recommendingProduct.id, {
+        fromUserName: userAlias,
+        note: data.note,
+        timestamp: Date.now(),
+      })
+      return next
+    })
+
+    return true
+  }
+
+  const handleViewRecommendation = (rec: RecommendProductPayload) => {
+    setActiveToast(null)
+
+    // Buscar el producto en categories o pdfHotspots
+    let targetProduct: ProductModalData | null = null
+    for (const cat of categories) {
+      const found = cat.products.find((p) => p.id === rec.productId)
+      if (found) {
+        targetProduct = found
+        break
+      }
+    }
+
+    if (!targetProduct && pdfHotspots.length > 0) {
+      const hs = pdfHotspots.find((h) => h.product.id === rec.productId)
+      if (hs) targetProduct = hs.product
+    }
+
+    if (!targetProduct) return
+
+    // Si el platillo tiene hotspot en el PDF y el PDF está activo:
+    const hs = pdfHotspots.find((h) => h.product.id === rec.productId)
+    if (pdfUrl && hs !== undefined && viewMode === 'pdf') {
+      const pageElem = document.getElementById(`pdf-page-${hs.page}`)
+      if (pageElem) {
+        pageElem.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+      const hotspotElem = document.getElementById(`pdf-hotspot-${rec.productId}`)
+      if (hotspotElem) {
+        hotspotElem.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    } else {
+      if (viewMode === 'pdf') {
+        setViewMode('list')
+      }
+      setTimeout(() => {
+        const elem = document.getElementById(`product-${rec.productId}`)
+        if (elem) {
+          elem.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+      }, 100)
+    }
+
+    setSelectedProduct(targetProduct)
+  }
 
   const handleSaveAlias = (alias: string) => {
     localStorage.setItem('imenu_user_alias', alias)
@@ -535,6 +654,7 @@ export function MenuPage({
           <PdfMenuView
             pdfUrl={pdfUrl}
             hotspots={pdfHotspots}
+            recommendedMap={recommendationsMap}
             onSelectProduct={setSelectedProduct}
           />
         </main>
@@ -578,6 +698,7 @@ export function MenuPage({
                         currency={currency}
                         orderedBy={getOrderedByForProduct(product.id)}
                         stockIssue={issue}
+                        recommendation={recommendationsMap.get(product.id)}
                         onSelect={() => setSelectedProduct(product)}
                       />
                     )
@@ -681,8 +802,38 @@ export function MenuPage({
           product={selectedProduct}
           currency={currency}
           stockIssue={stockIssues.find((si) => si.productId === selectedProduct.id)}
+          recommendationInfo={recommendationsMap.get(selectedProduct.id) || null}
+          onOpenRecommend={() => {
+            if (!userAlias) {
+              setIsAliasModalOpen(true)
+              return
+            }
+            setRecommendingProduct(selectedProduct)
+          }}
           onClose={() => setSelectedProduct(null)}
           onAdded={() => broadcastCartUpdate(useCartStore.getState().items)}
+        />
+      )}
+
+      {/* ── Modal de Recomendación de Platillo ── */}
+      {recommendingProduct && (
+        <RecommendModal
+          product={recommendingProduct}
+          currency={currency}
+          currentUserName={userAlias || 'Comensal'}
+          participants={participants}
+          onClose={() => setRecommendingProduct(null)}
+          onSendRecommendation={handleSendRecommendation}
+        />
+      )}
+
+      {/* ── Toast Flotante de Recomendación Recibida ── */}
+      {activeToast && (
+        <RecommendationToast
+          recommendation={activeToast}
+          currency={currency}
+          onViewProduct={handleViewRecommendation}
+          onDismiss={() => setActiveToast(null)}
         />
       )}
 
@@ -761,12 +912,14 @@ function ProductCard({
   currency,
   orderedBy = [],
   stockIssue,
+  recommendation,
   onSelect,
 }: {
   product: ProductModalData
   currency: string
   orderedBy?: string[]
   stockIssue?: StockIssueItem
+  recommendation?: { fromUserName: string; note?: string }
   onSelect: () => void
 }) {
   const formatPrice = (amount: number) =>
@@ -776,11 +929,13 @@ function ProductCard({
     product.modifierGroups.length > 0 || product.ingredients.some((i) => i.isRemovable)
 
   const hasOrders = orderedBy.length > 0
+  const isRecommended = Boolean(recommendation)
   const isOutOfStock = Boolean(stockIssue)
 
   // Descripción completa para lectores de pantalla
   const srDescription = [
     product.description,
+    isRecommended ? `Recomendado por: ${recommendation?.fromUserName}` : null,
     hasOrders ? `Pedida por: ${orderedBy.join(', ')}` : null,
     isOutOfStock ? `Agotado — sin stock de ${stockIssue?.ingredientName}` : null,
     hasModifiers && !isOutOfStock ? 'Personalizable' : null,
@@ -792,6 +947,7 @@ function ProductCard({
 
   return (
     <button
+      id={`product-${product.id}`}
       onClick={isOutOfStock ? undefined : onSelect}
       disabled={isOutOfStock}
       aria-label={`${product.name}. ${srDescription}`}
@@ -803,6 +959,11 @@ function ProductCard({
         borderRadius: 'var(--brand-radius)',
         opacity: 0.65,
         cursor: 'not-allowed',
+      } : isRecommended ? {
+        backgroundColor: 'color-mix(in srgb, var(--brand-surface) 88%, var(--brand-primary) 12%)',
+        borderColor: 'var(--brand-primary)',
+        boxShadow: '0 0 16px -3px color-mix(in srgb, var(--brand-primary) 35%, transparent)',
+        borderRadius: 'var(--brand-radius)',
       } : hasOrders ? {
         backgroundColor: 'color-mix(in srgb, var(--brand-surface) 90%, var(--brand-primary) 10%)',
         borderColor: 'color-mix(in srgb, var(--brand-primary) 40%, transparent)',
@@ -813,10 +974,26 @@ function ProductCard({
         borderRadius: 'var(--brand-radius)',
       }}
     >
+      {/* Badge de recomendación de comensal */}
+      {isRecommended && recommendation && (
+        <div
+          className="mb-2.5 inline-flex items-center gap-1.5 border px-3 py-1 rounded-md text-xs font-black shadow-sm"
+          style={{
+            backgroundColor: 'color-mix(in srgb, var(--brand-primary, #f59e0b) 22%, transparent)',
+            color: 'var(--brand-primary, #f59e0b)',
+            borderColor: 'color-mix(in srgb, var(--brand-primary, #f59e0b) 50%, transparent)',
+          }}
+          aria-hidden="true"
+        >
+          <span>⭐</span>
+          <span>{recommendation.fromUserName} recomienda este plato</span>
+        </div>
+      )}
+
       {/* Badge de comensales — aria-hidden porque ya está en aria-label */}
       {hasOrders && (
         <div
-          className="mb-2.5 inline-flex items-center gap-1.5 border px-3 py-1 rounded-md text-xs font-bold"
+          className="mb-2.5 inline-flex items-center gap-1.5 border px-3 py-1 rounded-md text-xs font-bold mr-2"
           style={{
             backgroundColor: 'color-mix(in srgb, var(--brand-primary) 18%, transparent)',
             color: 'var(--brand-primary)',
@@ -828,6 +1005,7 @@ function ProductCard({
           <span>Pedida por: {orderedBy.join(', ')}</span>
         </div>
       )}
+
 
       {/* Badge de Sin Stock */}
       {isOutOfStock && (
