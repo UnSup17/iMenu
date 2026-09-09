@@ -3,6 +3,18 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Tokens de Marca / White-Label */
+  --brand-primary: #f59e0b;
+  --brand-secondary: #18181b;
+  --brand-accent: #fbbf24;
+  --brand-bg: #09090b;
+  --brand-surface: #18181b;
+  --brand-text: #ffffff;
+  --brand-muted: #a1a1aa;
+  --brand-radius: 1rem;
+  --brand-font-heading: var(--font-sans);
+  --brand-font-body: var(--font-sans);
 }
 
 @theme inline {
@@ -10,6 +22,17 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-secondary: var(--brand-secondary);
+  --color-brand-accent: var(--brand-accent);
+  --color-brand-bg: var(--brand-bg);
+  --color-brand-surface: var(--brand-surface);
+  --color-brand-text: var(--brand-text);
+  --color-brand-muted: var(--brand-muted);
+  --radius-brand: var(--brand-radius);
+  --font-brand-heading: var(--brand-font-heading);
+  --font-brand-body: var(--brand-font-body);
 }
 
 @media (prefers-color-scheme: dark) {

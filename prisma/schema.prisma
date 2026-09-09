@@ -13,10 +13,11 @@ generator client {
 
 enum Role {
   SUPERADMIN
-  ORG_ADMIN     // Franquicia: Administra todas las sucursales de su organización
+  ORG_ADMIN          // Franquicia: Administra todas las sucursales de su organización
+  FOOD_COURT_ADMIN   // Administra una plaza gastronómica multi-franquicia
   RESTAURANT_ADMIN
-  ACCOUNTANT    // Solo módulos financieros, sin acceso a operaciones
-  MANAGER       // Operativo completo + inventario, sin contabilidad profunda
+  ACCOUNTANT         // Solo módulos financieros, sin acceso a operaciones
+  MANAGER            // Operativo completo + inventario, sin contabilidad profunda
   WAITER
   KITCHEN
 }
@@ -128,6 +129,7 @@ model Organization {
   foodCourts   FoodCourt[]
   users        User[]
   subscription Subscription?
+  brandTheme   BrandTheme?
 
   @@map("organizations")
 }
@@ -185,6 +187,7 @@ model Restaurant {
   electronicInvoiceConfig ElectronicInvoiceConfig?
   foodCourtMemberships    FoodCourtMembership[]     // Plazas a las que pertenece
   foodCourtPayments       FoodCourtTablePayment[]   // Registros de pago en plazas
+  brandTheme              BrandTheme?
 
   @@map("restaurants")
 }
@@ -347,6 +350,11 @@ model Product {
   pdfHotspots     PdfHotspot[]
   recipeItems     ProductRecipeItem[]   // Ingredientes de inventario que usa
   stockIssues     ProductStockIssue[]   // Sin stock por ingrediente
+
+  // Control de stock / cupo diario de platos fuera del menú / festividades
+  specialOfferStock     Int?      // Cupo límite de porciones para la festividad/oferta
+  specialOfferStockSold Int       @default(0) // Porciones vendidas del cupo
+  specialOfferCost      Decimal?  @db.Decimal(10, 2) // Costo unitario estimado para rentabilidad
 
   @@map("products")
 }
@@ -669,6 +677,8 @@ model InvoiceItem {
   taxRate     Decimal  @db.Decimal(5, 4)
   taxAmount   Decimal  @db.Decimal(12, 2)
   subtotal    Decimal  @db.Decimal(12, 2) // unitPrice × qty (sin impuesto)
+  isSpecialOffer Boolean  @default(false)
+  offerLabel     String?
 
   @@map("invoice_items")
 }
@@ -848,9 +858,52 @@ model FoodCourt {
   tables       Table[]
   memberships  FoodCourtMembership[]
   users        User[]          // Meseros y staff asignados a la plaza
+  brandTheme   BrandTheme?
 
   @@index([organizationId])
   @@map("food_courts")
+}
+
+// ============================================================
+// Identidad de Marca y Personalización de UI (White-Label)
+// ============================================================
+
+model BrandTheme {
+  id             String        @id @default(uuid())
+  organizationId String?       @unique
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  restaurantId   String?       @unique
+  restaurant     Restaurant?   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  foodCourtId    String?       @unique
+  foodCourt      FoodCourt?    @relation(fields: [foodCourtId], references: [id], onDelete: Cascade)
+
+  // Colores (Hexadecimales)
+  primaryColor    String  @default("#f59e0b") // Color principal de marca / botones destacados
+  secondaryColor  String  @default("#18181b") // Fondos oscuros secundarios / paneles
+  accentColor     String  @default("#fbbf24") // Badges / destaques / acentos
+  backgroundColor String  @default("#09090b") // Fondo global de la web y menú
+  surfaceColor    String  @default("#18181b") // Fondo de tarjetas de producto y modales
+  textColor       String  @default("#ffffff") // Color de texto principal
+  textMutedColor  String  @default("#a1a1aa") // Color de texto secundario y descripciones
+
+  // Tipografías de Google Fonts
+  fontHeading     String  @default("Inter")   // Playfair Display, Montserrat, Poppins, Outfit, Cinzel, Inter, Syne
+  fontBody        String  @default("Inter")   // Inter, Plus Jakarta Sans, Roboto, Lora, DM Sans
+
+  // Morfología y Elementos Gráficos
+  borderRadius    String  @default("1rem")    // 0px, 0.5rem, 1rem, 1.5rem, 9999px
+  coverBannerUrl  String? @db.VarChar(512)
+  logoUrl         String? @db.VarChar(512)
+
+  // Gobernanza Franquicia vs Sede
+  allowBranchOverrides Boolean @default(true) // Si ORG_ADMIN autoriza personalizaciones locales
+  useCustomTheme       Boolean @default(false) // Si la sede activa sus propias variaciones
+  branchProposal       Json?                  // Propuesta enviada por RESTAURANT_ADMIN para aprobación
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("brand_themes")
 }
 
 model FoodCourtMembership {

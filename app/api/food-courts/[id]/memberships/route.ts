@@ -26,12 +26,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    const user = session.user as { role: string }
-    if (user.role !== 'SUPERADMIN' && user.role !== 'ORG_ADMIN') {
+    const user = session.user as { role: string; foodCourtId?: string }
+    const allowedRoles = ['SUPERADMIN', 'ORG_ADMIN', 'FOOD_COURT_ADMIN']
+    if (!allowedRoles.includes(user.role)) {
       return NextResponse.json({ error: 'Permisos insuficientes' }, { status: 403 })
     }
 
     const { id: foodCourtId } = await params
+    if (user.role === 'FOOD_COURT_ADMIN' && user.foodCourtId && user.foodCourtId !== foodCourtId) {
+      return NextResponse.json({ error: 'No autorizado para esta plaza' }, { status: 403 })
+    }
     const body = await request.json()
     const parsed = AddMembershipSchema.parse(body)
 
@@ -87,12 +91,16 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    const user = session.user as { role: string }
-    if (user.role !== 'SUPERADMIN' && user.role !== 'ORG_ADMIN') {
+    const user = session.user as { role: string; foodCourtId?: string }
+    const allowedRoles = ['SUPERADMIN', 'ORG_ADMIN', 'FOOD_COURT_ADMIN']
+    if (!allowedRoles.includes(user.role)) {
       return NextResponse.json({ error: 'Permisos insuficientes' }, { status: 403 })
     }
 
     const { id: foodCourtId } = await params
+    if (user.role === 'FOOD_COURT_ADMIN' && user.foodCourtId && user.foodCourtId !== foodCourtId) {
+      return NextResponse.json({ error: 'No autorizado para esta plaza' }, { status: 403 })
+    }
     const body = await request.json()
     const parsed = ReorderMembershipsSchema.parse(body)
 
@@ -123,12 +131,16 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    const user = session.user as { role: string }
-    if (user.role !== 'SUPERADMIN' && user.role !== 'ORG_ADMIN') {
+    const user = session.user as { role: string; foodCourtId?: string }
+    const allowedRoles = ['SUPERADMIN', 'ORG_ADMIN', 'FOOD_COURT_ADMIN']
+    if (!allowedRoles.includes(user.role)) {
       return NextResponse.json({ error: 'Permisos insuficientes' }, { status: 403 })
     }
 
     const { id: foodCourtId } = await params
+    if (user.role === 'FOOD_COURT_ADMIN' && user.foodCourtId && user.foodCourtId !== foodCourtId) {
+      return NextResponse.json({ error: 'No autorizado para esta plaza' }, { status: 403 })
+    }
     const restaurantId = request.nextUrl.searchParams.get('restaurantId')
 
     if (!restaurantId) {

@@ -209,8 +209,12 @@ export function ProductModal({ product, currency = 'MXN', stockIssue, onClose, o
 
       {/* Panel del modal */}
       <div
-        className="relative w-full sm:max-w-md max-h-[90dvh] bg-zinc-900 rounded-t-2xl sm:rounded-2xl
-                    border border-zinc-700 shadow-2xl flex flex-col overflow-hidden"
+        className="relative w-full sm:max-w-md max-h-[90dvh] shadow-2xl flex flex-col overflow-hidden border"
+        style={{
+          backgroundColor: 'var(--brand-surface)',
+          borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+          borderRadius: 'var(--brand-radius)',
+        }}
       >
 
         {/* Imagen del producto */}
@@ -222,7 +226,13 @@ export function ProductModal({ product, currency = 'MXN', stockIssue, onClose, o
               alt={product.name}
               className="w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-transparent" aria-hidden="true" />
+            <div
+              className="absolute inset-0"
+              style={{
+                background: 'linear-gradient(to top, var(--brand-surface) 0%, transparent 100%)',
+              }}
+              aria-hidden="true"
+            />
           </div>
         )}
 
@@ -232,14 +242,19 @@ export function ProductModal({ product, currency = 'MXN', stockIssue, onClose, o
             <div className="flex-1">
               <h2
                 id="product-modal-title"
-                className="text-xl font-bold text-white leading-tight"
+                className="text-xl font-bold leading-tight"
+                style={{
+                  color: 'var(--brand-text)',
+                  fontFamily: 'var(--brand-font-heading)',
+                }}
               >
                 {product.name}
               </h2>
               {product.description && (
                 <p
                   id="product-modal-desc"
-                  className="text-sm text-zinc-300 mt-1.5 leading-relaxed"
+                  className="text-sm mt-1.5 leading-relaxed"
+                  style={{ color: 'var(--brand-muted)' }}
                 >
                   {product.description}
                 </p>
@@ -249,9 +264,12 @@ export function ProductModal({ product, currency = 'MXN', stockIssue, onClose, o
             <button
               ref={closeButtonRef}
               onClick={onClose}
-              className="flex-shrink-0 w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200
-                         flex items-center justify-center text-lg transition-colors
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+              className="flex-shrink-0 w-11 h-11 rounded-xl border flex items-center justify-center text-lg transition-colors focus-visible:outline-none"
+              style={{
+                backgroundColor: 'color-mix(in srgb, var(--brand-surface) 80%, var(--brand-bg) 20%)',
+                borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+                color: 'var(--brand-text)',
+              }}
               aria-label="Cerrar"
             >
               ✕
@@ -266,14 +284,31 @@ export function ProductModal({ product, currency = 'MXN', stockIssue, onClose, o
           {product.modifierGroups.map((group) => (
             <fieldset key={group.id} className="border-0 p-0 m-0">
               <legend className="flex items-center gap-2 mb-3 w-full">
-                <span className="text-base font-semibold text-white">{group.name}</span>
+                <span
+                  className="text-base font-semibold"
+                  style={{
+                    color: 'var(--brand-text)',
+                    fontFamily: 'var(--brand-font-heading)',
+                  }}
+                >
+                  {group.name}
+                </span>
                 {group.isRequired && (
-                  <span className="text-xs font-bold bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30">
+                  <span
+                    className="text-xs font-bold px-2 py-0.5 rounded-full border"
+                    style={{
+                      backgroundColor: 'color-mix(in srgb, var(--brand-primary) 18%, transparent)',
+                      color: 'var(--brand-primary)',
+                      borderColor: 'color-mix(in srgb, var(--brand-primary) 40%, transparent)',
+                    }}
+                  >
                     Requerido
                   </span>
                 )}
                 {group.type === 'ADDON' && group.maxSelect > 1 && (
-                  <span className="text-sm text-zinc-400">máx. {group.maxSelect}</span>
+                  <span className="text-sm" style={{ color: 'var(--brand-muted)' }}>
+                    máx. {group.maxSelect}
+                  </span>
                 )}
               </legend>
 
@@ -294,20 +329,28 @@ export function ProductModal({ product, currency = 'MXN', stockIssue, onClose, o
                           ? handleSingleSelect(group.id, option.id)
                           : handleAddonToggle(option.id, group.maxSelect)
                       }
-                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl
-                                  text-sm font-medium transition-all duration-150 min-h-[52px]
-                                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500
-                                  ${isSelected
-                                    ? 'bg-amber-500/20 border-2 border-amber-500/60 text-white'
-                                    : 'bg-zinc-800 border-2 border-transparent text-zinc-200 hover:bg-zinc-700 hover:border-zinc-600'
-                                  }`}
+                      className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium transition-all duration-150 min-h-[52px] border-2 focus-visible:outline-none cursor-pointer"
+                      style={isSelected ? {
+                        backgroundColor: 'color-mix(in srgb, var(--brand-primary) 15%, transparent)',
+                        borderColor: 'var(--brand-primary)',
+                        color: 'var(--brand-text)',
+                      } : {
+                        backgroundColor: 'color-mix(in srgb, var(--brand-surface) 70%, var(--brand-bg) 30%)',
+                        borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 12%)',
+                        color: 'var(--brand-text)',
+                      }}
                     >
                       <span className="flex items-center gap-3">
                         {/* Indicador visual radio/checkbox */}
                         <span
                           className={`w-5 h-5 flex-shrink-0 rounded-${group.type === 'SINGLE_SELECT' ? 'full' : 'md'}
-                                      border-2 transition-colors flex items-center justify-center
-                                      ${isSelected ? 'border-amber-500 bg-amber-500' : 'border-zinc-500'}`}
+                                      border-2 transition-colors flex items-center justify-center`}
+                          style={isSelected ? {
+                            backgroundColor: 'var(--brand-primary)',
+                            borderColor: 'var(--brand-primary)',
+                          } : {
+                            borderColor: 'var(--brand-muted)',
+                          }}
                           aria-hidden="true"
                         >
                           {isSelected && (
@@ -319,7 +362,10 @@ export function ProductModal({ product, currency = 'MXN', stockIssue, onClose, o
                         {option.name}
                       </span>
                       {option.extraPrice > 0 && (
-                        <span className="text-amber-300 font-semibold text-sm ml-2 shrink-0">
+                        <span
+                          className="font-semibold text-sm ml-2 shrink-0"
+                          style={{ color: 'var(--brand-accent)' }}
+                        >
                           +{formatPrice(option.extraPrice)}
                         </span>
                       )}
@@ -333,7 +379,15 @@ export function ProductModal({ product, currency = 'MXN', stockIssue, onClose, o
           {/* Ingredientes removibles */}
           {product.ingredients.filter((ing) => ing.isRemovable).length > 0 && (
             <fieldset className="border-0 p-0 m-0">
-              <legend className="text-base font-semibold text-white mb-3">¿Qué quieres quitar?</legend>
+              <legend
+                className="text-base font-semibold mb-3"
+                style={{
+                  color: 'var(--brand-text)',
+                  fontFamily: 'var(--brand-font-heading)',
+                }}
+              >
+                ¿Qué quieres quitar?
+              </legend>
               <div className="flex flex-wrap gap-2" role="group" aria-label="Ingredientes removibles">
                 {product.ingredients
                   .filter((ing) => ing.isRemovable)
@@ -345,12 +399,17 @@ export function ProductModal({ product, currency = 'MXN', stockIssue, onClose, o
                         role="checkbox"
                         aria-checked={isRemoved}
                         onClick={() => handleIngredientToggle(ing.id)}
-                        className={`px-4 py-2 rounded-full text-sm font-medium transition-all min-h-[44px]
-                                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500
-                                    ${isRemoved
-                                      ? 'bg-red-500/20 border-2 border-red-500/60 text-red-300 line-through'
-                                      : 'bg-zinc-800 border-2 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
-                                    }`}
+                        className="px-4 py-2 rounded-full text-sm font-medium transition-all min-h-[44px] border-2 focus-visible:outline-none cursor-pointer"
+                        style={isRemoved ? {
+                          backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                          borderColor: 'rgba(239, 68, 68, 0.6)',
+                          color: '#fca5a5',
+                          textDecoration: 'line-through',
+                        } : {
+                          backgroundColor: 'color-mix(in srgb, var(--brand-surface) 70%, var(--brand-bg) 30%)',
+                          borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+                          color: 'var(--brand-text)',
+                        }}
                       >
                         {isRemoved ? '✕ ' : ''}Sin {ing.name}
                       </button>
@@ -362,7 +421,14 @@ export function ProductModal({ product, currency = 'MXN', stockIssue, onClose, o
 
           {/* Notas especiales */}
           <div>
-            <label htmlFor="product-notes" className="block text-base font-semibold text-white mb-2.5">
+            <label
+              htmlFor="product-notes"
+              className="block text-base font-semibold mb-2.5"
+              style={{
+                color: 'var(--brand-text)',
+                fontFamily: 'var(--brand-font-heading)',
+              }}
+            >
               Notas especiales
             </label>
             <textarea
@@ -372,15 +438,24 @@ export function ProductModal({ product, currency = 'MXN', stockIssue, onClose, o
               placeholder="Ej: Poco picante, sin sal..."
               maxLength={250}
               rows={2}
-              className="w-full bg-zinc-800 border-2 border-zinc-700 rounded-xl px-4 py-3
-                         text-base text-zinc-100 placeholder:text-zinc-500 resize-none
-                         focus:outline-none focus:border-amber-500 transition-colors"
+              className="w-full border-2 rounded-xl px-4 py-3 text-base resize-none focus:outline-none transition-colors"
+              style={{
+                backgroundColor: 'color-mix(in srgb, var(--brand-surface) 70%, var(--brand-bg) 30%)',
+                borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+                color: 'var(--brand-text)',
+              }}
             />
           </div>
         </div>
 
         {/* Footer fijo */}
-        <div className="flex-shrink-0 px-5 py-4 border-t border-zinc-800 space-y-3 bg-zinc-900">
+        <div
+          className="flex-shrink-0 px-5 py-4 border-t space-y-3"
+          style={{
+            backgroundColor: 'var(--brand-surface)',
+            borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+          }}
+        >
           {/* Aviso de stock agotado */}
           {stockIssue && (
             <div
@@ -406,19 +481,25 @@ export function ProductModal({ product, currency = 'MXN', stockIssue, onClose, o
           {/* Selector de cantidad — touch targets ≥44px */}
           {!isOutOfStock && (
             <div className="flex items-center justify-between">
-              <span className="text-base text-zinc-300 font-medium">Cantidad</span>
+              <span className="text-base font-medium" style={{ color: 'var(--brand-muted)' }}>
+                Cantidad
+              </span>
               <div className="flex items-center gap-3" role="group" aria-label="Selector de cantidad">
                 <button
                   onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                   aria-label={`Reducir cantidad, actualmente ${quantity}`}
-                  className="w-11 h-11 rounded-full bg-zinc-800 hover:bg-zinc-700 text-white
-                             flex items-center justify-center transition-colors text-2xl font-light
-                             border border-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                  className="w-11 h-11 rounded-full border flex items-center justify-center transition-colors text-2xl font-light focus-visible:outline-none cursor-pointer"
+                  style={{
+                    backgroundColor: 'color-mix(in srgb, var(--brand-surface) 70%, var(--brand-bg) 30%)',
+                    borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+                    color: 'var(--brand-text)',
+                  }}
                 >
                   −
                 </button>
                 <span
-                  className="font-bold text-white text-xl w-8 text-center"
+                  className="font-bold text-xl w-8 text-center"
+                  style={{ color: 'var(--brand-text)' }}
                   aria-live="polite"
                   aria-atomic="true"
                 >
@@ -427,9 +508,12 @@ export function ProductModal({ product, currency = 'MXN', stockIssue, onClose, o
                 <button
                   onClick={() => setQuantity((q) => Math.min(50, q + 1))}
                   aria-label={`Aumentar cantidad, actualmente ${quantity}`}
-                  className="w-11 h-11 rounded-full bg-zinc-800 hover:bg-zinc-700 text-white
-                             flex items-center justify-center transition-colors text-2xl font-light
-                             border border-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                  className="w-11 h-11 rounded-full border flex items-center justify-center transition-colors text-2xl font-light focus-visible:outline-none cursor-pointer"
+                  style={{
+                    backgroundColor: 'color-mix(in srgb, var(--brand-surface) 70%, var(--brand-bg) 30%)',
+                    borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+                    color: 'var(--brand-text)',
+                  }}
                 >
                   +
                 </button>
@@ -443,13 +527,17 @@ export function ProductModal({ product, currency = 'MXN', stockIssue, onClose, o
             onClick={handleAddToCart}
             disabled={isOutOfStock}
             aria-disabled={isOutOfStock}
-            className={`w-full py-4 text-base text-white font-bold rounded-2xl transition-all duration-200
-                       flex items-center justify-between px-5 min-h-[56px]
-                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900
-                       ${isOutOfStock
-                         ? 'bg-zinc-800 border border-zinc-700 text-zinc-500 cursor-not-allowed'
-                         : 'bg-amber-500 hover:bg-amber-400 active:scale-95 shadow-lg shadow-amber-500/30 cursor-pointer'
-                       }`}
+            className="w-full py-4 text-base font-bold transition-all duration-200 flex items-center justify-between px-5 min-h-[56px] focus-visible:outline-none shadow-lg active:scale-95 cursor-pointer"
+            style={isOutOfStock ? {
+              backgroundColor: 'color-mix(in srgb, var(--brand-surface) 60%, transparent)',
+              color: 'var(--brand-muted)',
+              borderRadius: 'calc(var(--brand-radius) * 0.7)',
+              cursor: 'not-allowed',
+            } : {
+              backgroundColor: 'var(--brand-primary)',
+              color: '#ffffff',
+              borderRadius: 'calc(var(--brand-radius) * 0.7)',
+            }}
           >
             <span>{isOutOfStock ? 'No disponible (Agotado)' : 'Agregar al carrito'}</span>
             <span className="font-extrabold text-lg">{formatPrice(calculatedUnitPrice * quantity)}</span>

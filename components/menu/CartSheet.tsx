@@ -170,15 +170,23 @@ export function CartSheet({
       )}
 
       {/* Segmented Control Global vs Individual */}
-      <div className="bg-zinc-950 p-1 rounded-xl flex gap-1 border border-zinc-800 flex-shrink-0">
+      <div
+        className="p-1 rounded-xl flex gap-1 border flex-shrink-0"
+        style={{
+          backgroundColor: 'color-mix(in srgb, var(--brand-surface) 70%, var(--brand-bg) 30%)',
+          borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+        }}
+      >
         <button
           onClick={() => setViewMode('global')}
-          className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer
-            ${
-              viewMode === 'global'
-                ? 'bg-amber-500 text-white shadow-md'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
+          className="flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer"
+          style={viewMode === 'global' ? {
+            backgroundColor: 'var(--brand-primary)',
+            color: '#ffffff',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+          } : {
+            color: 'var(--brand-muted)',
+          }}
         >
           <span>🌐</span>
           <span>Mesa Completa</span>
@@ -186,12 +194,14 @@ export function CartSheet({
 
         <button
           onClick={() => setViewMode('individual')}
-          className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer
-            ${
-              viewMode === 'individual'
-                ? 'bg-amber-500 text-white shadow-md'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
+          className="flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer"
+          style={viewMode === 'individual' ? {
+            backgroundColor: 'var(--brand-primary)',
+            color: '#ffffff',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+          } : {
+            color: 'var(--brand-muted)',
+          }}
         >
           <span>👤</span>
           <span>Por Comensal ({breakdown.length})</span>
@@ -207,14 +217,23 @@ export function CartSheet({
             {items.length > 0 && (
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <h3
+                    className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5"
+                    style={{ color: 'var(--brand-primary)' }}
+                  >
                     <span>🛒</span>
                     <span>Por Enviar (Ronda Actual)</span>
-                    <span className="bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded text-[10px]">
+                    <span
+                      className="px-1.5 py-0.5 rounded text-[10px]"
+                      style={{
+                        backgroundColor: 'color-mix(in srgb, var(--brand-primary) 18%, transparent)',
+                        color: 'var(--brand-primary)',
+                      }}
+                    >
                       {draftCount}
                     </span>
                   </h3>
-                  <span className="text-[10px] text-zinc-400 font-medium">
+                  <span className="text-[10px] font-medium" style={{ color: 'var(--brand-muted)' }}>
                     Editable antes de enviar
                   </span>
                 </div>
@@ -286,32 +305,56 @@ export function CartSheet({
               return (
                 <div
                   key={userGroup.userName}
-                  className={`rounded-2xl p-3.5 border transition-all ${
-                    isCurrentUser
-                      ? 'bg-amber-500/5 border-amber-500/30'
-                      : 'bg-zinc-800/40 border-zinc-800'
-                  }`}
+                  className="rounded-2xl p-3.5 border transition-all"
+                  style={isCurrentUser ? {
+                    backgroundColor: 'color-mix(in srgb, var(--brand-primary) 10%, transparent)',
+                    borderColor: 'color-mix(in srgb, var(--brand-primary) 35%, transparent)',
+                  } : {
+                    backgroundColor: 'color-mix(in srgb, var(--brand-surface) 70%, var(--brand-bg) 30%)',
+                    borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+                  }}
                 >
-                  <div className="flex items-center justify-between border-b border-zinc-800/60 pb-2 mb-2.5">
+                  <div
+                    className="flex items-center justify-between border-b pb-2 mb-2.5"
+                    style={{
+                      borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+                    }}
+                  >
                     <div className="flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 text-xs font-black flex items-center justify-center">
+                      <span
+                        className="w-6 h-6 rounded-full text-xs font-black flex items-center justify-center border"
+                        style={{
+                          backgroundColor: 'color-mix(in srgb, var(--brand-primary) 18%, transparent)',
+                          borderColor: 'color-mix(in srgb, var(--brand-primary) 35%, transparent)',
+                          color: 'var(--brand-primary)',
+                        }}
+                      >
                         {userGroup.userName.charAt(0).toUpperCase()}
                       </span>
                       <div>
-                        <h4 className="text-xs font-black text-zinc-100 flex items-center gap-1">
+                        <h4
+                          className="text-xs font-black flex items-center gap-1"
+                          style={{ color: 'var(--brand-text)' }}
+                        >
                           {userGroup.userName}
                           {isCurrentUser && (
-                            <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded font-bold">
+                            <span
+                              className="text-[9px] px-1.5 py-0.2 rounded font-bold"
+                              style={{
+                                backgroundColor: 'color-mix(in srgb, var(--brand-primary) 20%, transparent)',
+                                color: 'var(--brand-primary)',
+                              }}
+                            >
                               Tú
                             </span>
                           )}
                         </h4>
-                        <p className="text-[10px] text-zinc-400">
+                        <p className="text-[10px]" style={{ color: 'var(--brand-muted)' }}>
                           {userGroup.itemsCount} {userGroup.itemsCount === 1 ? 'platillo' : 'platillos'}
                         </p>
                       </div>
                     </div>
-                    <span className="text-xs font-extrabold text-amber-400">
+                    <span className="text-xs font-extrabold" style={{ color: 'var(--brand-primary)' }}>
                       {formatPrice(userGroup.totalAmount)}
                     </span>
                   </div>
@@ -320,22 +363,35 @@ export function CartSheet({
                     {userGroup.items.map((line) => (
                       <div
                         key={line.cartItemId}
-                        className="flex items-center justify-between text-xs py-1.5 px-2.5 rounded-lg bg-zinc-900/60"
+                        className="flex items-center justify-between text-xs py-1.5 px-2.5 rounded-lg"
+                        style={{
+                          backgroundColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-bg) 40%)',
+                        }}
                       >
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="font-bold text-amber-400">{line.quantity}x</span>
-                          <span className="text-zinc-200 truncate">{line.name}</span>
+                          <span className="font-bold" style={{ color: 'var(--brand-primary)' }}>
+                            {line.quantity}x
+                          </span>
+                          <span className="truncate" style={{ color: 'var(--brand-text)' }}>
+                            {line.name}
+                          </span>
                           {line.isConfirmed ? (
                             <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-medium flex items-center gap-0.5 shrink-0">
                               <span>🔒</span> Confirmado
                             </span>
                           ) : (
-                            <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-medium shrink-0">
+                            <span
+                              className="text-[9px] px-1.5 py-0.5 rounded font-medium shrink-0"
+                              style={{
+                                backgroundColor: 'color-mix(in srgb, var(--brand-primary) 18%, transparent)',
+                                color: 'var(--brand-primary)',
+                              }}
+                            >
                               ⏳ Por enviar
                             </span>
                           )}
                         </div>
-                        <span className="font-semibold text-zinc-300 shrink-0 ml-2">
+                        <span className="font-semibold shrink-0 ml-2" style={{ color: 'var(--brand-muted)' }}>
                           {formatPrice(line.total)}
                         </span>
                       </div>
@@ -349,7 +405,13 @@ export function CartSheet({
       </div>
 
       {/* Footer con totales y botón de acción */}
-      <div className="border-t border-zinc-800 pt-3 space-y-3 bg-zinc-900 flex-shrink-0">
+      <div
+        className="border-t pt-3 space-y-3 flex-shrink-0"
+        style={{
+          backgroundColor: 'var(--brand-surface)',
+          borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+        }}
+      >
         {errorMsg && (
           <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs p-3 rounded-xl flex items-center gap-2">
             <span>⚠️</span>
@@ -360,19 +422,22 @@ export function CartSheet({
         {/* Desglose de totales */}
         <div className="space-y-1">
           {items.length > 0 && confirmedOrders.length > 0 && (
-            <div className="flex items-center justify-between text-xs text-zinc-400">
+            <div className="flex items-center justify-between text-xs" style={{ color: 'var(--brand-muted)' }}>
               <span>Ronda actual por enviar: {formatPrice(draftAmount)}</span>
               <span>Ya en cocina: {formatPrice(confirmedAmount)}</span>
             </div>
           )}
 
           <div className="flex items-center justify-between text-sm">
-            <span className="text-zinc-400 font-medium">
+            <span className="font-medium" style={{ color: 'var(--brand-muted)' }}>
               {items.length > 0
                 ? `Total Acumulado Mesa (${grandCount} ${grandCount !== 1 ? 'items' : 'item'})`
                 : `Total Confirmado Mesa (${confirmedCount} ${confirmedCount !== 1 ? 'items' : 'item'})`}
             </span>
-            <span className="font-black text-white text-lg">
+            <span
+              className="font-black text-lg"
+              style={{ color: 'var(--brand-primary)' }}
+            >
               {formatPrice(grandAmount)}
             </span>
           </div>
@@ -384,16 +449,21 @@ export function CartSheet({
             <button
               onClick={handleSubmitOrder}
               disabled={submitting}
-              className={`w-full py-3.5 font-bold rounded-xl transition-all duration-200 active:scale-95 shadow-lg flex items-center justify-center gap-2 cursor-pointer
-                ${
-                  submitting
-                    ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed shadow-none'
-                    : 'bg-amber-500 hover:bg-amber-400 text-white shadow-amber-500/30'
-                }`}
+              className="w-full py-3.5 font-bold transition-all duration-200 active:scale-95 shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+              style={submitting ? {
+                backgroundColor: 'color-mix(in srgb, var(--brand-surface) 70%, var(--brand-bg) 30%)',
+                color: 'var(--brand-muted)',
+                borderRadius: 'calc(var(--brand-radius) * 0.7)',
+                cursor: 'not-allowed',
+              } : {
+                backgroundColor: 'var(--brand-primary)',
+                color: '#ffffff',
+                borderRadius: 'calc(var(--brand-radius) * 0.7)',
+              }}
             >
               {submitting ? (
                 <>
-                  <span className="h-4 w-4 border-2 border-zinc-500 border-t-transparent rounded-full animate-spin" />
+                  <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   <span>Enviando a cocina...</span>
                 </>
               ) : (
@@ -416,7 +486,12 @@ export function CartSheet({
         ) : (
           <button
             onClick={onClose}
-            className="w-full py-3.5 bg-amber-500 hover:bg-amber-400 text-white font-bold rounded-xl transition-all duration-200 active:scale-95 shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full py-3.5 font-bold transition-all duration-200 active:scale-95 shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+            style={{
+              backgroundColor: 'var(--brand-primary)',
+              color: '#ffffff',
+              borderRadius: 'calc(var(--brand-radius) * 0.7)',
+            }}
           >
             <span>➕ Agregar más productos al pedido</span>
           </button>
@@ -474,7 +549,10 @@ function ConfirmedOrderItemRow({
 
           {/* Notas */}
           {item.notes && (
-            <p className="text-[11px] text-amber-400/80 italic mt-0.5">
+            <p
+              className="text-[11px] italic mt-0.5"
+              style={{ color: 'var(--brand-accent)' }}
+            >
               &ldquo;{item.notes}&rdquo;
             </p>
           )}
@@ -485,7 +563,11 @@ function ConfirmedOrderItemRow({
               {item.orderedByNames.map((name) => (
                 <span
                   key={name}
-                  className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded-md font-medium"
+                  className="text-[10px] px-1.5 py-0.5 rounded-md font-medium"
+                  style={{
+                    backgroundColor: 'color-mix(in srgb, var(--brand-surface) 90%, var(--brand-bg) 10%)',
+                    color: 'var(--brand-muted)',
+                  }}
                 >
                   👤 {name}
                 </span>
@@ -496,8 +578,10 @@ function ConfirmedOrderItemRow({
 
         {/* Precio solo lectura */}
         <div className="text-right shrink-0">
-          <span className="font-bold text-sm text-zinc-300">{formatPrice(item.subtotal)}</span>
-          <div className="text-[10px] text-zinc-500 mt-0.5 flex items-center justify-end gap-1">
+          <span className="font-bold text-sm" style={{ color: 'var(--brand-text)' }}>
+            {formatPrice(item.subtotal)}
+          </span>
+          <div className="text-[10px] mt-0.5 flex items-center justify-end gap-1" style={{ color: 'var(--brand-muted)' }}>
             <span>🔒</span>
             <span>En cocina</span>
           </div>
@@ -531,21 +615,34 @@ function GlobalCartItemRow({
   const currentUserQty = userEntry ? userEntry.quantity : 0
 
   return (
-    <div className="bg-zinc-800/60 rounded-xl p-3.5 space-y-2 border border-zinc-800/30">
+    <div
+      className="rounded-xl p-3.5 space-y-2 border"
+      style={{
+        backgroundColor: 'color-mix(in srgb, var(--brand-surface) 75%, var(--brand-bg) 25%)',
+        borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+      }}
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="space-y-1 min-w-0">
-          <p className="font-bold text-sm text-white leading-tight">{item.name}</p>
+          <p className="font-bold text-sm leading-tight" style={{ color: 'var(--brand-text)' }}>
+            {item.name}
+          </p>
 
           {/* Chips con los nombres de quienes pidieron este platillo */}
           <div className="flex flex-wrap gap-1 pt-0.5">
             {item.orderedBy.map((u) => (
               <span
                 key={u.userName}
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
-                  u.userName === currentUserAlias
-                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                    : 'bg-zinc-900 text-zinc-400 border-zinc-700'
-                }`}
+                className="text-[10px] font-bold px-2 py-0.5 rounded-md border"
+                style={u.userName === currentUserAlias ? {
+                  backgroundColor: 'color-mix(in srgb, var(--brand-primary) 18%, transparent)',
+                  color: 'var(--brand-primary)',
+                  borderColor: 'color-mix(in srgb, var(--brand-primary) 35%, transparent)',
+                } : {
+                  backgroundColor: 'color-mix(in srgb, var(--brand-surface) 90%, var(--brand-bg) 10%)',
+                  color: 'var(--brand-muted)',
+                  borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+                }}
               >
                 👤 {u.userName} ({u.quantity}x)
               </span>
@@ -555,7 +652,7 @@ function GlobalCartItemRow({
 
         <button
           onClick={() => onRemove()}
-          className="text-zinc-500 hover:text-red-400 text-xs transition-colors p-1"
+          className="text-zinc-500 hover:text-red-400 text-xs transition-colors p-1 cursor-pointer"
           title="Eliminar producto completo del carrito de mesa"
         >
           ✕
@@ -566,10 +663,10 @@ function GlobalCartItemRow({
       {item.selectedModifiers.length > 0 && (
         <div className="space-y-0.5 pt-1">
           {item.selectedModifiers.map((mod) => (
-            <p key={mod.optionId} className="text-[11px] text-zinc-400">
+            <p key={mod.optionId} className="text-[11px]" style={{ color: 'var(--brand-muted)' }}>
               + {mod.name}
               {mod.extraPrice > 0 && (
-                <span className="text-amber-400"> (+{formatPrice(mod.extraPrice)})</span>
+                <span style={{ color: 'var(--brand-primary)' }}> (+{formatPrice(mod.extraPrice)})</span>
               )}
             </p>
           ))}
@@ -582,35 +679,55 @@ function GlobalCartItemRow({
       )}
 
       {/* Notas */}
-      {item.notes && <p className="text-[11px] text-zinc-400 italic">&ldquo;{item.notes}&rdquo;</p>}
+      {item.notes && (
+        <p className="text-[11px] italic" style={{ color: 'var(--brand-muted)' }}>
+          &ldquo;{item.notes}&rdquo;
+        </p>
+      )}
 
       {/* Controles de cantidad y precio */}
-      <div className="flex items-center justify-between pt-2 border-t border-zinc-800/40">
+      <div
+        className="flex items-center justify-between pt-2 border-t"
+        style={{
+          borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+        }}
+      >
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
+          <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--brand-muted)' }}>
             Tú ({currentUserAlias}):
           </span>
           <button
             onClick={() => onQuantityChange(currentUserQty - 1, currentUserAlias)}
             disabled={currentUserQty <= 0}
-            className="w-6 h-6 rounded-lg bg-zinc-700 hover:bg-zinc-600 disabled:opacity-30 text-white text-xs flex items-center justify-center transition-colors font-bold"
+            className="w-6 h-6 rounded-lg disabled:opacity-30 text-xs flex items-center justify-center transition-colors font-bold cursor-pointer"
+            style={{
+              backgroundColor: 'color-mix(in srgb, var(--brand-surface) 80%, var(--brand-text) 10%)',
+              color: 'var(--brand-text)',
+            }}
           >
             −
           </button>
-          <span className="text-xs font-black text-amber-400 w-4 text-center">
+          <span
+            className="text-xs font-black w-4 text-center"
+            style={{ color: 'var(--brand-primary)' }}
+          >
             {currentUserQty}
           </span>
           <button
             onClick={() => onQuantityChange(currentUserQty + 1, currentUserAlias)}
-            className="w-6 h-6 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white text-xs flex items-center justify-center transition-colors font-bold"
+            className="w-6 h-6 rounded-lg text-xs flex items-center justify-center transition-colors font-bold cursor-pointer"
+            style={{
+              backgroundColor: 'color-mix(in srgb, var(--brand-surface) 80%, var(--brand-text) 10%)',
+              color: 'var(--brand-text)',
+            }}
           >
             +
           </button>
         </div>
 
         <div className="text-right">
-          <span className="text-[10px] text-zinc-500 block">Total Ítem</span>
-          <span className="font-black text-amber-400 text-sm">
+          <span className="text-[10px] block" style={{ color: 'var(--brand-muted)' }}>Total Ítem</span>
+          <span className="font-black text-sm" style={{ color: 'var(--brand-primary)' }}>
             {formatPrice(item.unitCalculatedPrice * item.quantity)}
           </span>
         </div>

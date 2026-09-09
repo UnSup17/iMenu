@@ -64,15 +64,32 @@ export async function deductStockForOrder(
     }
   }
 
-  if (deductions.size === 0) {
-    // Ningún producto tiene receta configurada — ok, no hay nada que descontar
-    return { success: true, movements: [], stockIssues: [] }
-  }
-
   const movements: string[] = []
   const newStockIssues: string[] = []
 
   await prisma.$transaction(async (tx) => {
+    // 1. Control de cupos / stock directo de platos especiales y festividades
+    for (const orderItem of orderItems) {
+      if (orderItem.product.specialOfferStock !== null) {
+        const currentSold = orderItem.product.specialOfferStockSold
+        const newSold = currentSold + orderItem.quantity
+        const isDepleted = newSold >= orderItem.product.specialOfferStock
+
+        await tx.product.update({
+          where: { id: orderItem.productId },
+          data: {
+            specialOfferStockSold: newSold,
+            ...(isDepleted && { isAvailable: false }),
+          },
+        })
+
+        if (isDepleted) {
+          newStockIssues.push(orderItem.productId)
+        }
+      }
+    }
+
+    // 2. Descuento de ingredientes por recetas si existen
     for (const [inventoryItemId, { item, qty }] of deductions) {
       const stockBefore = item.currentStock.toNumber()
       const stockAfter = Math.max(0, stockBefore - qty)
@@ -142,12 +159,34 @@ export async function restoreStockForOrder(
     include: { inventoryItem: true },
   })
 
+  const restoredItems: string[] = []
+  const resolvedStockIssues: string[] = []
+
+  // Restaurar cupos de ofertas especiales si aplica
+  const cancelledOrderItems = await prisma.orderItem.findMany({
+    where: { orderId },
+    include: { product: true },
+  })
+
+  for (const item of cancelledOrderItems) {
+    if (item.product.specialOfferStock !== null) {
+      const currentSold = item.product.specialOfferStockSold
+      const newSold = Math.max(0, currentSold - item.quantity)
+      const canRestore = newSold < item.product.specialOfferStock
+
+      await prisma.product.update({
+        where: { id: item.productId },
+        data: {
+          specialOfferStockSold: newSold,
+          ...(canRestore && { isAvailable: true }),
+        },
+      })
+    }
+  }
+
   if (saleMovements.length === 0) {
     return { success: true, restoredItems: [] }
   }
-
-  const restoredItems: string[] = []
-  const resolvedStockIssues: string[] = []
 
   await prisma.$transaction(async (tx) => {
     for (const movement of saleMovements) {

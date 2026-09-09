@@ -98,17 +98,40 @@ async function main() {
     },
   })
 
+  // --- 5.1 Plaza Gastronómica Demo ---
+  const foodCourt = await prisma.foodCourt.upsert({
+    where: { slug: 'plaza-central' },
+    update: {},
+    create: {
+      name: 'Plaza Gastronómica Central',
+      slug: 'plaza-central',
+      description: 'Espacio gastronómico con las mejores marcas y servicio a la mesa.',
+      currency: 'COP',
+      isActive: true,
+      memberships: {
+        create: [
+          {
+            restaurantId: restaurant.id,
+            orderIndex: 0,
+            isActive: true,
+          },
+        ],
+      },
+    },
+  })
+
   // --- 6. Usuarios de Prueba para todos los Roles ---
   const hashedPassword = await bcrypt.hash('admin123', 10)
   
   const demoUsers = [
-    { email: 'superadmin@imenu.co', name: 'Super Admin iMenu', role: Role.SUPERADMIN, resId: null, orgId: null },
-    { email: 'franquicia@demo.com', name: 'Laura Franquicia', role: Role.ORG_ADMIN, resId: restaurant.id, orgId: org.id },
-    { email: 'admin@demo.com', name: 'Admin Demo', role: Role.RESTAURANT_ADMIN, resId: restaurant.id, orgId: org.id },
-    { email: 'contador@demo.com', name: 'Camilo Contador', role: Role.ACCOUNTANT, resId: restaurant.id, orgId: org.id },
-    { email: 'manager@demo.com', name: 'Mateo Manager', role: Role.MANAGER, resId: restaurant.id, orgId: org.id },
-    { email: 'mesero@demo.com', name: 'Carlos Mesero', role: Role.WAITER, resId: restaurant.id, orgId: org.id },
-    { email: 'cocina@demo.com', name: 'Chef Cocina', role: Role.KITCHEN, resId: restaurant.id, orgId: org.id },
+    { email: 'superadmin@imenu.co', name: 'Super Admin iMenu', role: Role.SUPERADMIN, resId: null, orgId: null, fcId: null },
+    { email: 'franquicia@demo.com', name: 'Laura Franquicia', role: Role.ORG_ADMIN, resId: restaurant.id, orgId: org.id, fcId: null },
+    { email: 'plaza@demo.com', name: 'Admin Plaza Gastronómica', role: Role.FOOD_COURT_ADMIN, resId: null, orgId: null, fcId: foodCourt.id },
+    { email: 'admin@demo.com', name: 'Admin Demo', role: Role.RESTAURANT_ADMIN, resId: restaurant.id, orgId: org.id, fcId: null },
+    { email: 'contador@demo.com', name: 'Camilo Contador', role: Role.ACCOUNTANT, resId: restaurant.id, orgId: org.id, fcId: null },
+    { email: 'manager@demo.com', name: 'Mateo Manager', role: Role.MANAGER, resId: restaurant.id, orgId: org.id, fcId: null },
+    { email: 'mesero@demo.com', name: 'Carlos Mesero', role: Role.WAITER, resId: restaurant.id, orgId: org.id, fcId: null },
+    { email: 'cocina@demo.com', name: 'Chef Cocina', role: Role.KITCHEN, resId: restaurant.id, orgId: org.id, fcId: null },
   ]
 
   let waiterUser = null
@@ -121,6 +144,7 @@ async function main() {
         role: u.role,
         restaurantId: u.resId,
         organizationId: u.orgId,
+        foodCourtId: u.fcId,
       },
       create: {
         email: u.email,
@@ -129,6 +153,7 @@ async function main() {
         role: u.role,
         restaurantId: u.resId,
         organizationId: u.orgId,
+        foodCourtId: u.fcId,
       },
     })
     if (u.email === 'mesero@demo.com') waiterUser = usr

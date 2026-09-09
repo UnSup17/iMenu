@@ -10,6 +10,7 @@ const NAV_SECTIONS = [
     items: [
       { href: '/dashboard', label: 'Inicio', icon: '🏠' },
       { href: '/dashboard/menu', label: 'Gestor de Menú', icon: '🍽️' },
+      { href: '/dashboard/special-offers', label: 'Ofertas & Festividades', icon: '✨' },
       { href: '/dashboard/orders', label: 'Pedidos', icon: '📋' },
       { href: '/dashboard/tables', label: 'Mesas', icon: '🪑' },
     ],
@@ -55,9 +56,16 @@ const NAV_SECTIONS = [
   },
   {
     label: 'Plazas Gastronómicas',
-    roles: ['SUPERADMIN', 'ORG_ADMIN', 'RESTAURANT_ADMIN'],
+    roles: ['SUPERADMIN', 'ORG_ADMIN', 'FOOD_COURT_ADMIN', 'RESTAURANT_ADMIN'],
     items: [
       { href: '/dashboard/food-courts', label: 'Sedes Compartidas', icon: '🏪' },
+    ],
+  },
+  {
+    label: 'Identidad de Marca',
+    roles: ['SUPERADMIN', 'ORG_ADMIN', 'RESTAURANT_ADMIN', 'FOOD_COURT_ADMIN'],
+    items: [
+      { href: '/dashboard/brand', label: 'Estudio de Marca', icon: '🎨' },
     ],
   },
   {

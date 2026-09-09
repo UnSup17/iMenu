@@ -61,6 +61,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           restaurantId: user.restaurantId,
           restaurantSlug: user.restaurant?.slug,
           organizationId: user.organizationId,
+          foodCourtId: user.foodCourtId,
         }
       },
     }),
@@ -73,6 +74,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.restaurantId = user.restaurantId
         token.restaurantSlug = user.restaurantSlug
         token.organizationId = user.organizationId
+        token.foodCourtId = user.foodCourtId
       }
       return token
     },
@@ -83,6 +85,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.restaurantId = token.restaurantId as string | null
         session.user.restaurantSlug = token.restaurantSlug as string | null
         session.user.organizationId = token.organizationId as string | null
+        session.user.foodCourtId = token.foodCourtId as string | null
       }
       return session
     },

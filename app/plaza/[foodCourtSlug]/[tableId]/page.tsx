@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma'
 import { getTableSession } from '@/lib/redis'
 import { FoodCourtPage } from '@/components/food-court/FoodCourtPage'
 import { isCategoryScheduleActive } from '@/lib/menu-schedule'
+import { BrandThemeInjector } from '@/components/branding/BrandThemeInjector'
+import { getResolvedBrandTheme } from '@/lib/branding/resolver'
 
 interface PageProps {
   params: Promise<{ foodCourtSlug: string; tableId: string }>
@@ -234,22 +236,27 @@ export default async function FoodCourtGuestPage({ params, searchParams }: PageP
     invoiceNumber: tp.invoice?.invoiceNumber || null,
   }))
 
+  const brandTheme = await getResolvedBrandTheme({ foodCourtId: foodCourt.id })
+
   return (
-    <FoodCourtPage
-      foodCourt={{
-        id: foodCourt.id,
-        name: foodCourt.name,
-        slug: foodCourt.slug,
-        description: foodCourt.description,
-        logoUrl: foodCourt.logoUrl,
-        currency: foodCourt.currency,
-      }}
-      tableId={tableId}
-      tableNumber={redisSession.tableNumber}
-      sessionToken={token}
-      sessionId={redisSession.sessionId}
-      restaurants={serializedRestaurants}
-      initialPayments={initialPayments}
-    />
+    <>
+      <BrandThemeInjector theme={brandTheme} />
+      <FoodCourtPage
+        foodCourt={{
+          id: foodCourt.id,
+          name: foodCourt.name,
+          slug: foodCourt.slug,
+          description: foodCourt.description,
+          logoUrl: brandTheme.logoUrl || foodCourt.logoUrl,
+          currency: foodCourt.currency,
+        }}
+        tableId={tableId}
+        tableNumber={redisSession.tableNumber}
+        sessionToken={token}
+        sessionId={redisSession.sessionId}
+        restaurants={serializedRestaurants}
+        initialPayments={initialPayments}
+      />
+    </>
   )
 }

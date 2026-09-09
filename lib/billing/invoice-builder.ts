@@ -21,6 +21,8 @@ export interface InvoiceLineItem {
   taxRate: number
   taxAmount: number
   subtotal: number  // unitPrice × qty (sin impuesto)
+  isSpecialOffer?: boolean
+  offerLabel?: string | null
 }
 
 export interface InvoiceDraft {
@@ -71,7 +73,17 @@ export async function buildInvoiceDraft(
     include: {
       items: {
         include: {
-          product: { select: { name: true } },
+          product: {
+            select: {
+              name: true,
+              category: {
+                select: {
+                  isSpecialOffer: true,
+                  offerLabel: true,
+                },
+              },
+            },
+          },
           modifiers: {
             include: { modifierOption: { select: { name: true } } },
           },
@@ -94,6 +106,8 @@ export async function buildInvoiceDraft(
       const qty = item.quantity
       const lineSubtotal = unitPrice * qty
       const lineTax = parseFloat((lineSubtotal * vatRate).toFixed(2))
+      const isSpecialOffer = item.product.category?.isSpecialOffer ?? false
+      const offerLabel = item.product.category?.offerLabel ?? null
 
       lines.push({
         productId: item.productId,
@@ -103,6 +117,8 @@ export async function buildInvoiceDraft(
         taxRate: vatRate,
         taxAmount: lineTax,
         subtotal: lineSubtotal,
+        isSpecialOffer,
+        offerLabel,
       })
     }
   }
@@ -197,6 +213,8 @@ export async function createInvoiceFromDraft(
           taxRate: new Prisma.Decimal(line.taxRate),
           taxAmount: new Prisma.Decimal(line.taxAmount),
           subtotal: new Prisma.Decimal(line.subtotal),
+          isSpecialOffer: line.isSpecialOffer ?? false,
+          offerLabel: line.offerLabel ?? null,
         })),
       },
     },

@@ -32,22 +32,49 @@ export function UserAliasModal({
       <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-5 animate-scale-in">
+      <div
+        className="relative w-full max-w-sm border p-6 shadow-2xl space-y-5 animate-scale-in"
+        style={{
+          backgroundColor: 'var(--brand-surface)',
+          borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+          borderRadius: 'var(--brand-radius)',
+        }}
+      >
         <div className="text-center space-y-1.5">
-          <div className="w-14 h-14 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-2 text-amber-400">
+          <div
+            className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-2 border"
+            style={{
+              backgroundColor: 'color-mix(in srgb, var(--brand-primary) 15%, transparent)',
+              borderColor: 'color-mix(in srgb, var(--brand-primary) 35%, transparent)',
+              color: 'var(--brand-primary)',
+            }}
+          >
             👥
           </div>
-          <h2 className="text-lg font-black text-white leading-tight">
+          <h2
+            className="text-lg font-black leading-tight"
+            style={{
+              color: 'var(--brand-text)',
+              fontFamily: 'var(--brand-font-heading)',
+            }}
+          >
             ¡Bienvenido a la Mesa!
           </h2>
-          <p className="text-xs text-zinc-400 leading-relaxed px-2">
+          <p
+            className="text-xs leading-relaxed px-2"
+            style={{ color: 'var(--brand-muted)' }}
+          >
             Ingresa tu nombre o apodo para colaborar en el pedido en tiempo real con la mesa.
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="alias-input" className="block text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+            <label
+              htmlFor="alias-input"
+              className="block text-[11px] font-bold uppercase tracking-wider mb-1.5"
+              style={{ color: 'var(--brand-muted)' }}
+            >
               Tu Nombre / Apodo
             </label>
             <input
@@ -58,7 +85,12 @@ export function UserAliasModal({
               placeholder="Ej. Zapata, Juan Diego, Daniel..."
               value={nameInput}
               onChange={(e) => setNameInput(e.target.value)}
-              className="w-full bg-zinc-800/80 border border-zinc-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-white placeholder-zinc-500 rounded-xl px-4 py-3 text-sm font-semibold transition-all outline-none"
+              className="w-full border rounded-xl px-4 py-3 text-sm font-semibold transition-all outline-none"
+              style={{
+                backgroundColor: 'color-mix(in srgb, var(--brand-surface) 75%, var(--brand-bg) 25%)',
+                borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+                color: 'var(--brand-text)',
+              }}
               autoFocus
             />
           </div>
@@ -66,7 +98,12 @@ export function UserAliasModal({
           <button
             type="submit"
             disabled={!nameInput.trim()}
-            className="w-full py-3.5 bg-amber-500 hover:bg-amber-400 text-white font-bold rounded-xl shadow-lg shadow-amber-500/20 active:scale-98 transition-all disabled:opacity-50 disabled:hover:bg-amber-500 text-sm"
+            className="w-full py-3.5 font-bold shadow-lg active:scale-98 transition-all disabled:opacity-50 text-sm cursor-pointer"
+            style={{
+              backgroundColor: 'var(--brand-primary)',
+              color: '#ffffff',
+              borderRadius: 'calc(var(--brand-radius) * 0.7)',
+            }}
           >
             Unirse a la Mesa ➔
           </button>

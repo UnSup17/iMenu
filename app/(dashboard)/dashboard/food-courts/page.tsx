@@ -12,16 +12,23 @@ export default async function FoodCourtsDashboardPage() {
   const session = await auth()
   if (!session?.user) redirect('/login')
 
-  const user = session.user as { organizationId?: string; role?: string }
-  const allowedRoles = ['SUPERADMIN', 'ORG_ADMIN', 'RESTAURANT_ADMIN', 'MANAGER']
+  const user = session.user as { organizationId?: string; role?: string; foodCourtId?: string }
+  const allowedRoles = ['SUPERADMIN', 'ORG_ADMIN', 'FOOD_COURT_ADMIN', 'RESTAURANT_ADMIN', 'MANAGER']
   if (!allowedRoles.includes(user.role || '')) {
     redirect('/dashboard')
+  }
+
+  // Si es FOOD_COURT_ADMIN con plaza asignada, redirigir directamente al panel de su plaza
+  if (user.role === 'FOOD_COURT_ADMIN' && user.foodCourtId) {
+    redirect(`/dashboard/food-courts/${user.foodCourtId}`)
   }
 
   const foodCourts = await prisma.foodCourt.findMany({
     where: {
       ...(user.role === 'SUPERADMIN'
         ? {}
+        : user.role === 'FOOD_COURT_ADMIN' && user.foodCourtId
+        ? { id: user.foodCourtId }
         : user.organizationId
         ? { organizationId: user.organizationId }
         : {}),

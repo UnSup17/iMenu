@@ -77,8 +77,13 @@ export function PdfMenuView({ pdfUrl, hotspots, onSelectProduct }: PdfMenuViewPr
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-3">
-        <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-zinc-400 text-sm animate-pulse">Cargando menú PDF…</p>
+        <div
+          className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin"
+          style={{ borderColor: 'var(--brand-primary)', borderTopColor: 'transparent' }}
+        />
+        <p className="text-sm animate-pulse" style={{ color: 'var(--brand-muted)' }}>
+          Cargando menú PDF…
+        </p>
       </div>
     )
   }
@@ -91,8 +96,11 @@ export function PdfMenuView({ pdfUrl, hotspots, onSelectProduct }: PdfMenuViewPr
         return (
           <div
             key={pageIndex}
-            className="relative border border-zinc-800 rounded-xl overflow-hidden bg-white mx-auto shadow-xl"
-            style={{ width: '100%' }}
+            className="relative border rounded-xl overflow-hidden bg-white mx-auto shadow-xl"
+            style={{
+              width: '100%',
+              borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+            }}
           >
             {/* Imagen de la página */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -120,16 +128,19 @@ export function PdfMenuView({ pdfUrl, hotspots, onSelectProduct }: PdfMenuViewPr
                     width: `${hs.width * 100}%`,
                     height: `${hs.height * 100}%`,
                   }}
-                  className={`group rounded transition-all duration-150 relative focus:outline-none focus:ring-2 focus:ring-amber-500 ${
+                  className={`group rounded transition-all duration-150 relative focus:outline-none focus:ring-2 ${
                     hasOrders
-                      ? 'bg-amber-500/20 ring-2 ring-amber-500 shadow-md'
-                      : 'hover:bg-amber-500/20 hover:ring-2 hover:ring-amber-500/60'
+                      ? 'bg-[var(--brand-primary)]/25 ring-2 ring-[var(--brand-primary)] shadow-md'
+                      : 'hover:bg-[var(--brand-primary)]/20 hover:ring-2 hover:ring-[var(--brand-primary)]/60'
                   }`}
                   aria-label={`Abrir ${hs.product.name}`}
                 >
                   {/* Badge de comensales que ordenaron este platillo */}
                   {hasOrders && (
-                    <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-amber-500 text-white font-extrabold text-[9px] px-2 py-0.5 rounded-full shadow-lg border border-white/20 whitespace-nowrap flex items-center gap-1 z-10 animate-bounce">
+                    <div
+                      className="absolute -top-2.5 left-1/2 -translate-x-1/2 text-white font-extrabold text-[9px] px-2 py-0.5 rounded-full shadow-lg border border-white/20 whitespace-nowrap flex items-center gap-1 z-10 animate-bounce"
+                      style={{ backgroundColor: 'var(--brand-primary)' }}
+                    >
                       <span>🏷️</span>
                       <span>{orderedByNames.join(', ')}</span>
                     </div>
@@ -137,8 +148,9 @@ export function PdfMenuView({ pdfUrl, hotspots, onSelectProduct }: PdfMenuViewPr
 
                   <span
                     className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100
-                               transition-opacity bg-amber-500 text-white text-[9px] font-bold
+                               transition-opacity text-white text-[9px] font-bold
                                px-1.5 py-0.5 rounded-full pointer-events-none leading-none shadow-md"
+                    style={{ backgroundColor: 'var(--brand-primary)' }}
                   >
                     +
                   </span>

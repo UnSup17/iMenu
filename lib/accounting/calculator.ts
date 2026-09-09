@@ -307,3 +307,161 @@ export async function calculateDailyCashRegister(
     invoicesPaidCount: payments.length,
   }
 }
+
+/**
+ * Calcula el reporte financiero y de rentabilidad de Ofertas Especiales y Festividades
+ */
+export async function calculateSpecialOffersReport(
+  restaurantId: string,
+  startDate: Date,
+  endDate: Date,
+  periodLabel?: string
+) {
+  const paidInvoices = await prisma.invoice.findMany({
+    where: {
+      restaurantId,
+      status: InvoiceStatus.PAID,
+      issuedAt: { gte: startDate, lte: endDate },
+    },
+    include: {
+      items: true,
+    },
+  })
+
+  // Cargar productos relacionados para costeo de recetas y cupos
+  const productIds = Array.from(
+    new Set(
+      paidInvoices.flatMap((inv) => inv.items.map((i) => i.productId).filter(Boolean) as string[])
+    )
+  )
+
+  const products = await prisma.product.findMany({
+    where: { id: { in: productIds } },
+    include: {
+      recipeItems: {
+        include: { inventoryItem: true },
+      },
+    },
+  })
+
+  const productMap = new Map(products.map((p) => [p.id, p]))
+
+  let totalSpecialSales = 0
+  let totalRegularSales = 0
+  let totalSpecialUnits = 0
+  let estimatedSpecialCost = 0
+
+  const offerMap = new Map<string, {
+    offerLabel: string
+    unitsSold: number
+    grossSales: number
+    taxAmount: number
+    netSales: number
+    estimatedCost: number
+  }>()
+
+  const dishMap = new Map<string, {
+    productId: string | null
+    name: string
+    offerLabel: string | null
+    unitsSold: number
+    unitPrice: number
+    totalSales: number
+    specialOfferStock: number | null
+    remainingStock: number | null
+  }>()
+
+  for (const inv of paidInvoices) {
+    for (const item of inv.items) {
+      const lineSubtotal = Number(item.subtotal)
+      const lineTax = Number(item.taxAmount)
+      const lineTotal = lineSubtotal + lineTax
+      const product = item.productId ? productMap.get(item.productId) : null
+
+      if (item.isSpecialOffer) {
+        totalSpecialSales += lineTotal
+        totalSpecialUnits += item.quantity
+
+        let unitCost = 0
+        if (product?.specialOfferCost) {
+          unitCost = Number(product.specialOfferCost)
+        } else if (product?.recipeItems?.length) {
+          for (const ri of product.recipeItems) {
+            const costPerUnit = Number(ri.inventoryItem.costPerUnit || 0)
+            unitCost += Number(ri.quantity) * costPerUnit
+          }
+        }
+        const itemTotalCost = unitCost * item.quantity
+        estimatedSpecialCost += itemTotalCost
+
+        const label = item.offerLabel || 'Oferta Especial General'
+        const existingOffer = offerMap.get(label) || {
+          offerLabel: label,
+          unitsSold: 0,
+          grossSales: 0,
+          taxAmount: 0,
+          netSales: 0,
+          estimatedCost: 0,
+        }
+        existingOffer.unitsSold += item.quantity
+        existingOffer.grossSales += lineTotal
+        existingOffer.taxAmount += lineTax
+        existingOffer.netSales += lineSubtotal
+        existingOffer.estimatedCost += itemTotalCost
+        offerMap.set(label, existingOffer)
+
+        const dishKey = item.productId || item.description
+        const existingDish = dishMap.get(dishKey) || {
+          productId: item.productId,
+          name: item.description,
+          offerLabel: label,
+          unitsSold: 0,
+          unitPrice: Number(item.unitPrice),
+          totalSales: 0,
+          specialOfferStock: product?.specialOfferStock ?? null,
+          remainingStock: product?.specialOfferStock !== null && product?.specialOfferStock !== undefined
+            ? Math.max(0, product.specialOfferStock - product.specialOfferStockSold)
+            : null,
+        }
+        existingDish.unitsSold += item.quantity
+        existingDish.totalSales += lineTotal
+        dishMap.set(dishKey, existingDish)
+      } else {
+        totalRegularSales += lineTotal
+      }
+    }
+  }
+
+  const grandTotal = totalSpecialSales + totalRegularSales
+  const specialSalesPercent = grandTotal > 0 ? (totalSpecialSales / grandTotal) * 100 : 0
+  const specialGrossProfit = totalSpecialSales - estimatedSpecialCost
+  const specialGrossMarginPercent = totalSpecialSales > 0 ? (specialGrossProfit / totalSpecialSales) * 100 : 0
+
+  const byOffer = Array.from(offerMap.values()).map((o) => {
+    const grossProfit = o.grossSales - o.estimatedCost
+    const marginPercent = o.grossSales > 0 ? (grossProfit / o.grossSales) * 100 : 0
+    return {
+      ...o,
+      grossProfit,
+      marginPercent: parseFloat(marginPercent.toFixed(1)),
+    }
+  })
+
+  return {
+    periodLabel: periodLabel || `${startDate.toLocaleDateString('es-CO')} - ${endDate.toLocaleDateString('es-CO')}`,
+    startDate: startDate.toISOString(),
+    endDate: endDate.toISOString(),
+    summary: {
+      totalSpecialSales,
+      totalRegularSales,
+      specialSalesPercent: parseFloat(specialSalesPercent.toFixed(1)),
+      totalSpecialUnits,
+      estimatedSpecialCost,
+      specialGrossProfit,
+      specialGrossMarginPercent: parseFloat(specialGrossMarginPercent.toFixed(1)),
+    },
+    byOffer,
+    dishes: Array.from(dishMap.values()),
+  }
+}
+

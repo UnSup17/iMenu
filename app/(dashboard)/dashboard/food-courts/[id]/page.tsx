@@ -23,13 +23,18 @@ export default async function FoodCourtDetailPage({ params }: PageProps) {
   const session = await auth()
   if (!session?.user) redirect('/login')
 
-  const user = session.user as { organizationId?: string; role?: string }
-  const allowedRoles = ['SUPERADMIN', 'ORG_ADMIN', 'RESTAURANT_ADMIN', 'MANAGER']
+  const user = session.user as { organizationId?: string; role?: string; foodCourtId?: string }
+  const allowedRoles = ['SUPERADMIN', 'ORG_ADMIN', 'FOOD_COURT_ADMIN', 'RESTAURANT_ADMIN', 'MANAGER']
   if (!allowedRoles.includes(user.role || '')) {
     redirect('/dashboard')
   }
 
   const { id } = await params
+
+  // Si es FOOD_COURT_ADMIN, solo puede acceder a su propia plaza
+  if (user.role === 'FOOD_COURT_ADMIN' && user.foodCourtId && user.foodCourtId !== id) {
+    redirect('/dashboard')
+  }
 
   const foodCourt = await prisma.foodCourt.findUnique({
     where: { id },
@@ -107,7 +112,7 @@ export default async function FoodCourtDetailPage({ params }: PageProps) {
     orderBy: { name: 'asc' },
   })
 
-  const canManage = ['SUPERADMIN', 'ORG_ADMIN'].includes(user.role || '')
+  const canManage = ['SUPERADMIN', 'ORG_ADMIN', 'FOOD_COURT_ADMIN'].includes(user.role || '')
 
   return (
     <div className="p-6 max-w-7xl mx-auto">

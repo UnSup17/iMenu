@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma'
 import { getTableSession } from '@/lib/redis'
 import { MenuPage } from '@/components/menu/MenuPage'
 import { isCategoryScheduleActive } from '@/lib/menu-schedule'
+import { BrandThemeInjector } from '@/components/branding/BrandThemeInjector'
+import { getResolvedBrandTheme } from '@/lib/branding/resolver'
 
 interface PageProps {
   params: Promise<{ restaurantSlug: string; tableId: string }>
@@ -189,19 +191,26 @@ export default async function MenuGuestPage({ params, searchParams }: PageProps)
     },
   }))
 
+  const brandTheme = await getResolvedBrandTheme({ restaurantId: restaurant.id })
+
   return (
-    <MenuPage
-      restaurantId={restaurant.id}
-      restaurantName={restaurant.name}
-      tableId={tableId}
-      tableNumber={redisSession.tableNumber}
-      sessionToken={token}
-      currency={restaurant.currency}
-      categories={categories}
-      pdfUrl={restaurant.pdfUrl ?? null}
-      pdfHotspots={pdfHotspots}
-      initialStockIssues={initialStockIssues}
-    />
+    <>
+      <BrandThemeInjector theme={brandTheme} />
+      <MenuPage
+        restaurantId={restaurant.id}
+        restaurantName={restaurant.name}
+        tableId={tableId}
+        tableNumber={redisSession.tableNumber}
+        sessionToken={token}
+        currency={restaurant.currency}
+        categories={categories}
+        pdfUrl={restaurant.pdfUrl ?? null}
+        pdfHotspots={pdfHotspots}
+        initialStockIssues={initialStockIssues}
+        brandLogoUrl={brandTheme.logoUrl}
+        brandCoverBannerUrl={brandTheme.coverBannerUrl}
+      />
+    </>
   )
 }
 

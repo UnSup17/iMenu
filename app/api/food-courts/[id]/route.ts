@@ -72,13 +72,16 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    const user = session.user as { role: string }
-    const allowedRoles = ['SUPERADMIN', 'ORG_ADMIN']
+    const user = session.user as { role: string; foodCourtId?: string }
+    const allowedRoles = ['SUPERADMIN', 'ORG_ADMIN', 'FOOD_COURT_ADMIN']
     if (!allowedRoles.includes(user.role)) {
       return NextResponse.json({ error: 'Permisos insuficientes' }, { status: 403 })
     }
 
     const { id } = await params
+    if (user.role === 'FOOD_COURT_ADMIN' && user.foodCourtId && user.foodCourtId !== id) {
+      return NextResponse.json({ error: 'No autorizado para esta plaza' }, { status: 403 })
+    }
     const body = await request.json()
     const parsed = UpdateFoodCourtSchema.parse(body)
 

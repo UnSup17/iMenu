@@ -9,6 +9,7 @@ declare module 'next-auth' {
       restaurantId?: string | null
       restaurantSlug?: string | null
       organizationId?: string | null
+      foodCourtId?: string | null
     } & DefaultSession['user']
   }
 
@@ -18,6 +19,7 @@ declare module 'next-auth' {
     restaurantId?: string | null
     restaurantSlug?: string | null
     organizationId?: string | null
+    foodCourtId?: string | null
   }
 }
 
@@ -28,5 +30,7 @@ declare module 'next-auth/jwt' {
     restaurantId?: string | null
     restaurantSlug?: string | null
     organizationId?: string | null
+    foodCourtId?: string | null
   }
 }
+

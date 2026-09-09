@@ -63,6 +63,9 @@ interface MenuPageProps {
   onNavigateRestaurant?: (direction: 'next' | 'prev') => void
   hasPrevRestaurant?: boolean
   hasNextRestaurant?: boolean
+  // Soporte de Identidad de Marca / White-Label
+  brandLogoUrl?: string | null
+  brandCoverBannerUrl?: string | null
 }
 
 type ViewMode = 'list' | 'pdf'
@@ -104,6 +107,8 @@ export function MenuPage({
   onNavigateRestaurant,
   hasPrevRestaurant = false,
   hasNextRestaurant = false,
+  brandLogoUrl,
+  brandCoverBannerUrl,
 }: MenuPageProps) {
   const hasPdf = Boolean(pdfUrl)
 
@@ -262,8 +267,15 @@ export function MenuPage({
     new Intl.NumberFormat('es-MX', { style: 'currency', currency }).format(amount)
 
   return (
-    // Accesibilidad: lang implícita heredada del HTML; fuente base ampliada a 17px via clase
-    <div className="min-h-dvh bg-zinc-950 text-white font-sans selection:bg-amber-500/30 text-[17px]">
+    // Accesibilidad: lang implícita heredada del HTML; fuentes y colores dinámicos de marca
+    <div
+      className="min-h-dvh selection:bg-[var(--brand-primary)]/30 text-[17px] transition-colors"
+      style={{
+        backgroundColor: 'var(--brand-bg)',
+        color: 'var(--brand-text)',
+        fontFamily: 'var(--brand-font-body)',
+      }}
+    >
 
       {/* Modal para ingresar apodo de comensal */}
       <UserAliasModal
@@ -273,8 +285,27 @@ export function MenuPage({
         onClose={() => userAlias && setIsAliasModalOpen(false)}
       />
 
+      {/* Banner de Portada Hero (si la marca lo tiene configurado) */}
+      {brandCoverBannerUrl && (
+        <div className="w-full h-36 sm:h-48 relative overflow-hidden">
+          <img src={brandCoverBannerUrl} alt={restaurantName} className="w-full h-full object-cover" />
+          <div
+            className="absolute inset-0"
+            style={{
+              background: 'linear-gradient(to top, var(--brand-bg) 0%, transparent 100%)',
+            }}
+          />
+        </div>
+      )}
+
       {/* ── Header ── */}
-      <header className="sticky top-0 z-40 bg-zinc-950/95 backdrop-blur-md border-b border-zinc-800">
+      <header
+        className="sticky top-0 z-40 backdrop-blur-md border-b transition-colors"
+        style={{
+          backgroundColor: 'color-mix(in srgb, var(--brand-bg) 92%, transparent)',
+          borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+        }}
+      >
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             {/* Botón Volver al mosaico si estamos en contexto de plaza */}
@@ -282,7 +313,12 @@ export function MenuPage({
               <button
                 id="btn-back-to-mosaic"
                 onClick={onBackToMosaic}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-amber-400 text-xs font-bold transition-all border border-zinc-700/60 active:scale-95 shrink-0"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border active:scale-95 shrink-0"
+                style={{
+                  backgroundColor: 'var(--brand-surface)',
+                  borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+                  color: 'var(--brand-primary)',
+                }}
                 aria-label={`Volver al mosaico de ${foodCourtName || 'la plaza'}`}
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -292,16 +328,31 @@ export function MenuPage({
               </button>
             )}
 
-            {/* Logo inicial del restaurante */}
+            {/* Logo o inicial del restaurante con Branding */}
             <div
-              className="w-11 h-11 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold text-lg"
+              className="w-11 h-11 rounded-xl flex items-center justify-center font-bold text-lg overflow-hidden shrink-0 shadow-sm border"
+              style={{
+                backgroundColor: 'color-mix(in srgb, var(--brand-primary) 15%, transparent)',
+                borderColor: 'color-mix(in srgb, var(--brand-primary) 35%, transparent)',
+                color: 'var(--brand-primary)',
+              }}
               aria-hidden="true"
             >
-              {restaurantName.charAt(0)}
+              {brandLogoUrl ? (
+                <img src={brandLogoUrl} alt={restaurantName} className="w-full h-full object-contain p-1" />
+              ) : (
+                restaurantName.charAt(0)
+              )}
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-base sm:text-lg font-black text-white tracking-tight leading-tight">
+                <h1
+                  className="text-base sm:text-lg font-black tracking-tight leading-tight"
+                  style={{
+                    color: 'var(--brand-text)',
+                    fontFamily: 'var(--brand-font-heading)',
+                  }}
+                >
                   {restaurantName}
                 </h1>
                 {onNavigateRestaurant && (
@@ -309,7 +360,12 @@ export function MenuPage({
                     {hasPrevRestaurant && (
                       <button
                         onClick={() => onNavigateRestaurant('prev')}
-                        className="p-1 rounded-md bg-zinc-800 text-zinc-400 hover:text-white"
+                        className="p-1 rounded-md border"
+                        style={{
+                          backgroundColor: 'var(--brand-surface)',
+                          borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+                          color: 'var(--brand-muted)',
+                        }}
                         aria-label="Restaurante anterior"
                       >
                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -320,7 +376,12 @@ export function MenuPage({
                     {hasNextRestaurant && (
                       <button
                         onClick={() => onNavigateRestaurant('next')}
-                        className="p-1 rounded-md bg-zinc-800 text-zinc-400 hover:text-white"
+                        className="p-1 rounded-md border"
+                        style={{
+                          backgroundColor: 'var(--brand-surface)',
+                          borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+                          color: 'var(--brand-muted)',
+                        }}
                         aria-label="Siguiente restaurante"
                       >
                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -332,7 +393,10 @@ export function MenuPage({
                 )}
               </div>
               <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-sm font-semibold text-zinc-300">
+                <span
+                  className="text-sm font-semibold"
+                  style={{ color: 'var(--brand-muted)' }}
+                >
                   Mesa {tableNumber}
                 </span>
                 {/* Badge de comensales activos */}
@@ -348,13 +412,23 @@ export function MenuPage({
           {/* Botón carrito en header — touch target mínimo 44px */}
           <button
             onClick={() => setCartOpen(true)}
-            className="relative flex items-center justify-center w-12 h-12 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl transition-all duration-200 active:scale-95 text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+            className="relative flex items-center justify-center w-12 h-12 rounded-xl transition-all duration-200 active:scale-95 border focus-visible:outline-none"
+            style={{
+              backgroundColor: 'var(--brand-surface)',
+              borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+              color: 'var(--brand-text)',
+            }}
             aria-label={`Ver carrito${totalItems > 0 ? `, ${totalItems} ${totalItems === 1 ? 'artículo' : 'artículos'}` : ', vacío'}`}
           >
             <span className="text-xl" aria-hidden="true">🛒</span>
             {totalItems > 0 && (
               <span
-                className="absolute -top-1.5 -right-1.5 bg-amber-500 text-white font-black text-xs rounded-full h-5 min-w-[20px] flex items-center justify-center px-1 border-2 border-zinc-950 shadow-md"
+                className="absolute -top-1.5 -right-1.5 font-black text-xs rounded-full h-5 min-w-[20px] flex items-center justify-center px-1 border-2 shadow-md"
+                style={{
+                  backgroundColor: 'var(--brand-primary)',
+                  color: '#ffffff',
+                  borderColor: 'var(--brand-bg)',
+                }}
                 aria-hidden="true"
               >
                 {totalItems}
@@ -366,26 +440,41 @@ export function MenuPage({
         {/* Segmented Control PDF / Lista */}
         {hasPdf && (
           <div className="max-w-2xl mx-auto px-4 pb-3" role="group" aria-label="Modo de vista del menú">
-            <div className="bg-zinc-900 p-1 rounded-2xl flex gap-1 border border-zinc-800">
+            <div
+              className="p-1 rounded-2xl flex gap-1 border"
+              style={{
+                backgroundColor: 'var(--brand-surface)',
+                borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+                borderRadius: 'var(--brand-radius)',
+              }}
+            >
               <button
                 onClick={() => setViewMode('pdf')}
                 aria-pressed={viewMode === 'pdf'}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500
-                  ${viewMode === 'pdf'
-                    ? 'bg-amber-500 text-white shadow-md shadow-amber-500/10'
-                    : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
-                  }`}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 text-sm font-semibold transition-all duration-200 focus-visible:outline-none"
+                style={viewMode === 'pdf' ? {
+                  backgroundColor: 'var(--brand-primary)',
+                  color: '#ffffff',
+                  borderRadius: 'calc(var(--brand-radius) - 4px)',
+                } : {
+                  color: 'var(--brand-muted)',
+                  borderRadius: 'calc(var(--brand-radius) - 4px)',
+                }}
               >
                 📋 Menú PDF
               </button>
               <button
                 onClick={() => setViewMode('list')}
                 aria-pressed={viewMode === 'list'}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500
-                  ${viewMode === 'list'
-                    ? 'bg-amber-500 text-white shadow-md shadow-amber-500/10'
-                    : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
-                  }`}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 text-sm font-semibold transition-all duration-200 focus-visible:outline-none"
+                style={viewMode === 'list' ? {
+                  backgroundColor: 'var(--brand-primary)',
+                  color: '#ffffff',
+                  borderRadius: 'calc(var(--brand-radius) - 4px)',
+                } : {
+                  color: 'var(--brand-muted)',
+                  borderRadius: 'calc(var(--brand-radius) - 4px)',
+                }}
               >
                 🍔 Por Categorías
               </button>
@@ -397,7 +486,10 @@ export function MenuPage({
         {viewMode === 'list' && (
           <nav
             aria-label="Categorías del menú"
-            className="max-w-2xl mx-auto overflow-x-auto scrollbar-none border-t border-zinc-800/60"
+            className="max-w-2xl mx-auto overflow-x-auto scrollbar-none border-t"
+            style={{
+              borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+            }}
           >
             <div
               role="tablist"
@@ -414,11 +506,19 @@ export function MenuPage({
                     aria-controls={`tabpanel-${cat.id}`}
                     id={`tab-${cat.id}`}
                     onClick={() => setActiveCategory(cat.id)}
-                    className={`flex-shrink-0 px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-200 border min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500
-                      ${isActive
-                        ? 'bg-amber-500/15 text-amber-300 border-amber-500/40 font-bold'
-                        : 'bg-zinc-900 border-zinc-700 text-zinc-200 hover:text-white hover:bg-zinc-800'
-                      }`}
+                    className="flex-shrink-0 px-5 py-2.5 text-sm font-semibold transition-all duration-200 border min-h-[44px] focus-visible:outline-none"
+                    style={isActive ? {
+                      backgroundColor: 'color-mix(in srgb, var(--brand-primary) 18%, transparent)',
+                      color: 'var(--brand-primary)',
+                      borderColor: 'color-mix(in srgb, var(--brand-primary) 45%, transparent)',
+                      borderRadius: 'var(--brand-radius)',
+                      fontWeight: 700,
+                    } : {
+                      backgroundColor: 'var(--brand-surface)',
+                      borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+                      color: 'var(--brand-muted)',
+                      borderRadius: 'var(--brand-radius)',
+                    }}
                   >
                     {cat.name}
                   </button>
@@ -452,9 +552,19 @@ export function MenuPage({
                 role="tabpanel"
                 aria-labelledby={`tab-${cat.id}`}
               >
-                {/* Encabezado de categoría — tamaño aumentado para legibilidad */}
-                <h2 className="text-base font-black uppercase tracking-wider text-zinc-200 mb-4 flex items-center gap-2.5">
-                  <span className="w-1.5 h-4 bg-amber-500 rounded-full" aria-hidden="true" />
+                {/* Encabezado de categoría */}
+                <h2
+                  className="text-base font-black uppercase tracking-wider mb-4 flex items-center gap-2.5"
+                  style={{
+                    color: 'var(--brand-text)',
+                    fontFamily: 'var(--brand-font-heading)',
+                  }}
+                >
+                  <span
+                    className="w-1.5 h-4 rounded-full"
+                    style={{ backgroundColor: 'var(--brand-primary)' }}
+                    aria-hidden="true"
+                  />
                   {cat.name}
                 </h2>
 
@@ -501,13 +611,18 @@ export function MenuPage({
             <button
               onClick={() => setCartOpen(true)}
               aria-label={`Ver pedido: ${totalItems} ${totalItems === 1 ? 'artículo' : 'artículos'}, total ${formatPrice(totalAmount)}`}
-              className="w-full bg-amber-500 hover:bg-amber-400 text-white rounded-2xl flex items-center justify-between px-5 py-4 shadow-xl shadow-amber-500/20 active:scale-98 transition-all font-bold text-base cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              className="w-full flex items-center justify-between px-5 py-4 shadow-xl active:scale-98 transition-all font-bold text-base cursor-pointer focus-visible:outline-none"
+              style={{
+                backgroundColor: 'var(--brand-primary)',
+                color: '#ffffff',
+                borderRadius: 'var(--brand-radius)',
+              }}
             >
               <div className="flex items-center gap-2">
                 <span className="text-xl" aria-hidden="true">🛒</span>
                 <span>{confirmedCount > 0 ? 'Ver Ronda Actual' : 'Ver Pedido Mesa'}</span>
               </div>
-              <div className="flex items-center gap-2 bg-black/15 py-1.5 px-3 rounded-lg text-sm font-semibold border border-white/10">
+              <div className="flex items-center gap-2 bg-black/20 py-1.5 px-3 rounded-lg text-sm font-semibold border border-white/15">
                 <span>{totalItems} {totalItems === 1 ? 'item' : 'items'}</span>
                 <span className="w-1 h-1 bg-white/40 rounded-full" aria-hidden="true" />
                 <span>{formatPrice(totalAmount)}</span>
@@ -517,7 +632,13 @@ export function MenuPage({
             <button
               onClick={() => setCartOpen(true)}
               aria-label={`Ver pedidos en cocina: ${confirmedCount} ${confirmedCount === 1 ? 'platillo' : 'platillos'}, total ${formatPrice(confirmedTotalAmount)}`}
-              className="w-full bg-zinc-900 border border-emerald-500/50 hover:border-emerald-400 text-emerald-300 hover:text-white rounded-2xl flex items-center justify-between px-5 py-4 shadow-xl shadow-emerald-500/5 active:scale-98 transition-all font-bold text-base cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+              className="w-full border flex items-center justify-between px-5 py-4 shadow-xl active:scale-98 transition-all font-bold text-base cursor-pointer focus-visible:outline-none"
+              style={{
+                backgroundColor: 'var(--brand-surface)',
+                borderColor: 'color-mix(in srgb, #10b981 50%, transparent)',
+                color: '#34d399',
+                borderRadius: 'var(--brand-radius)',
+              }}
             >
               <div className="flex items-center gap-2">
                 <span className="text-xl" aria-hidden="true">🍳</span>
@@ -533,13 +654,19 @@ export function MenuPage({
             <button
               onClick={() => setCartOpen(true)}
               aria-label="Ver pedido, carrito vacío"
-              className="w-full bg-zinc-900 border border-zinc-700 text-zinc-200 hover:text-white rounded-2xl flex items-center justify-between px-5 py-4 shadow-xl active:scale-98 transition-all font-semibold text-base cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
+              className="w-full border flex items-center justify-between px-5 py-4 shadow-xl active:scale-98 transition-all font-semibold text-base cursor-pointer focus-visible:outline-none"
+              style={{
+                backgroundColor: 'var(--brand-surface)',
+                borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+                color: 'var(--brand-text)',
+                borderRadius: 'var(--brand-radius)',
+              }}
             >
               <div className="flex items-center gap-2">
                 <span aria-hidden="true">🛒</span>
                 <span>Ver Pedido</span>
               </div>
-              <span className="text-sm text-zinc-400">Sin artículos</span>
+              <span className="text-sm" style={{ color: 'var(--brand-muted)' }}>Sin artículos</span>
             </button>
           )}
         </div>
@@ -572,13 +699,37 @@ export function MenuPage({
             onClick={() => setCartOpen(false)}
             aria-hidden="true"
           />
-          <div className="relative w-full max-w-sm bg-zinc-900 border-l border-zinc-800 h-full flex flex-col shadow-2xl overflow-hidden animate-slide-in">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800 flex-shrink-0">
-              <h2 className="font-bold text-white text-lg">Pedido de la Mesa</h2>
+          <div
+            className="relative w-full max-w-sm border-l h-full flex flex-col shadow-2xl overflow-hidden animate-slide-in"
+            style={{
+              backgroundColor: 'var(--brand-surface)',
+              borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+            }}
+          >
+            <div
+              className="flex items-center justify-between px-5 py-4 border-b flex-shrink-0"
+              style={{
+                borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+              }}
+            >
+              <h2
+                className="font-bold text-lg"
+                style={{
+                  color: 'var(--brand-text)',
+                  fontFamily: 'var(--brand-font-heading)',
+                }}
+              >
+                Pedido de la Mesa
+              </h2>
               <button
                 onClick={() => setCartOpen(false)}
                 aria-label="Cerrar pedido"
-                className="p-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 text-base"
+                className="p-2.5 rounded-xl border transition-colors"
+                style={{
+                  backgroundColor: 'color-mix(in srgb, var(--brand-surface) 80%, var(--brand-bg) 20%)',
+                  borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+                  color: 'var(--brand-text)',
+                }}
               >
                 ✕
               </button>
@@ -645,19 +796,32 @@ function ProductCard({
       disabled={isOutOfStock}
       aria-label={`${product.name}. ${srDescription}`}
       aria-disabled={isOutOfStock}
-      className={`w-full text-left rounded-2xl overflow-hidden transition-all duration-300 p-4 relative
-        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950
-        ${isOutOfStock
-          ? 'border border-red-900/50 bg-red-950/20 opacity-70 cursor-not-allowed'
-          : hasOrders
-          ? 'border border-amber-500/50 bg-amber-500/5 hover:bg-zinc-900 hover:shadow-md hover:shadow-black/20 hover:scale-[1.01] active:scale-[0.99] cursor-pointer'
-          : 'border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-900 hover:border-zinc-700 hover:shadow-md hover:shadow-black/20 hover:scale-[1.01] active:scale-[0.99] cursor-pointer'
-        }`}
+      className="w-full text-left overflow-hidden transition-all duration-300 p-4 relative border focus-visible:outline-none hover:shadow-md hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+      style={isOutOfStock ? {
+        backgroundColor: 'color-mix(in srgb, var(--brand-surface) 50%, transparent)',
+        borderColor: 'color-mix(in srgb, #ef4444 30%, transparent)',
+        borderRadius: 'var(--brand-radius)',
+        opacity: 0.65,
+        cursor: 'not-allowed',
+      } : hasOrders ? {
+        backgroundColor: 'color-mix(in srgb, var(--brand-surface) 90%, var(--brand-primary) 10%)',
+        borderColor: 'color-mix(in srgb, var(--brand-primary) 40%, transparent)',
+        borderRadius: 'var(--brand-radius)',
+      } : {
+        backgroundColor: 'var(--brand-surface)',
+        borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+        borderRadius: 'var(--brand-radius)',
+      }}
     >
       {/* Badge de comensales — aria-hidden porque ya está en aria-label */}
       {hasOrders && (
         <div
-          className="mb-2.5 inline-flex items-center gap-1.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 px-3 py-1 rounded-md text-xs font-bold"
+          className="mb-2.5 inline-flex items-center gap-1.5 border px-3 py-1 rounded-md text-xs font-bold"
+          style={{
+            backgroundColor: 'color-mix(in srgb, var(--brand-primary) 18%, transparent)',
+            color: 'var(--brand-primary)',
+            borderColor: 'color-mix(in srgb, var(--brand-primary) 35%, transparent)',
+          }}
           aria-hidden="true"
         >
           <span>🏷️</span>
@@ -680,27 +844,34 @@ function ProductCard({
         {/* Contenido */}
         <div className="flex-1 min-w-0 flex flex-col justify-between h-full">
           <div>
-            {/* Nombre — texto más grande y contraste alto */}
+            {/* Nombre — texto más grande y tipografía de encabezado */}
             <h3
-              className={`font-bold leading-snug text-base sm:text-lg ${
-                isOutOfStock ? 'text-zinc-400 line-through' : 'text-white'
-              }`}
+              className="font-bold leading-snug text-base sm:text-lg"
+              style={{
+                fontFamily: 'var(--brand-font-heading)',
+                color: isOutOfStock ? 'var(--brand-muted)' : 'var(--brand-text)',
+                textDecoration: isOutOfStock ? 'line-through' : 'none',
+              }}
             >
               {product.name}
             </h3>
             {product.description && (
-              <p className="text-sm text-zinc-300 mt-1 leading-relaxed line-clamp-2">
+              <p
+                className="text-sm mt-1 leading-relaxed line-clamp-2"
+                style={{ color: 'var(--brand-muted)' }}
+              >
                 {product.description}
               </p>
             )}
           </div>
 
           <div className="flex items-center justify-between mt-3.5">
-            {/* Precio — grande y visible */}
+            {/* Precio — grande y en el color de marca primario */}
             <span
-              className={`font-extrabold text-base sm:text-lg ${
-                isOutOfStock ? 'text-zinc-500' : 'text-amber-400'
-              }`}
+              className="font-extrabold text-base sm:text-lg"
+              style={{
+                color: isOutOfStock ? 'var(--brand-muted)' : 'var(--brand-primary)',
+              }}
               aria-hidden="true"
             >
               {formatPrice(product.basePrice)}
@@ -709,7 +880,12 @@ function ProductCard({
             <div className="flex items-center gap-2">
               {hasModifiers && !isOutOfStock && (
                 <span
-                  className="text-xs font-bold tracking-wide bg-amber-500/15 text-amber-300 border border-amber-500/30 px-2.5 py-1 rounded-md uppercase"
+                  className="text-xs font-bold tracking-wide border px-2.5 py-1 rounded-md uppercase"
+                  style={{
+                    backgroundColor: 'color-mix(in srgb, var(--brand-accent) 15%, transparent)',
+                    color: 'var(--brand-accent)',
+                    borderColor: 'color-mix(in srgb, var(--brand-accent) 35%, transparent)',
+                  }}
                   aria-hidden="true"
                 >
                   Personalizable
@@ -723,9 +899,14 @@ function ProductCard({
                   Agotado
                 </span>
               ) : (
-                /* Indicador de acción — sin texto redundante (ya cubierto por aria-label del botón) */
+                /* Indicador de acción en color de marca primario */
                 <span
-                  className="w-9 h-9 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 flex items-center justify-center text-base font-bold transition-all shadow-sm"
+                  className="w-9 h-9 flex items-center justify-center text-base font-bold transition-all shadow-sm"
+                  style={{
+                    backgroundColor: 'var(--brand-primary)',
+                    color: '#ffffff',
+                    borderRadius: 'calc(var(--brand-radius) * 0.5)',
+                  }}
                   aria-hidden="true"
                 >
                   +
@@ -737,7 +918,13 @@ function ProductCard({
 
         {/* Imagen */}
         {product.imageUrl && (
-          <div className="w-24 h-24 sm:w-28 sm:h-28 flex-shrink-0 rounded-xl overflow-hidden border border-zinc-800 shadow-inner bg-zinc-800">
+          <div
+            className="w-24 h-24 sm:w-28 sm:h-28 flex-shrink-0 rounded-xl overflow-hidden border shadow-inner"
+            style={{
+              borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+              backgroundColor: 'color-mix(in srgb, var(--brand-surface) 80%, black 20%)',
+            }}
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={product.imageUrl}

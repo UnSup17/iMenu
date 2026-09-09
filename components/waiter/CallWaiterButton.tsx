@@ -229,18 +229,23 @@ export function CallWaiterButton({
             onClick={handleOpenModal}
             disabled={isDisabled}
             aria-label="Llamar al mesero"
-            className={`
-              relative w-14 h-14 rounded-2xl flex items-center justify-center
-              transition-all duration-200 shadow-lg active:scale-95 text-xl
-              ${status === 'ON_THE_WAY'
-                ? 'bg-emerald-500 text-white shadow-emerald-500/20 cursor-default'
-              : status === 'WAITING_ACK'
-                ? 'bg-amber-500/20 border border-amber-500/40 text-white shadow-amber-500/10 cursor-default'
-                  : isDisabled
-                    ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed shadow-none'
-                    : 'bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-700 hover:bg-zinc-850 cursor-pointer'
-              }
-            `}
+            className="relative w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-200 shadow-lg active:scale-95 text-xl border focus-visible:outline-none cursor-pointer"
+            style={status === 'ON_THE_WAY' ? {
+              backgroundColor: '#10b981',
+              color: '#ffffff',
+            } : status === 'WAITING_ACK' ? {
+              backgroundColor: 'color-mix(in srgb, var(--brand-primary) 20%, transparent)',
+              borderColor: 'color-mix(in srgb, var(--brand-primary) 40%, transparent)',
+              color: '#ffffff',
+            } : isDisabled ? {
+              backgroundColor: 'color-mix(in srgb, var(--brand-surface) 60%, transparent)',
+              color: 'var(--brand-muted)',
+              cursor: 'not-allowed',
+            } : {
+              backgroundColor: 'var(--brand-surface)',
+              borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+              color: 'var(--brand-text)',
+            }}
           >
             {getButtonIcon()}
 
@@ -308,7 +313,12 @@ export function CallWaiterButton({
             role="dialog"
             aria-modal="true"
             aria-labelledby="waiter-modal-title"
-            className="relative w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 animate-in fade-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200 z-10"
+            className="relative w-full max-w-md border p-5 sm:p-6 shadow-2xl space-y-4 animate-in fade-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200 z-10"
+            style={{
+              backgroundColor: 'var(--brand-surface)',
+              borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+              borderRadius: 'var(--brand-radius)',
+            }}
           >
             {/* Grabber bar móvil */}
             <div className="w-12 h-1 bg-zinc-700 rounded-full mx-auto sm:hidden -mt-1 mb-2" />
@@ -316,14 +326,28 @@ export function CallWaiterButton({
             {/* Header */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-xl text-amber-400">
+                <div
+                  className="w-10 h-10 rounded-2xl border flex items-center justify-center text-xl"
+                  style={{
+                    backgroundColor: 'color-mix(in srgb, var(--brand-primary) 15%, transparent)',
+                    borderColor: 'color-mix(in srgb, var(--brand-primary) 35%, transparent)',
+                    color: 'var(--brand-primary)',
+                  }}
+                >
                   🛎️
                 </div>
                 <div>
-                  <h3 id="waiter-modal-title" className="text-base font-bold text-white leading-tight">
+                  <h3
+                    id="waiter-modal-title"
+                    className="text-base font-bold leading-tight"
+                    style={{
+                      color: 'var(--brand-text)',
+                      fontFamily: 'var(--brand-font-heading)',
+                    }}
+                  >
                     ¿Cómo podemos ayudarte?
                   </h3>
-                  <p className="text-xs text-zinc-400 mt-0.5">
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--brand-muted)' }}>
                     Mesa {tableNumber} • Notificaremos a tu mesero
                   </p>
                 </div>
@@ -331,7 +355,12 @@ export function CallWaiterButton({
               <button
                 onClick={() => setIsModalOpen(false)}
                 aria-label="Cerrar ventana"
-                className="w-8 h-8 rounded-full bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-750 flex items-center justify-center text-sm transition-colors cursor-pointer"
+                className="w-8 h-8 rounded-full border flex items-center justify-center text-sm transition-colors cursor-pointer"
+                style={{
+                  backgroundColor: 'color-mix(in srgb, var(--brand-surface) 80%, var(--brand-bg) 20%)',
+                  borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+                  color: 'var(--brand-muted)',
+                }}
               >
                 ✕
               </button>
@@ -343,11 +372,11 @@ export function CallWaiterButton({
                 <button
                   key={opt.type}
                   onClick={() => handleSendAlert(opt.type)}
-                  className={`
-                    w-full flex items-center gap-3.5 p-3.5 rounded-2xl
-                    bg-zinc-850/80 hover:bg-zinc-800 border border-zinc-800
-                    ${opt.borderHover} transition-all text-left active:scale-[0.98] group cursor-pointer
-                  `}
+                  className="w-full flex items-center gap-3.5 p-3.5 rounded-2xl border transition-all text-left active:scale-[0.98] group cursor-pointer"
+                  style={{
+                    backgroundColor: 'color-mix(in srgb, var(--brand-surface) 70%, var(--brand-bg) 30%)',
+                    borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 12%)',
+                  }}
                 >
                   <div
                     className={`w-11 h-11 rounded-xl flex items-center justify-center text-2xl border ${opt.iconBg} shrink-0 transition-transform group-hover:scale-105`}
@@ -356,14 +385,17 @@ export function CallWaiterButton({
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <h4 className="font-semibold text-white text-sm group-hover:text-amber-300 transition-colors">
+                      <h4
+                        className="font-semibold text-sm transition-colors"
+                        style={{ color: 'var(--brand-text)' }}
+                      >
                         {opt.title}
                       </h4>
-                      <span className="text-zinc-500 text-xs group-hover:translate-x-1 transition-transform">
+                      <span className="text-xs group-hover:translate-x-1 transition-transform" style={{ color: 'var(--brand-muted)' }}>
                         →
                       </span>
                     </div>
-                    <p className="text-xs text-zinc-400 mt-0.5 leading-snug">
+                    <p className="text-xs mt-0.5 leading-snug" style={{ color: 'var(--brand-muted)' }}>
                       {opt.subtitle}
                     </p>
                   </div>
