@@ -37,6 +37,16 @@ export async function GET(
         table: { select: { tableNumber: true } },
         waiter: { select: { name: true, email: true } },
         session: { select: { id: true, createdAt: true } },
+        restaurant: {
+          select: {
+            name: true,
+            brandTheme: {
+              select: {
+                whiteLabelEnabled: true,
+              },
+            },
+          },
+        },
       },
     })
 

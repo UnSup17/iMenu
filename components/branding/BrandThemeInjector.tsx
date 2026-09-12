@@ -35,6 +35,15 @@ export function BrandThemeInjector({ theme, id = 'brand-theme-styles' }: BrandTh
   const contrastPrimary = getContrastTextColor(theme.primaryColor)
   const contrastAccent = getContrastTextColor(theme.accentColor)
 
+  const btnRadius =
+    theme.buttonStyle === 'pill'
+      ? '9999px'
+      : theme.buttonStyle === 'sharp'
+      ? '2px'
+      : theme.borderRadius || '0.75rem'
+
+  const glassFilter = theme.glassmorphismEnabled !== false ? 'blur(16px)' : 'none'
+
   const cssVariables = `
     :root {
       /* Tokens de Identidad de Marca */
@@ -46,6 +55,8 @@ export function BrandThemeInjector({ theme, id = 'brand-theme-styles' }: BrandTh
       --brand-text: ${theme.textColor};
       --brand-muted: ${theme.textMutedColor};
       --brand-radius: ${theme.borderRadius};
+      --brand-btn-radius: ${btnRadius};
+      --brand-glass-blur: ${glassFilter};
       --brand-font-heading: '${theme.fontHeading}', sans-serif;
       --brand-font-body: '${theme.fontBody}', sans-serif;
 

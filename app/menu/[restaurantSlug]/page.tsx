@@ -197,6 +197,7 @@ export default async function MenuViewOnlyPage({ params }: PageProps) {
         initialStockIssues={[]}
         brandLogoUrl={brandTheme.logoUrl}
         brandCoverBannerUrl={brandTheme.coverBannerUrl}
+        whiteLabelEnabled={brandTheme.whiteLabelEnabled}
         isViewOnly={true}
       />
     </>

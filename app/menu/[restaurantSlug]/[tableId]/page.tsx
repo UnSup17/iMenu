@@ -238,6 +238,7 @@ export default async function MenuGuestPage({ params, searchParams }: PageProps)
         initialStockIssues={initialStockIssues}
         brandLogoUrl={brandTheme.logoUrl}
         brandCoverBannerUrl={brandTheme.coverBannerUrl}
+        whiteLabelEnabled={brandTheme.whiteLabelEnabled}
       />
     </>
   )

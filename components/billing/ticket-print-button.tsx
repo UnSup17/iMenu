@@ -96,7 +96,7 @@ export function TicketPrintButton({ invoiceId }: { invoiceId: string }) {
 
             <div class="divider"></div>
             <div class="center">¡Gracias por su visita!</div>
-            <div class="center" style="font-size: 9px; margin-top: 4px;">Powered by iMenu POS</div>
+            ${inv.restaurant?.brandTheme?.whiteLabelEnabled ? '' : '<div class="center" style="font-size: 9px; margin-top: 4px; opacity: 0.7;">Powered by iMenu POS</div>'}
           </body>
         </html>
       `

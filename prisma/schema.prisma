@@ -180,6 +180,11 @@ model Restaurant {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
+  // Dominio personalizado para el menú QR
+  customDomain         String?  @unique
+  customDomainVerified Boolean  @default(false)
+  customDomainCname    String?
+
   users                   User[]
   tables                  Table[]
   categories              Category[]
@@ -1063,6 +1068,11 @@ model BrandTheme {
   allowBranchOverrides Boolean @default(true) // Si ORG_ADMIN autoriza personalizaciones locales
   useCustomTheme       Boolean @default(false) // Si la sede activa sus propias variaciones
   branchProposal       Json?                  // Propuesta enviada por RESTAURANT_ADMIN para aprobación
+
+  // White-Label & Efectos Visuales
+  whiteLabelEnabled    Boolean @default(false) // Suprime marcas "Powered by iMenu"
+  glassmorphismEnabled Boolean @default(true)  // Efecto acrílico / traslúcido
+  buttonStyle          String  @default("rounded") // "pill", "rounded", "sharp"
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

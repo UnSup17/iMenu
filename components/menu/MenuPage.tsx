@@ -74,6 +74,7 @@ interface MenuPageProps {
   // Soporte de Identidad de Marca / White-Label
   brandLogoUrl?: string | null
   brandCoverBannerUrl?: string | null
+  whiteLabelEnabled?: boolean
   // Modo sólo lectura (web)
   isViewOnly?: boolean
 }
@@ -119,6 +120,7 @@ export function MenuPage({
   hasNextRestaurant = false,
   brandLogoUrl,
   brandCoverBannerUrl,
+  whiteLabelEnabled = false,
   isViewOnly = false,
 }: MenuPageProps) {
   const hasPdf = Boolean(pdfUrl)
@@ -921,6 +923,32 @@ export function MenuPage({
                 </div>
               </section>
             ))}
+
+          {/* Footer sutil del Menú QR (con soporte White-Label) */}
+          <footer className="pt-8 pb-20 text-center select-none" aria-label="Información del restaurante">
+            <p
+              className="text-xs font-semibold tracking-wider uppercase opacity-70"
+              style={{ color: 'var(--brand-muted)' }}
+            >
+              {restaurantName}
+            </p>
+            {!whiteLabelEnabled ? (
+              <p
+                className="text-[11px] mt-1 tracking-tight flex items-center justify-center gap-1.5 opacity-50"
+                style={{ color: 'var(--brand-muted)' }}
+              >
+                <span>Experiencia digital por</span>
+                <span className="font-bold text-white tracking-normal">iMenu</span>
+              </p>
+            ) : (
+              <p
+                className="text-[10px] mt-1 opacity-30"
+                style={{ color: 'var(--brand-muted)' }}
+              >
+                Menú digital interactivo
+              </p>
+            )}
+          </footer>
         </main>
       )}
 

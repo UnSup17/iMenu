@@ -103,6 +103,27 @@ export default async function BrandStudioPage() {
     organizationId: user.organizationId,
   })
 
+  // Obtener info del dominio personalizado si es restaurante
+  let initialCustomDomain: string | null = null
+  let initialCustomDomainVerified = false
+  let initialCustomDomainCname: string | null = null
+
+  if (user.restaurantId) {
+    const rest = await prisma.restaurant.findUnique({
+      where: { id: user.restaurantId },
+      select: {
+        customDomain: true,
+        customDomainVerified: true,
+        customDomainCname: true,
+      },
+    })
+    if (rest) {
+      initialCustomDomain = rest.customDomain
+      initialCustomDomainVerified = rest.customDomainVerified
+      initialCustomDomainCname = rest.customDomainCname
+    }
+  }
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <BrandStudioClient
@@ -116,6 +137,9 @@ export default async function BrandStudioPage() {
         foodCourtName={foodCourtName}
         targetType={targetType}
         targetId={targetId}
+        initialCustomDomain={initialCustomDomain}
+        initialCustomDomainVerified={initialCustomDomainVerified}
+        initialCustomDomainCname={initialCustomDomainCname}
       />
     </div>
   )
