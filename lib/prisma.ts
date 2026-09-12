@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 
 // Evita múltiples instancias del cliente Prisma en desarrollo (hot reload de Next.js)
-const PRISMA_SCHEMA_VERSION = '2026_09_11_tables_reservations'
+const PRISMA_SCHEMA_VERSION = '2026_09_12_orders_kds'
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
   prismaVersion: string | undefined

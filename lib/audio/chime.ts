@@ -86,9 +86,81 @@ class AudioNotifier {
       console.warn('[AudioNotifier] No se pudo reproducir audio:', e)
     }
   }
+
+  /**
+   * Alerta sonora de cocina penetrante (880Hz -> 1100Hz -> 1320Hz)
+   * Diseñada para ambientes ruidosos de cocina con ataque rápido y volumen audible.
+   */
+  playKitchenNewOrderAlert() {
+    try {
+      const ctx = this.getContext()
+      if (!ctx) return
+
+      const now = ctx.currentTime
+      const notes = [
+        { freq: 880, start: now, duration: 0.18, gain: 0.45 },
+        { freq: 1100, start: now + 0.15, duration: 0.18, gain: 0.5 },
+        { freq: 1320, start: now + 0.32, duration: 0.65, gain: 0.6 },
+      ]
+
+      for (const note of notes) {
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.type = 'triangle' // Tono brillante y armónico
+        osc.frequency.setValueAtTime(note.freq, note.start)
+        gain.gain.setValueAtTime(note.gain, note.start)
+        gain.gain.exponentialRampToValueAtTime(0.001, note.start + note.duration)
+
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+        osc.start(note.start)
+        osc.stop(note.start + note.duration)
+      }
+    } catch (e) {
+      console.warn('[AudioNotifier] No se pudo reproducir alerta de cocina:', e)
+    }
+  }
+
+  /**
+   * Tono de orden urgente (pulso doble insistente)
+   */
+  playUrgentAlertChime() {
+    try {
+      const ctx = this.getContext()
+      if (!ctx) return
+
+      const now = ctx.currentTime
+      const tones = [now, now + 0.18, now + 0.36]
+      for (const t of tones) {
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.type = 'sawtooth'
+        osc.frequency.setValueAtTime(1200, t)
+        gain.gain.setValueAtTime(0.4, t)
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12)
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+        osc.start(t)
+        osc.stop(t + 0.12)
+      }
+    } catch (e) {
+      console.warn('[AudioNotifier] Error al reproducir tono urgente:', e)
+    }
+  }
 }
 
 export const soundNotifier = new AudioNotifier()
+
+/**
+ * Activa vibración táctil en dispositivos móviles o tablets que lo soporten
+ */
+export function triggerKitchenVibration(pattern: number[] = [250, 100, 250, 100, 400]) {
+  if (typeof window !== 'undefined' && 'navigator' in window && 'vibrate' in navigator) {
+    try {
+      navigator.vibrate(pattern)
+    } catch {}
+  }
+}
 
 /**
  * Solicita permiso de notificaciones HTML5 al navegador

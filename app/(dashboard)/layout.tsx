@@ -15,6 +15,7 @@ const NAV_SECTIONS = [
       { href: '/dashboard/additions', label: 'Adiciones & Extras', icon: '➕' },
       { href: '/dashboard/special-offers', label: 'Ofertas & Festividades', icon: '✨' },
       { href: '/dashboard/orders', label: 'Pedidos', icon: '📋' },
+      { href: '/dashboard/kds', label: 'Cocina (KDS)', icon: '🍳' },
       { href: '/dashboard/tables', label: 'Mesas', icon: '🪑' },
     ],
   },

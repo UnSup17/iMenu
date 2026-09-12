@@ -1,14 +1,15 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
-import { OrdersPageClient, type EnrichedOrder } from './OrdersPageClient'
 import type { Metadata } from 'next'
+import { KdsViewClient, type KdsOrder } from '@/components/kitchen/KdsViewClient'
 
 export const metadata: Metadata = {
-  title: 'Pedidos & Panel de Cocina — iMenu Dashboard',
+  title: 'KDS — Pantalla de Cocina — iMenu',
+  description: 'Sistema de visualización de comandas en tiempo real para cocina (KDS).',
 }
 
-export default async function OrdersPage() {
+export default async function KdsPage() {
   const session = await auth()
   if (!session?.user) redirect('/login')
 
@@ -16,30 +17,35 @@ export default async function OrdersPage() {
 
   if (!restaurantId) {
     return (
-      <div className="flex items-center justify-center h-full text-zinc-500 text-sm">
+      <div className="flex items-center justify-center min-h-screen bg-zinc-950 text-zinc-500 text-sm">
         No tienes un restaurante asignado.
       </div>
     )
   }
 
-  // Cargar órdenes activas (RECEIVED, PREPARING, READY)
-  const activeOrdersRaw = await prisma.order.findMany({
+  const restaurant = await prisma.restaurant.findUnique({
+    where: { id: restaurantId },
+    select: { name: true },
+  })
+
+  // Cargar órdenes activas de cocina (RECEIVED, PREPARING, READY)
+  const ordersRaw = await prisma.order.findMany({
     where: {
       restaurantId,
       status: { in: ['RECEIVED', 'PREPARING', 'READY'] },
     },
-    orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+    orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
     include: {
       table: {
         select: {
           tableNumber: true,
           zone: true,
-          assignedWaiter: { select: { id: true, name: true } },
+          assignedWaiter: { select: { name: true } },
         },
       },
       items: {
         include: {
-          product: { select: { id: true, name: true } },
+          product: { select: { name: true } },
           modifiers: { include: { modifierOption: true } },
           additions: { include: { addition: true } },
         },
@@ -47,29 +53,11 @@ export default async function OrdersPage() {
     },
   })
 
-  // Cargar lista de meseros para filtro
-  const waiters = await prisma.user.findMany({
-    where: {
-      restaurantId,
-      role: { in: ['WAITER', 'MANAGER', 'RESTAURANT_ADMIN'] },
-    },
-    select: { id: true, name: true, email: true },
-    orderBy: { name: 'asc' },
-  })
-
-  // Cargar lista de productos activos para filtro
-  const products = await prisma.product.findMany({
-    where: { restaurantId, isAvailable: true },
-    select: { id: true, name: true },
-    orderBy: { name: 'asc' },
-  })
-
-  const initialOrders: EnrichedOrder[] = activeOrdersRaw.map((o) => ({
+  const initialOrders: KdsOrder[] = ordersRaw.map((o) => ({
     id: o.id,
     tableId: o.tableId,
     tableNumber: o.table.tableNumber,
     zone: o.table.zone,
-    waiterId: o.table.assignedWaiter?.id || null,
     waiterName: o.table.assignedWaiter?.name || null,
     status: o.status,
     priority: (o.priority as 'NORMAL' | 'URGENT') || 'NORMAL',
@@ -78,7 +66,6 @@ export default async function OrdersPage() {
     createdAt: o.createdAt.toISOString(),
     preparedAt: o.preparedAt ? o.preparedAt.toISOString() : null,
     deliveredAt: o.deliveredAt ? o.deliveredAt.toISOString() : null,
-    itemsCount: o.items.reduce((acc, i) => acc + i.quantity, 0),
     items: o.items.map((i) => ({
       id: i.id,
       productId: i.productId,
@@ -99,11 +86,10 @@ export default async function OrdersPage() {
   }))
 
   return (
-    <OrdersPageClient
+    <KdsViewClient
       restaurantId={restaurantId}
+      restaurantName={restaurant?.name || 'Restaurante'}
       initialOrders={initialOrders}
-      waiters={waiters.map((w) => ({ id: w.id, name: w.name || w.email }))}
-      products={products}
     />
   )
 }
