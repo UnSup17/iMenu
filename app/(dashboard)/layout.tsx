@@ -90,6 +90,8 @@ const NAV_SECTIONS = [
     label: 'Configuración',
     roles: ['SUPERADMIN', 'ORG_ADMIN', 'RESTAURANT_ADMIN'],
     items: [
+      { href: '/dashboard/settings/team', label: 'Equipo & Roles', icon: '👥' },
+      { href: '/dashboard/settings/security', label: 'Seguridad (2FA)', icon: '🔒' },
       { href: '/dashboard/settings/electronic-invoicing', label: 'Factura DIAN (UBL 2.1)', icon: '🏛️' },
       { href: '/dashboard/settings/billing', label: 'Suscripción SaaS', icon: '💳' },
       { href: '/dashboard/menu-pdf', label: 'Menú PDF', icon: '📄' },
@@ -191,12 +193,34 @@ export default async function DashboardLayout({
 
       {/* Main content */}
       <main
-        className="flex-1 overflow-auto bg-zinc-950 transition-colors duration-200"
+        className="flex-1 overflow-auto bg-zinc-950 transition-colors duration-200 flex flex-col"
         style={{
           backgroundColor: 'var(--brand-bg, #09090b)',
         }}
       >
-        {children}
+        {session.user.isImpersonating && (
+          <div className="bg-amber-500 text-zinc-950 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs font-bold shadow-lg sticky top-0 z-50">
+            <div className="flex items-center gap-2">
+              <span className="text-base leading-none">⚠️</span>
+              <span>
+                MODO IMPERSONACIÓN: Operando como <span className="underline">{user.email}</span>{' '}
+                {user.restaurantSlug && `(${user.restaurantSlug})`} — Sesión iniciada por{' '}
+                {session.user.impersonatorEmail}
+              </span>
+            </div>
+            <form action="/api/superadmin/stop-impersonate" method="POST">
+              <button
+                type="submit"
+                className="px-3 py-1 bg-zinc-950 text-white rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer text-xs font-semibold"
+              >
+                Salir de impersonación ✕
+              </button>
+            </form>
+          </div>
+        )}
+        <div className="flex-1">
+          {children}
+        </div>
       </main>
     </div>
   )

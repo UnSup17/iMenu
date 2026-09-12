@@ -35,6 +35,15 @@ enum TableStatus {
   MAINTENANCE
 }
 
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  SEATED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
 enum SessionStatus {
   ACTIVE
   CLOSED
@@ -189,6 +198,8 @@ model Restaurant {
   foodCourtPayments       FoodCourtTablePayment[]   // Registros de pago en plazas
   brandTheme              BrandTheme?
   additions               Addition[]
+  feedbacks               TableSessionFeedback[]
+  reservations            Reservation[]
 
   @@map("restaurants")
 }
@@ -251,6 +262,19 @@ model User {
   role           Role          @default(WAITER)
   createdAt      DateTime      @default(now())
 
+  // Reset de contraseña
+  resetPasswordToken  String?   @unique
+  resetPasswordExpiry DateTime?
+
+  // 2FA (TOTP — Google Authenticator / Authy)
+  twoFactorSecret     String?   // Secret TOTP cifrado con AES-256
+  twoFactorEnabled    Boolean   @default(false)
+
+  // Invitación por email
+  inviteToken         String?   @unique
+  inviteExpiry        DateTime?
+  inviteAccepted      Boolean   @default(false)
+
   accounts                Account[]
   sessions                Session[]
   assignedTables          Table[]             @relation("WaiterAssignedTables")
@@ -275,17 +299,66 @@ model Table {
   zone         String?     // Ej. Terraza, Patio Central
   status       TableStatus @default(AVAILABLE)
 
+  capacity     Int         @default(4)
+  posX         Float       @default(0)
+  posY         Float       @default(0)
+  width        Float       @default(80)
+  height       Float       @default(80)
+  shape        String      @default("square") // square, round, rectangle
+
   assignedWaiterId String?
   assignedWaiter   User?   @relation("WaiterAssignedTables", fields: [assignedWaiterId], references: [id])
 
-  sessions TableSession[]
-  orders   Order[]
-  invoices Invoice[]
+  sessions     TableSession[]
+  orders       Order[]
+  invoices     Invoice[]
+  feedbacks    TableSessionFeedback[]
+  reservations Reservation[]
 
   // Número único dentro del restaurante O de la plaza
   @@unique([restaurantId, tableNumber])
   @@unique([foodCourtId, tableNumber])
   @@map("tables")
+}
+
+model TableSessionFeedback {
+  id           String      @id @default(uuid())
+  restaurantId String
+  restaurant   Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  tableId      String?
+  table        Table?      @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  sessionId    String?
+  rating       Int         // 1 a 5 estrellas
+  tags         String?     // Etiquetas seleccionadas (ej: "comida_deliciosa,atencion_rapida")
+  comment      String?     @db.Text
+  customerName String?
+  createdAt    DateTime    @default(now())
+
+  @@index([restaurantId, rating])
+  @@index([restaurantId, createdAt])
+  @@map("table_session_feedback")
+}
+
+model Reservation {
+  id              String            @id @default(uuid())
+  restaurantId    String
+  restaurant      Restaurant        @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  tableId         String?
+  table           Table?            @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  customerName    String
+  customerEmail   String?
+  customerPhone   String
+  partySize       Int               @default(2)
+  reservationDate DateTime
+  status          ReservationStatus @default(PENDING)
+  notes           String?           @db.Text
+  seatedAt        DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([restaurantId, reservationDate])
+  @@index([restaurantId, status])
+  @@map("reservations")
 }
 
 model TableSession {

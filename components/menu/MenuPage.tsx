@@ -11,6 +11,11 @@ import { UserAliasModal } from './UserAliasModal'
 import { TableParticipantsBadge } from './TableParticipantsBadge'
 import { RecommendModal } from './RecommendModal'
 import { RecommendationToast } from './RecommendationToast'
+import { LanguageSelector } from './LanguageSelector'
+import { OrderHistoryTrackerModal } from './OrderHistoryTrackerModal'
+import { FeedbackModal } from './FeedbackModal'
+import { type Locale, translations, translateCategoryName } from '@/lib/i18n/menu-translations'
+import { soundNotifier, requestNotificationPermission, sendBrowserNotification } from '@/lib/audio/chime'
 import {
   WsClientEvent,
   WsServerEvent,
@@ -69,6 +74,8 @@ interface MenuPageProps {
   // Soporte de Identidad de Marca / White-Label
   brandLogoUrl?: string | null
   brandCoverBannerUrl?: string | null
+  // Modo sólo lectura (web)
+  isViewOnly?: boolean
 }
 
 type ViewMode = 'list' | 'pdf'
@@ -112,6 +119,7 @@ export function MenuPage({
   hasNextRestaurant = false,
   brandLogoUrl,
   brandCoverBannerUrl,
+  isViewOnly = false,
 }: MenuPageProps) {
   const hasPdf = Boolean(pdfUrl)
 
@@ -121,11 +129,40 @@ export function MenuPage({
   const [viewMode, setViewMode] = useState<ViewMode>(hasPdf ? 'pdf' : 'list')
   const [stockIssues, setStockIssues] = useState<StockIssueItem[]>(initialStockIssues)
 
+  // i18n
+  const [locale, setLocale] = useState<Locale>('es')
+  const t = useCallback(
+    (key: keyof (typeof translations)['es']) => {
+      const dict = translations[locale] || translations.es
+      return ((dict as any)[key] as string) || (key as string)
+    },
+    [locale],
+  )
+
+  // Tracker y Feedback
+  const [isTrackerOpen, setIsTrackerOpen] = useState(false)
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false)
+  const [statusAlert, setStatusAlert] = useState<{
+    title: string
+    message: string
+    emoji: string
+    timestamp: number
+  } | null>(null)
+  const [kitchenInfo, setKitchenInfo] = useState<{
+    estimatedMinutes: number
+    pace: 'calm' | 'normal' | 'busy'
+  }>({
+    estimatedMinutes: 20,
+    pace: 'normal',
+  })
+
   const userAlias = useCartStore((s) => s.userAlias)
   const setUserAlias = useCartStore((s) => s.setUserAlias)
   const setSharedItems = useCartStore((s) => s.setSharedItems)
   const setConfirmedOrders = useCartStore((s) => s.setConfirmedOrders)
   const addConfirmedOrder = useCartStore((s) => s.addConfirmedOrder)
+  const updateConfirmedOrderStatus = useCartStore((s) => s.updateConfirmedOrderStatus)
+  const confirmedOrders = useCartStore((s) => s.confirmedOrders)
   const getOrderedByForProduct = useCartStore((s) => s.getOrderedByForProduct)
   const totalItems = useCartStore((s) => s.getTotalItemsCount())
   const totalAmount = useCartStore((s) => s.getTotalAmount())
@@ -141,8 +178,9 @@ export function MenuPage({
   const [recommendingProduct, setRecommendingProduct] = useState<ProductModalData | null>(null)
   const isBroadcastingRef = useRef(false)
 
-  // Cargar apodo guardado o solicitarlo
+  // Cargar apodo guardado o solicitarlo (solo si no es modo sólo lectura)
   useEffect(() => {
+    if (isViewOnly) return
     if (!userAlias) {
       const savedAlias = localStorage.getItem('imenu_user_alias')
       if (savedAlias) {
@@ -151,12 +189,35 @@ export function MenuPage({
         queueMicrotask(() => setIsAliasModalOpen(true))
       }
     }
-  }, [userAlias, setUserAlias])
+  }, [userAlias, setUserAlias, isViewOnly])
+
+  // Cargar tiempo estimado y carga de cocina
+  useEffect(() => {
+    if (!restaurantId) return
+    fetch(`/api/kitchen/load?restaurantId=${restaurantId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data) {
+          setKitchenInfo({
+            estimatedMinutes: data.estimatedMinutes,
+            pace: data.pace,
+          })
+        }
+      })
+      .catch(() => {})
+  }, [restaurantId])
+
+  // Solicitar permiso de notificación del navegador cuando hay órdenes confirmadas
+  useEffect(() => {
+    if (!isViewOnly && confirmedCount > 0) {
+      requestNotificationPermission().catch(() => {})
+    }
+  }, [isViewOnly, confirmedCount])
 
   // Función para retransmitir cambios del carrito por socket
   const broadcastCartUpdate = useCallback(
     (newItems: CartItem[]) => {
-      if (!userAlias) return
+      if (isViewOnly || !userAlias) return
       isBroadcastingRef.current = true
       const socket = getSocket()
 
@@ -185,12 +246,12 @@ export function MenuPage({
         isBroadcastingRef.current = false
       }, 500)
     },
-    [restaurantId, tableId, sessionToken, userAlias],
+    [restaurantId, tableId, sessionToken, userAlias, isViewOnly],
   )
 
   // Conexión Socket.IO y listeners
   useEffect(() => {
-    if (!userAlias) return
+    if (isViewOnly || !userAlias) return
     const socket = getSocket()
 
     // Cargar órdenes confirmadas iniciales vía API
@@ -238,6 +299,54 @@ export function MenuPage({
       addConfirmedOrder(order)
     }
 
+    // Listener de cambio de estado de una orden en cocina/salón
+    const handleOrderStatusUpdated = (data: {
+      orderId: string
+      tableId: string
+      newStatus: string
+      restaurantId?: string
+    }) => {
+      if (data.tableId === tableId) {
+        updateConfirmedOrderStatus(data.orderId, data.newStatus)
+
+        let alertMessage = ''
+        let alertEmoji = '🔔'
+        if (data.newStatus === 'PREPARING') {
+          alertMessage = t('preparingNotification')
+          alertEmoji = '🍳'
+          soundNotifier.playOrderPreparingChime()
+        } else if (data.newStatus === 'READY') {
+          alertMessage = t('readyNotification')
+          alertEmoji = '🔔'
+          soundNotifier.playOrderReadyChime()
+        } else if (data.newStatus === 'DELIVERED') {
+          alertMessage = t('deliveredNotification')
+          alertEmoji = '🍽️'
+        }
+
+        if (alertMessage) {
+          const timestamp = Date.now()
+          const statusDetail =
+            data.newStatus === 'READY'
+              ? t('statusReady')
+              : data.newStatus === 'PREPARING'
+              ? t('statusPreparing')
+              : t('statusDelivered')
+
+          setStatusAlert({
+            title: alertMessage,
+            message: `${t('orderStatus')}: ${statusDetail}`,
+            emoji: alertEmoji,
+            timestamp,
+          })
+          sendBrowserNotification(restaurantName, alertMessage, brandLogoUrl)
+          setTimeout(() => {
+            setStatusAlert((curr) => (curr?.timestamp === timestamp ? null : curr))
+          }, 6000)
+        }
+      }
+    }
+
     // Listeners de disponibilidad de stock en tiempo real
     const handleProductUnavailable = (data: StockIssueItem) => {
       setStockIssues((prev) => [...prev.filter((si) => si.productId !== data.productId), data])
@@ -249,7 +358,6 @@ export function MenuPage({
 
     // Listener de recomendaciones entre comensales en tiempo real
     const handleProductRecommended = (data: RecommendProductPayload) => {
-      // Si el usuario actual fue quien envió la recomendación, no mostrar toast a sí mismo
       if (userAlias && data.fromUserName.trim().toLowerCase() === userAlias.trim().toLowerCase()) {
         return
       }
@@ -270,6 +378,7 @@ export function MenuPage({
     socket.on(WsServerEvent.TABLE_PARTICIPANTS_UPDATED, handleParticipantsUpdate)
     socket.on(WsServerEvent.SHARED_CART_UPDATED, handleSharedCartUpdate)
     socket.on(WsServerEvent.TABLE_ORDERS_UPDATED, handleTableOrdersUpdate)
+    socket.on(WsServerEvent.ORDER_STATUS_UPDATED, handleOrderStatusUpdated as any)
     socket.on(WsServerEvent.PRODUCT_RECOMMENDED, handleProductRecommended)
     // @ts-ignore custom events
     socket.on('product:unavailable', handleProductUnavailable)
@@ -279,13 +388,27 @@ export function MenuPage({
       socket.off(WsServerEvent.TABLE_PARTICIPANTS_UPDATED, handleParticipantsUpdate)
       socket.off(WsServerEvent.SHARED_CART_UPDATED, handleSharedCartUpdate)
       socket.off(WsServerEvent.TABLE_ORDERS_UPDATED, handleTableOrdersUpdate)
+      socket.off(WsServerEvent.ORDER_STATUS_UPDATED, handleOrderStatusUpdated as any)
       socket.off(WsServerEvent.PRODUCT_RECOMMENDED, handleProductRecommended)
       // @ts-ignore custom events
       socket.off('product:unavailable', handleProductUnavailable)
       // @ts-ignore custom events
       socket.off('product:available', handleProductAvailable)
     }
-  }, [restaurantId, tableId, sessionToken, userAlias, setSharedItems, setConfirmedOrders, addConfirmedOrder])
+  }, [
+    restaurantId,
+    tableId,
+    sessionToken,
+    userAlias,
+    isViewOnly,
+    t,
+    restaurantName,
+    brandLogoUrl,
+    setSharedItems,
+    setConfirmedOrders,
+    addConfirmedOrder,
+    updateConfirmedOrderStatus,
+  ])
 
   const handleSendRecommendation = (data: {
     targetSocketId: string | 'ALL'
@@ -425,8 +548,16 @@ export function MenuPage({
           borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
         }}
       >
+        {/* Banner de modo solo lectura */}
+        {isViewOnly && (
+          <div className="bg-amber-500/10 border-b border-amber-500/20 text-amber-200 text-xs py-1.5 px-4 text-center font-medium flex items-center justify-center gap-2">
+            <span aria-hidden="true">👀</span>
+            <span>{t('viewOnlyBanner')}</span>
+          </div>
+        )}
+
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             {/* Botón Volver al mosaico si estamos en contexto de plaza */}
             {onBackToMosaic && (
               <button
@@ -463,10 +594,10 @@ export function MenuPage({
                 restaurantName.charAt(0)
               )}
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h1
-                  className="text-base sm:text-lg font-black tracking-tight leading-tight"
+                  className="text-base sm:text-lg font-black tracking-tight leading-tight truncate"
                   style={{
                     color: 'var(--brand-text)',
                     fontFamily: 'var(--brand-font-heading)',
@@ -475,7 +606,7 @@ export function MenuPage({
                   {restaurantName}
                 </h1>
                 {onNavigateRestaurant && (
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 shrink-0">
                     {hasPrevRestaurant && (
                       <button
                         onClick={() => onNavigateRestaurant('prev')}
@@ -511,49 +642,102 @@ export function MenuPage({
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span
-                  className="text-sm font-semibold"
-                  style={{ color: 'var(--brand-muted)' }}
-                >
-                  Mesa {tableNumber}
-                </span>
-                {/* Badge de comensales activos */}
-                <TableParticipantsBadge
-                  participants={participants}
-                  currentUserAlias={userAlias}
-                  onEditAlias={() => setIsAliasModalOpen(true)}
-                />
+              <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                {isViewOnly ? (
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                    {t('viewOnlyMode')}
+                  </span>
+                ) : (
+                  <>
+                    <span
+                      className="text-sm font-semibold"
+                      style={{ color: 'var(--brand-muted)' }}
+                    >
+                      {t('table')} {tableNumber}
+                    </span>
+                    {/* Badge de comensales activos */}
+                    <TableParticipantsBadge
+                      participants={participants}
+                      currentUserAlias={userAlias}
+                      onEditAlias={() => setIsAliasModalOpen(true)}
+                    />
+                  </>
+                )}
+
+                {/* Badge de tiempo estimado de cocina */}
+                {kitchenInfo.estimatedMinutes > 0 && (
+                  <div
+                    className="flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full border"
+                    style={{
+                      backgroundColor: 'color-mix(in srgb, #3b82f6 12%, transparent)',
+                      borderColor: 'color-mix(in srgb, #3b82f6 30%, transparent)',
+                      color: '#60a5fa',
+                    }}
+                    title={`${t('estimatedWait')}: ~${kitchenInfo.estimatedMinutes} min`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                    <span>~{kitchenInfo.estimatedMinutes} min {t('kitchenWaitShort')}</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Botón carrito en header — touch target mínimo 44px */}
-          <button
-            onClick={() => setCartOpen(true)}
-            className="relative flex items-center justify-center w-12 h-12 rounded-xl transition-all duration-200 active:scale-95 border focus-visible:outline-none"
-            style={{
-              backgroundColor: 'var(--brand-surface)',
-              borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
-              color: 'var(--brand-text)',
-            }}
-            aria-label={`Ver carrito${totalItems > 0 ? `, ${totalItems} ${totalItems === 1 ? 'artículo' : 'artículos'}` : ', vacío'}`}
-          >
-            <span className="text-xl" aria-hidden="true">🛒</span>
-            {totalItems > 0 && (
-              <span
-                className="absolute -top-1.5 -right-1.5 font-black text-xs rounded-full h-5 min-w-[20px] flex items-center justify-center px-1 border-2 shadow-md"
+          {/* Acciones en header */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Selector de idioma */}
+            <LanguageSelector currentLocale={locale} onLocaleChange={setLocale} />
+
+            {/* Botón de Mis Pedidos confirmados (si existen) */}
+            {!isViewOnly && confirmedCount > 0 && (
+              <button
+                onClick={() => setIsTrackerOpen(true)}
+                className="relative flex items-center justify-center h-10 px-3 rounded-xl transition-all duration-200 active:scale-95 border text-xs font-bold gap-1.5 cursor-pointer"
                 style={{
-                  backgroundColor: 'var(--brand-primary)',
-                  color: '#ffffff',
-                  borderColor: 'var(--brand-bg)',
+                  backgroundColor: 'color-mix(in srgb, #10b981 15%, transparent)',
+                  borderColor: 'color-mix(in srgb, #10b981 40%, transparent)',
+                  color: '#34d399',
                 }}
-                aria-hidden="true"
+                aria-label={`${t('myOrders')}: ${confirmedCount} platillos`}
+                title={t('myOrders')}
               >
-                {totalItems}
-              </span>
+                <span className="text-base" aria-hidden="true">🍳</span>
+                <span className="hidden sm:inline">{t('myOrders')}</span>
+                <span className="text-[11px] bg-emerald-500/30 px-1.5 py-0.5 rounded-full font-black text-emerald-200 border border-emerald-400/30">
+                  {confirmedCount}
+                </span>
+              </button>
             )}
-          </button>
+
+            {/* Botón carrito en header — touch target mínimo 44px */}
+            {!isViewOnly && (
+              <button
+                onClick={() => setCartOpen(true)}
+                className="relative flex items-center justify-center w-11 h-11 rounded-xl transition-all duration-200 active:scale-95 border focus-visible:outline-none cursor-pointer"
+                style={{
+                  backgroundColor: 'var(--brand-surface)',
+                  borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+                  color: 'var(--brand-text)',
+                }}
+                aria-label={`Ver carrito${totalItems > 0 ? `, ${totalItems} ${totalItems === 1 ? 'artículo' : 'artículos'}` : ', vacío'}`}
+              >
+                <span className="text-lg" aria-hidden="true">🛒</span>
+                {totalItems > 0 && (
+                  <span
+                    className="absolute -top-1.5 -right-1.5 font-black text-xs rounded-full h-5 min-w-[20px] flex items-center justify-center px-1 border-2 shadow-md"
+                    style={{
+                      backgroundColor: 'var(--brand-primary)',
+                      color: '#ffffff',
+                      borderColor: 'var(--brand-bg)',
+                    }}
+                    aria-hidden="true"
+                  >
+                    {totalItems}
+                  </span>
+                )}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Segmented Control PDF / Lista */}
@@ -570,7 +754,7 @@ export function MenuPage({
               <button
                 onClick={() => setViewMode('pdf')}
                 aria-pressed={viewMode === 'pdf'}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 text-sm font-semibold transition-all duration-200 focus-visible:outline-none"
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 text-sm font-semibold transition-all duration-200 focus-visible:outline-none cursor-pointer"
                 style={viewMode === 'pdf' ? {
                   backgroundColor: 'var(--brand-primary)',
                   color: '#ffffff',
@@ -580,12 +764,12 @@ export function MenuPage({
                   borderRadius: 'calc(var(--brand-radius) - 4px)',
                 }}
               >
-                📋 Menú PDF
+                📋 {t('viewPdf')}
               </button>
               <button
                 onClick={() => setViewMode('list')}
                 aria-pressed={viewMode === 'list'}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 text-sm font-semibold transition-all duration-200 focus-visible:outline-none"
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 text-sm font-semibold transition-all duration-200 focus-visible:outline-none cursor-pointer"
                 style={viewMode === 'list' ? {
                   backgroundColor: 'var(--brand-primary)',
                   color: '#ffffff',
@@ -595,13 +779,13 @@ export function MenuPage({
                   borderRadius: 'calc(var(--brand-radius) - 4px)',
                 }}
               >
-                🍔 Por Categorías
+                🍔 {t('viewByCategory')}
               </button>
             </div>
           </div>
         )}
 
-        {/* Category Tabs — accesibles como tablist */}
+        {/* Category Tabs — accesibles como tablist con traducción i18n */}
         {viewMode === 'list' && (
           <nav
             aria-label="Categorías del menú"
@@ -617,6 +801,7 @@ export function MenuPage({
             >
               {categories.map((cat) => {
                 const isActive = activeCategory === cat.id
+                const categoryDisplayName = translateCategoryName(cat.name, locale)
                 return (
                   <button
                     key={cat.id}
@@ -625,7 +810,7 @@ export function MenuPage({
                     aria-controls={`tabpanel-${cat.id}`}
                     id={`tab-${cat.id}`}
                     onClick={() => setActiveCategory(cat.id)}
-                    className="flex-shrink-0 px-5 py-2.5 text-sm font-semibold transition-all duration-200 border min-h-[44px] focus-visible:outline-none"
+                    className="flex-shrink-0 px-5 py-2.5 text-sm font-semibold transition-all duration-200 border min-h-[44px] focus-visible:outline-none cursor-pointer"
                     style={isActive ? {
                       backgroundColor: 'color-mix(in srgb, var(--brand-primary) 18%, transparent)',
                       color: 'var(--brand-primary)',
@@ -639,7 +824,7 @@ export function MenuPage({
                       borderRadius: 'var(--brand-radius)',
                     }}
                   >
-                    {cat.name}
+                    {categoryDisplayName}
                   </button>
                 )
               })}
@@ -647,6 +832,36 @@ export function MenuPage({
           </nav>
         )}
       </header>
+
+      {/* ── Alerta flotante de cambio de estado en vivo ── */}
+      {statusAlert && (
+        <aside
+          aria-live="polite"
+          className="fixed top-20 left-1/2 -translate-x-1/2 z-50 w-11/12 max-w-md shadow-2xl rounded-2xl p-4 border flex items-center justify-between gap-3 text-white backdrop-blur-md animate-bounce"
+          style={{
+            backgroundColor: 'rgba(16, 185, 129, 0.96)',
+            borderColor: '#34d399',
+            boxShadow: '0 20px 30px -10px rgba(16, 185, 129, 0.5)',
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-2xl" aria-hidden="true">🔔</span>
+            <div>
+              <p className="font-extrabold text-sm tracking-tight">{statusAlert.title}</p>
+              <p className="text-xs text-emerald-100 font-medium">{statusAlert.message}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setStatusAlert(null)
+              setIsTrackerOpen(true)
+            }}
+            className="bg-white/20 hover:bg-white/30 text-white text-xs font-bold px-3 py-1.5 rounded-lg shrink-0 transition-colors cursor-pointer border border-white/30"
+          >
+            {t('viewHistory')}
+          </button>
+        </aside>
+      )}
 
       {/* ── Vista PDF ── */}
       {viewMode === 'pdf' && pdfUrl && (
@@ -672,7 +887,7 @@ export function MenuPage({
                 role="tabpanel"
                 aria-labelledby={`tab-${cat.id}`}
               >
-                {/* Encabezado de categoría */}
+                {/* Encabezado de categoría con i18n */}
                 <h2
                   className="text-base font-black uppercase tracking-wider mb-4 flex items-center gap-2.5"
                   style={{
@@ -685,7 +900,7 @@ export function MenuPage({
                     style={{ backgroundColor: 'var(--brand-primary)' }}
                     aria-hidden="true"
                   />
-                  {cat.name}
+                  {translateCategoryName(cat.name, locale)}
                 </h2>
 
                 <div className="grid grid-cols-1 gap-4">
@@ -709,26 +924,74 @@ export function MenuPage({
         </main>
       )}
 
-      {/* ── Bottom Floating Bar (Waiter & Cart) ── */}
+      {/* ── Bottom Floating Bar (Waiter & Cart / Orders) ── */}
       <div
         className="fixed bottom-6 left-0 right-0 z-30 px-4 max-w-2xl mx-auto flex items-end gap-3 pointer-events-none"
         role="region"
         aria-label="Acciones de pedido"
       >
-        {/* Llamar al mesero */}
-        <div className="pointer-events-auto">
-          <CallWaiterButton
-            restaurantId={restaurantId}
-            tableId={tableId}
-            tableNumber={tableNumber}
-            sessionToken={sessionToken}
-            variant="compact"
-          />
-        </div>
+        {/* Llamar al mesero (solo si no es modo solo lectura) */}
+        {!isViewOnly && (
+          <div className="pointer-events-auto">
+            <CallWaiterButton
+              restaurantId={restaurantId}
+              tableId={tableId}
+              tableNumber={tableNumber}
+              sessionToken={sessionToken}
+              variant="compact"
+            />
+          </div>
+        )}
 
-        {/* Botón unificado Carrito/Pedido */}
+        {/* Botón unificado Carrito/Pedido/Tracker */}
         <div className="flex-1 pointer-events-auto">
-          {totalItems > 0 ? (
+          {isViewOnly ? (
+            <div
+              className="w-full border flex items-center justify-between px-5 py-3.5 shadow-xl font-medium text-sm"
+              style={{
+                backgroundColor: 'var(--brand-surface)',
+                borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
+                color: 'var(--brand-muted)',
+                borderRadius: 'var(--brand-radius)',
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <span aria-hidden="true">👀</span>
+                <span className="font-semibold text-slate-200">{t('viewOnlyMode')}</span>
+              </div>
+              <span className="text-xs text-slate-400">
+                {categories.reduce((acc, c) => acc + c.products.length, 0)} {t('items')}
+              </span>
+            </div>
+          ) : totalItems > 0 && confirmedCount > 0 ? (
+            <div className="flex gap-2">
+              <button
+                onClick={() => setIsTrackerOpen(true)}
+                className="flex-1 border flex items-center justify-center gap-2 py-3 px-3 shadow-xl active:scale-98 transition-all font-bold text-xs sm:text-sm cursor-pointer"
+                style={{
+                  backgroundColor: 'var(--brand-surface)',
+                  borderColor: 'color-mix(in srgb, #10b981 50%, transparent)',
+                  color: '#34d399',
+                  borderRadius: 'var(--brand-radius)',
+                }}
+              >
+                <span aria-hidden="true">🍳</span>
+                <span>{t('myOrders')} ({confirmedCount})</span>
+              </button>
+              <button
+                onClick={() => setCartOpen(true)}
+                className="flex-1 flex items-center justify-center gap-2 py-3 px-3 shadow-xl active:scale-98 transition-all font-bold text-xs sm:text-sm cursor-pointer"
+                style={{
+                  backgroundColor: 'var(--brand-primary)',
+                  color: '#ffffff',
+                  borderRadius: 'var(--brand-radius)',
+                }}
+              >
+                <span aria-hidden="true">🛒</span>
+                <span>{t('cart')} ({totalItems})</span>
+              </button>
+            </div>
+          ) : totalItems > 0 ? (
             <button
               onClick={() => setCartOpen(true)}
               aria-label={`Ver pedido: ${totalItems} ${totalItems === 1 ? 'artículo' : 'artículos'}, total ${formatPrice(totalAmount)}`}
@@ -741,7 +1004,7 @@ export function MenuPage({
             >
               <div className="flex items-center gap-2">
                 <span className="text-xl" aria-hidden="true">🛒</span>
-                <span>{confirmedCount > 0 ? 'Ver Ronda Actual' : 'Ver Pedido Mesa'}</span>
+                <span>{confirmedCount > 0 ? t('cart') : t('viewOrder')}</span>
               </div>
               <div className="flex items-center gap-2 bg-black/20 py-1.5 px-3 rounded-lg text-sm font-semibold border border-white/15">
                 <span>{totalItems} {totalItems === 1 ? 'item' : 'items'}</span>
@@ -751,8 +1014,8 @@ export function MenuPage({
             </button>
           ) : confirmedCount > 0 ? (
             <button
-              onClick={() => setCartOpen(true)}
-              aria-label={`Ver pedidos en cocina: ${confirmedCount} ${confirmedCount === 1 ? 'platillo' : 'platillos'}, total ${formatPrice(confirmedTotalAmount)}`}
+              onClick={() => setIsTrackerOpen(true)}
+              aria-label={`${t('myOrders')}: ${confirmedCount} ${confirmedCount === 1 ? 'platillo' : 'platillos'}, total ${formatPrice(confirmedTotalAmount)}`}
               className="w-full border flex items-center justify-between px-5 py-4 shadow-xl active:scale-98 transition-all font-bold text-base cursor-pointer focus-visible:outline-none"
               style={{
                 backgroundColor: 'var(--brand-surface)',
@@ -763,7 +1026,12 @@ export function MenuPage({
             >
               <div className="flex items-center gap-2">
                 <span className="text-xl" aria-hidden="true">🍳</span>
-                <span>Ver Pedidos en Cocina</span>
+                <span>{t('myOrders')} ({confirmedCount})</span>
+                {kitchenInfo.estimatedMinutes > 0 && (
+                  <span className="text-xs font-normal text-emerald-300/80">
+                    (~{kitchenInfo.estimatedMinutes} min)
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2 bg-emerald-500/10 py-1.5 px-3 rounded-lg text-sm font-semibold border border-emerald-500/20 text-emerald-300">
                 <span>{confirmedCount} {confirmedCount === 1 ? 'platillo' : 'platillos'}</span>
@@ -785,9 +1053,9 @@ export function MenuPage({
             >
               <div className="flex items-center gap-2">
                 <span aria-hidden="true">🛒</span>
-                <span>Ver Pedido</span>
+                <span>{t('viewOrder')}</span>
               </div>
-              <span className="text-sm" style={{ color: 'var(--brand-muted)' }}>Sin artículos</span>
+              <span className="text-sm" style={{ color: 'var(--brand-muted)' }}>{t('emptyCart')}</span>
             </button>
           )}
         </div>
@@ -870,12 +1138,12 @@ export function MenuPage({
                   fontFamily: 'var(--brand-font-heading)',
                 }}
               >
-                Pedido de la Mesa
+                {t('tableOrder')}
               </h2>
               <button
                 onClick={() => setCartOpen(false)}
                 aria-label="Cerrar pedido"
-                className="p-2.5 rounded-xl border transition-colors"
+                className="p-2.5 rounded-xl border transition-colors cursor-pointer"
                 style={{
                   backgroundColor: 'color-mix(in srgb, var(--brand-surface) 80%, var(--brand-bg) 20%)',
                   borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
@@ -899,6 +1167,43 @@ export function MenuPage({
           </div>
         </div>
       )}
+
+      {/* ── Modal de Apodo del Comensal ── */}
+      <UserAliasModal
+        isOpen={isAliasModalOpen}
+        currentAlias={userAlias}
+        onSave={(newAlias) => {
+          setUserAlias(newAlias)
+          setIsAliasModalOpen(false)
+        }}
+        onClose={() => setIsAliasModalOpen(false)}
+      />
+
+      {/* ── Modal de Historial y Seguimiento de Pedidos ── */}
+      <OrderHistoryTrackerModal
+        isOpen={isTrackerOpen}
+        onClose={() => setIsTrackerOpen(false)}
+        restaurantId={restaurantId}
+        tableId={tableId}
+        tableNumber={tableNumber}
+        sessionToken={sessionToken}
+        currency={currency}
+        userAlias={userAlias}
+        locale={locale}
+        estimatedMinutes={kitchenInfo.estimatedMinutes}
+        onOpenFeedback={() => setIsFeedbackOpen(true)}
+      />
+
+      {/* ── Modal de Calificación y Feedback ── */}
+      <FeedbackModal
+        isOpen={isFeedbackOpen}
+        onClose={() => setIsFeedbackOpen(false)}
+        restaurantId={restaurantId}
+        tableId={tableId}
+        sessionToken={sessionToken}
+        userAlias={userAlias}
+        locale={locale}
+      />
     </div>
   )
 }

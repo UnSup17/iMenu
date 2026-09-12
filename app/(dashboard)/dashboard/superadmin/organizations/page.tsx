@@ -152,16 +152,47 @@ export default function SuperadminOrganizationsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <select
-                        value={org.plan}
-                        disabled={updatingId === org.id}
-                        onChange={(e) => handlePlanChange(org.id, e.target.value as PlanTier)}
-                        className="bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1 text-xs font-bold text-amber-400 focus:outline-none focus:border-amber-500"
-                      >
-                        <option value="BASIC">BASIC</option>
-                        <option value="PRO">PRO</option>
-                        <option value="ENTERPRISE">ENTERPRISE</option>
-                      </select>
+                      <div className="flex items-center justify-end gap-2">
+                        <select
+                          value={org.plan}
+                          disabled={updatingId === org.id}
+                          onChange={(e) => handlePlanChange(org.id, e.target.value as PlanTier)}
+                          className="bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1 text-xs font-bold text-amber-400 focus:outline-none focus:border-amber-500"
+                        >
+                          <option value="BASIC">BASIC</option>
+                          <option value="PRO">PRO</option>
+                          <option value="ENTERPRISE">ENTERPRISE</option>
+                        </select>
+
+                        {org.restaurants.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const res = await fetch('/api/superadmin/impersonate', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    targetRestaurantId: org.restaurants[0].id,
+                                  }),
+                                })
+                                if (res.ok) {
+                                  window.location.href = '/dashboard/orders'
+                                } else {
+                                  const d = await res.json()
+                                  alert(d.error || 'Error al iniciar impersonación')
+                                }
+                              } catch {
+                                alert('Error al conectar')
+                              }
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold shadow transition-colors cursor-pointer whitespace-nowrap"
+                            title="Acceder como restaurante de esta organización"
+                          >
+                            Acceder →
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))

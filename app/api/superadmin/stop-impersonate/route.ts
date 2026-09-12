@@ -1,0 +1,19 @@
+import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+
+export async function POST() {
+  const cookieStore = await cookies()
+  cookieStore.delete('imenu_impersonate_user_id')
+
+  return NextResponse.json({
+    success: true,
+    message: 'Impersonación finalizada',
+  })
+}
+
+export async function GET() {
+  const cookieStore = await cookies()
+  cookieStore.delete('imenu_impersonate_user_id')
+
+  return NextResponse.redirect(new URL('/dashboard/superadmin/organizations', process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'))
+}

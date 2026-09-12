@@ -96,16 +96,26 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'No autenticado.' }, { status: 401 })
   }
 
-  await params
-  const body = await request.json()
+  const { tableId } = await params
+  let body: any = {}
+  try {
+    body = await request.json()
+  } catch {
+    // Body vacío o no-JSON
+  }
 
   try {
     const result = await closeTableSession({
+      tableId,
       sessionToken: body.sessionToken,
-      restaurantId: body.restaurantId,
+      restaurantId: body.restaurantId || (authSession.user as any).restaurantId,
       foodCourtId: body.foodCourtId,
-      forceClose: body.forceClose,
+      forceClose: body.forceClose ?? true,
     })
+
+    if (!result.success) {
+      return NextResponse.json({ error: result.message || 'Error al cerrar sesión' }, { status: 400 })
+    }
 
     return NextResponse.json(result)
   } catch (error) {

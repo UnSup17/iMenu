@@ -7,6 +7,12 @@ const CreateTableSchema = z
   .object({
     tableNumber: z.number().int().positive(),
     zone: z.string().optional(),
+    capacity: z.number().int().positive().default(4),
+    posX: z.number().optional().default(0),
+    posY: z.number().optional().default(0),
+    width: z.number().optional().default(80),
+    height: z.number().optional().default(80),
+    shape: z.enum(['square', 'round', 'rectangle']).optional().default('square'),
     restaurantId: z.string().optional(),
     foodCourtId: z.string().optional(),
   })
@@ -32,10 +38,65 @@ export async function GET(request: NextRequest) {
         ...(restaurantId ? { restaurantId } : {}),
         ...(foodCourtId ? { foodCourtId } : {}),
       },
+      include: {
+        sessions: {
+          where: { status: 'ACTIVE' },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            sessionToken: true,
+            createdAt: true,
+            status: true,
+          },
+        },
+        reservations: {
+          where: {
+            status: { in: ['PENDING', 'CONFIRMED'] },
+            reservationDate: { gte: new Date(Date.now() - 3600000) },
+          },
+          orderBy: { reservationDate: 'asc' },
+          take: 1,
+          select: {
+            id: true,
+            customerName: true,
+            customerPhone: true,
+            partySize: true,
+            reservationDate: true,
+            status: true,
+          },
+        },
+      },
       orderBy: { tableNumber: 'asc' },
     })
 
-    return NextResponse.json(tables)
+    const enrichedTables = tables.map((t) => {
+      const activeSession = t.sessions[0] || null
+      const elapsedMinutes = activeSession
+        ? Math.floor((Date.now() - new Date(activeSession.createdAt).getTime()) / 60000)
+        : null
+      const nextReservation = t.reservations[0] || null
+
+      return {
+        id: t.id,
+        restaurantId: t.restaurantId,
+        foodCourtId: t.foodCourtId,
+        tableNumber: t.tableNumber,
+        zone: t.zone,
+        status: t.status,
+        capacity: t.capacity,
+        posX: t.posX,
+        posY: t.posY,
+        width: t.width,
+        height: t.height,
+        shape: t.shape,
+        activeSession,
+        elapsedMinutes,
+        nextReservation,
+      }
+    })
+
+    return NextResponse.json(enrichedTables)
   } catch (error) {
     console.error('[GET /api/tables] Error:', error)
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
@@ -53,7 +114,13 @@ export async function POST(request: NextRequest) {
     const table = await prisma.table.create({
       data: {
         tableNumber: parsed.tableNumber,
-        zone: parsed.zone,
+        zone: parsed.zone || null,
+        capacity: parsed.capacity,
+        posX: parsed.posX,
+        posY: parsed.posY,
+        width: parsed.width,
+        height: parsed.height,
+        shape: parsed.shape,
         restaurantId: parsed.restaurantId || null,
         foodCourtId: parsed.foodCourtId || null,
       },
@@ -68,3 +135,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message || 'Error al crear mesa' }, { status: 400 })
   }
 }
+

@@ -79,6 +79,7 @@ interface CartState {
   setSharedItems: (items: CartItem[]) => void
   setConfirmedOrders: (orders: ConfirmedOrderPayload[]) => void
   addConfirmedOrder: (order: ConfirmedOrderPayload) => void
+  updateConfirmedOrderStatus: (orderId: string, newStatus: string) => void
   clearCart: () => void
   
   // Computed
@@ -260,6 +261,13 @@ export const useCartStore = create<CartState>()(
           }
           return { confirmedOrders: [...state.confirmedOrders, newOrder] }
         }),
+
+      updateConfirmedOrderStatus: (orderId, newStatus) =>
+        set((state) => ({
+          confirmedOrders: state.confirmedOrders.map((o) =>
+            o.orderId === orderId ? { ...o, status: newStatus as any } : o
+          ),
+        })),
 
       clearCart: () => set({ items: [] }),
 
