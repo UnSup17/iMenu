@@ -85,10 +85,12 @@ const modules: ModuleSection[] = [
       { route: '/api/kitchen/load', view: 'GET cálculo de carga de cocina y tiempo estimado de preparación en minutos', status: 'done', roles: 'Público / Sistema' },
       { route: '/api/feedback', view: 'POST calificación de experiencia de servicio y GET métricas agregadas', status: 'done', roles: 'Público (POST) / ADMIN (GET)' },
       { route: '/waiter/[tableId]', view: 'Llamada al mesero desde QR secundario o botón flotante', status: 'done', roles: 'Público (clientes)' },
+      { route: '/sw.js', view: 'Service Worker de Web Push: recepción de notificaciones push en segundo plano y apertura de comanda', status: 'done', roles: 'Público / Sistema' },
     ],
     observations: [
       'Las sesiones de mesa son colaborativas y sincronizadas en tiempo real vía Socket.IO entre comensales.',
       'Historial de rondas de pedidos accesible desde el menú con stepper de estado (RECEIVED ➔ PREPARING ➔ READY ➔ DELIVERED).',
+      'Soporte completo de Web Push API con banner interactivo para que el comensal active avisos en su celular con 1 toque y reciba alerta cuando su pedido esté listo.',
       'Alertas en vivo con chime armónico (Web Audio API) y notificaciones de navegador (Web Notification API) al cambiar de estado el pedido.',
       'Internacionalización (i18n) completa con selector fluido para Español (es), English (en) y Português (pt).',
       'Indicador de tiempo estimado de espera en cocina según cantidad de pedidos activos y ritmo de preparación.',
@@ -151,15 +153,19 @@ const modules: ModuleSection[] = [
     routes: [
       { route: '/dashboard/orders', view: 'Panel de comandas: 3 tabs (En Vivo, Historial con búsqueda y Métricas de cocina)', status: 'done', roles: 'ADMIN, MANAGER, WAITER, KITCHEN' },
       { route: '/dashboard/kds', view: 'Pantalla de cocina dedicada (KDS) para tablets a pantalla completa con cronómetros y checklist táctil', status: 'done', roles: 'ADMIN, MANAGER, KITCHEN' },
+      { route: '/kds', view: 'KDS Fullscreen Tablet: Vista independiente sin barra de administración ni sidebar para fijación en pared', status: 'done', roles: 'ADMIN, MANAGER, KITCHEN' },
       { route: '/api/orders', view: 'GET (lista de órdenes activas) + POST (crear comanda y emitir WebSocket)', status: 'done', roles: 'ADMIN, WAITER, Público' },
       { route: '/api/orders/[id]', view: 'GET detalle + PATCH transición de estados (RECEIVED→PREPARING→READY→DELIVERED) y prioridad', status: 'done', roles: 'ADMIN, MANAGER, WAITER, KITCHEN' },
       { route: '/api/orders/[id]/items/[itemId]', view: 'PATCH toggle de ítem completado en checklist táctil de cocina', status: 'done', roles: 'ADMIN, MANAGER, KITCHEN' },
       { route: '/api/orders/history', view: 'GET historial diario con búsqueda libre y filtros por mesero, hora, producto y estado', status: 'done', roles: 'ADMIN, MANAGER' },
       { route: '/api/kitchen/stats', view: 'GET estadísticas de tiempos promedio de preparación, tasa a tiempo y cuellos de botella', status: 'done', roles: 'ADMIN, MANAGER' },
       { route: '/api/kitchen/load', view: 'GET cálculo de carga en cocina y tiempo estimado de entrega', status: 'done', roles: 'Público / Sistema' },
+      { route: '/api/push/subscribe', view: 'GET llave pública VAPID y POST registro de suscripción Web Push vinculada a la mesa', status: 'done', roles: 'Público / Sistema' },
     ],
     observations: [
-      'Pantalla de cocina KDS táctil dedicada (/dashboard/kds) con soporte para tablets y modo Fullscreen nativo.',
+      'Pantalla de cocina KDS táctil dedicada (/dashboard/kds y ruta independiente /kds) con soporte para tablets y modo Fullscreen nativo.',
+      'Ruta /kds dedicada para tablets montadas en cocina sin sidebar ni barras de administración, con botón rápido de toggle a pantalla completa.',
+      'Notificaciones Web Push automáticas: al marcar una comanda como READY en cocina, el sistema envía push al comensal vía Service Worker.',
       'Cronómetros en vivo (MM:SS) en cada comanda con cambio dinámico de color según antigüedad (<12m verde, 12-20m ámbar, >20m rojo).',
       'Sistema de alarmas audibles estridentes con Web Audio API y vibración táctil para ambientes ruidosos de cocina.',
       'Checklists táctiles plato por plato en la tablet de cocina con sincronización instantánea vía WebSockets.',
@@ -174,7 +180,7 @@ const modules: ModuleSection[] = [
     ],
     opportunities: [
       'Algoritmo de estimación de despacho con Machine Learning basado en histórico de horas pico.',
-      'Paging por bíper digital o SMS al cliente cuando su pedido está listo para recoger en barra.',
+      'Filtro dinámico de comandas por zona de mesas (ej. terraza vs. salón principal) en el KDS.',
     ],
   },
   {
@@ -306,11 +312,15 @@ const modules: ModuleSection[] = [
       { route: '/dashboard/billing/config', view: 'Configuración fiscal: país, IVA, cargo por servicio, datos legales, formato de tickets', status: 'done', roles: 'ADMIN' },
       { route: '/api/invoices', view: 'GET (lista) + POST (crear factura desde tabla)', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
       { route: '/api/invoices/[id]', view: 'GET detalle + PATCH (registrar pago, anular)', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
+      { route: '/api/invoices/[id]/notify', view: 'POST envío del comprobante de factura por correo electrónico', status: 'done', roles: 'ADMIN, WAITER, Sistema' },
+      { route: '/api/export/invoices', view: 'GET exportación de facturas a CSV/Excel con UTF-8 BOM y filtros de estado', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
       { route: '/api/billing/tax-config', view: 'GET/PUT configuración fiscal del restaurante', status: 'done', roles: 'ADMIN' },
       { route: '/api/pdf', view: 'Generación de PDF de factura descargable', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
     ],
     observations: [
       'El IVA (19% por defecto en Colombia) se calcula automáticamente al crear la factura.',
+      'Exportación a Excel/CSV con BOM UTF-8 (\uFEFF) desde el listado de facturas para contabilidad.',
+      'Envío rápido de factura por WhatsApp (link wa.me con desglose estilizado) y por email desde el detalle.',
       'La impresión térmica ESC/POS funciona vía WebUSB en Chrome/Edge. El fallback genera un PDF imprimible en cualquier navegador.',
       'Los tickets son configurables: logo, header, footer, mostrar/ocultar IVA, mesa, mesero y propina sugerida.',
       'El consecutivo de facturas (FV-0001) es auto-incremental por restaurante y se maneja atómicamente para evitar duplicados.',
@@ -320,10 +330,10 @@ const modules: ModuleSection[] = [
       'Reimpresión de ticket para facturas ya cerradas desde el listado (sin necesidad de entrar al detalle).',
       'Propina en el ticket: campo editable en el wizard de cierre.',
       'División de cuenta entre varios comensales (split bill).',
-      'Reporte diario de ventas exportable en PDF directamente desde el hub.',
+      'Generación masiva de comprobantes comprimidos en ZIP.',
     ],
     opportunities: [
-      'Envío de factura por WhatsApp o email directamente al cliente desde el detalle.',
+      'Integración con pasarelas de pago digitales (Wompi, Bold, MercadoPago, Stripe) para cobro con QR directo en mesa.',
       'Integración con POS físico como Ingenico o Verifone para confirmar cobros con tarjeta.',
       'Factura proforma o presupuesto para eventos/grupos grandes.',
     ],
@@ -344,9 +354,12 @@ const modules: ModuleSection[] = [
       { route: '/api/inventory', view: 'CRUD de ítems de inventario', status: 'done', roles: 'ADMIN, MANAGER' },
       { route: '/api/inventory/[id]', view: 'GET/PATCH/DELETE ítem individual', status: 'done', roles: 'ADMIN, MANAGER' },
       { route: '/api/inventory/movements', view: 'GET historial + POST ajuste/compra manual', status: 'done', roles: 'ADMIN, MANAGER' },
+      { route: '/api/export/inventory', view: 'GET exportación completa de existencias, umbrales y valorización total a CSV/Excel', status: 'done', roles: 'ADMIN, MANAGER' },
     ],
     observations: [
       'El descuento de stock se ejecuta atómicamente en la misma transacción de base de datos que el cambio de estado de la orden a RECEIVED.',
+      'Exportación completa a Excel / CSV con BOM UTF-8 y cálculo automático de valorización total monetaria del stock.',
+      'Alertas automáticas por correo electrónico a administradores y gerentes cuando el stock cae al mínimo de seguridad.',
       'Si el stock de un ingrediente llega a 0, el sistema calcula los productos afectados y emite product:unavailable por Socket.IO.',
       'El costo unitario de cada insumo permite calcular el costo de ventas (COGS) para el P&L.',
       'Las unidades soportadas: KG, GRAM, LITER, ML, UNIT, PORTION.',
@@ -356,11 +369,10 @@ const modules: ModuleSection[] = [
       'Inventario físico periódico: formulario para contar manualmente el stock y cuadrar diferencias.',
       'Predicción de reposición: "En X días te quedarás sin Y insumo según tu consumo promedio".',
       'Transferencias entre sucursales (contemplado en el roadmap como Fase 3 pero no implementado).',
-      'Valorización de inventario: valor total del stock en COP.',
     ],
     opportunities: [
       'Integración con proveedores para generar órdenes de compra directamente desde el sistema.',
-      'Alertas automáticas por WhatsApp o email al proveedor cuando el stock baja del mínimo.',
+      'Alertas automáticas por WhatsApp al proveedor cuando el stock baja del mínimo.',
       'Código de barras/QR en los insumos para agilizar conteos físicos con escáner.',
     ],
   },
@@ -760,7 +772,10 @@ export default function DocsPage() {
                 {[
                   'Stack moderno y escalable: Next.js 16 App Router + Prisma + Socket.IO + Redis.',
                   'Ciclo operativo completo: QR → Pedido → Inventario → Factura → Contabilidad.',
+                  'KDS Fullscreen dedicado para tablets de cocina y Web Push API para comensales en vivo.',
                   'Facturación electrónica DIAN sin PTH externo, reduciendo costos por factura.',
+                  'Exportación a Excel / CSV con UTF-8 BOM en facturas e inventario valorizado.',
+                  'Notificaciones multicanal transaccionales: WhatsApp (wa.me) y correo electrónico.',
                   'Multi-tenant real con organizaciones, roles granulares y Stripe integrado.',
                   'Tiempo real en toda la plataforma: pedidos, stock, estados de mesa.',
                   'Motor contable con adaptadores multi-país (Colombia, México, Chile).',
@@ -778,13 +793,11 @@ export default function DocsPage() {
               <h3 className="text-lg font-bold text-red-400 mb-4">🚨 Gaps críticos para producción</h3>
               <ul className="space-y-3">
                 {[
-                  'Flujo de registro público y onboarding: los nuevos clientes no pueden auto-registrarse.',
-                  'Reset de contraseña: sin esta funcionalidad no se puede lanzar al público.',
-                  'Reporte de cashflow: el roadmap lo contempla pero la ruta no existe aún.',
-                  'Set de pruebas DIAN automatizado: el wizard está, pero el admin debe enviar los casos manualmente.',
-                  'Cancelación electrónica ante DIAN (SendEventUpdateStatus): sin esto la anulación solo existe en iMenu, no ante la DIAN.',
-                  'Notificaciones por email: no hay emails transaccionales (bienvenida, facturas, alertas de stock).',
-                  'Exportación de reportes P&L e IVA a PDF/Excel desde la UI.',
+                  'Cancelación electrónica y notas de crédito ante DIAN (SendEventUpdateStatus).',
+                  'Set de pruebas DIAN automatizado: ejecución automática de los 87 casos requeridos por la DIAN.',
+                  'Reporte de flujo de caja (Cashflow) y estado P&L exportable a PDF con marca de agua.',
+                  'Emisión y renovación automática de certificados SSL delegados para dominios personalizados de restaurantes.',
+                  'Pasarelas de pago digitales (Wompi, MercadoPago, Bold) integradas directamente en el menú comensal.',
                 ].map((g, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-zinc-300">
                     <span className="text-red-500 mt-0.5">✗</span> {g}
@@ -795,22 +808,78 @@ export default function DocsPage() {
 
             {/* Quick wins */}
             <div className="bg-zinc-900 border border-amber-500/20 rounded-2xl p-8">
-              <h3 className="text-lg font-bold text-amber-400 mb-4">⚡ Quick wins de alto impacto</h3>
-              <ul className="space-y-3">
-                {[
-                  'Envío de factura por WhatsApp (link wa.me + PDF adjunto) — 1 día de desarrollo.',
-                  'Notificación push al cliente cuando su pedido está listo — Web Push API.',
-                  'Email transaccional con Resend o SendGrid para facturas, alertas y bienvenida.',
-                  'KDS (Kitchen Display System) fullscreen para tablets de cocina.',
-                  'Historial de pedidos visible para el cliente en el menú QR durante su sesión.',
-                  'Exportación a Excel de facturas e inventario para RESTAURANT_ADMIN.',
-                  'Preview en tiempo real del branding en el menú QR.',
-                ].map((qw, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-zinc-300">
-                    <span className="text-amber-500 mt-0.5">→</span> {qw}
-                  </li>
-                ))}
-              </ul>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-amber-400">⚡ Quick wins de alto impacto</h3>
+                <span className="text-[10px] uppercase tracking-wider font-extrabold bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                  7 Completados
+                </span>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-2">
+                    ✓ Implementados recientemente:
+                  </p>
+                  <ul className="space-y-1.5 text-xs text-zinc-300">
+                    <li className="flex items-center gap-1.5">
+                      <span className="text-emerald-400 font-bold">✓</span>
+                      <span>Envío de factura por WhatsApp (enlace wa.me con desglose formateado).</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <span className="text-emerald-400 font-bold">✓</span>
+                      <span>Notificación Web Push al cliente cuando su comanda pasa a READY (Web Push API).</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <span className="text-emerald-400 font-bold">✓</span>
+                      <span>Email transaccional: facturas digitales, bienvenida y alertas de stock bajo.</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <span className="text-emerald-400 font-bold">✓</span>
+                      <span>KDS Fullscreen dedicado para tablets de cocina (ruta /kds + modo overlay).</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <span className="text-emerald-400 font-bold">✓</span>
+                      <span>Historial de pedidos y tracking con stepper visible para el comensal.</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <span className="text-emerald-400 font-bold">✓</span>
+                      <span>Exportación a Excel/CSV de facturas e inventario con BOM UTF-8 y valorización.</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <span className="text-emerald-400 font-bold">✓</span>
+                      <span>Previsualización en tiempo real del menú QR en el Studio de Marca.</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="pt-3 border-t border-zinc-800">
+                  <p className="text-xs font-bold uppercase tracking-wider text-amber-400 mb-2">
+                    → Próxima ola de Quick Wins (1-2 días):
+                  </p>
+                  <ul className="space-y-1.5 text-xs text-zinc-300">
+                    <li className="flex items-center gap-1.5">
+                      <span className="text-amber-400 font-bold">→</span>
+                      <span>Reimpresión rápida de ticket térmico desde el listado de facturas.</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <span className="text-amber-400 font-bold">→</span>
+                      <span>Campo de propina sugerida y voluntaria en el wizard de cierre de mesa.</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <span className="text-amber-400 font-bold">→</span>
+                      <span>Filtro dinámico de comandas por zona de mesas en el KDS de cocina.</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <span className="text-amber-400 font-bold">→</span>
+                      <span>Exportación de liquidaciones de Food Courts a Excel / CSV.</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <span className="text-amber-400 font-bold">→</span>
+                      <span>Filtros visuales de alérgenos y dietas (Vegano, Sin Gluten, Keto) en el menú QR.</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
             </div>
 
             {/* Strategic opportunities */}
@@ -818,13 +887,13 @@ export default function DocsPage() {
               <h3 className="text-lg font-bold text-violet-400 mb-4">🚀 Oportunidades estratégicas</h3>
               <ul className="space-y-3">
                 {[
-                  'App nativa (React Native / Expo) para meseros: más rápida que la web en campo.',
-                  'Integración con plataformas de delivery (Rappi, Uber Eats) para pedidos externos.',
-                  'Motor de recomendaciones: "los clientes de esta mesa también pidieron...".',
-                  'Expansión a México (CFDI 4.0 SAT) y Chile (DTE SII) reutilizando los adaptadores.',
-                  'Módulo de reservaciones integrado con Google Calendar y notificaciones.',
-                  'Marketplace de iMenu: la plataforma puede monetizarse como mercado de restaurantes.',
-                  'IA generativa: descripciones de platillos, sugerencias de precios, análisis de reseñas.',
+                  'Auto-pago desde la mesa con pasarelas de pago digitales (Wompi, MercadoPago, Bold, Stripe).',
+                  'Integración con plataformas de delivery (Rappi, Uber Eats) para inyección directa al KDS.',
+                  'Motor de recomendaciones y upselling inteligente impulsado por IA según los ítems del pedido.',
+                  'Expansión fiscal multi-país (CFDI 4.0 SAT México, DTE SII Chile) reutilizando los adaptadores.',
+                  'App nativa (React Native / Expo) para meseros con soporte offline y comanderos Bluetooth.',
+                  'Módulo de reservaciones propio con listas de espera digitales y turnos por SMS/WhatsApp.',
+                  'Marketplace de iMenu: catálogo unificado de restaurantes para descubrimiento de usuarios.',
                 ].map((so, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-zinc-300">
                     <span className="text-violet-500 mt-0.5">◆</span> {so}
@@ -846,6 +915,7 @@ export default function DocsPage() {
               { path: '/api/menu/[slug]', tag: 'Público' },
               { path: '/api/orders', tag: 'RT' },
               { path: '/api/orders/[id]', tag: 'RT' },
+              { path: '/api/push/subscribe', tag: 'Push' },
               { path: '/api/tables', tag: 'CRUD' },
               { path: '/api/tables/[id]/session', tag: 'Session' },
               { path: '/api/menu', tag: 'CRUD' },
@@ -857,6 +927,9 @@ export default function DocsPage() {
               { path: '/api/food-courts/[id]/reports', tag: 'Report' },
               { path: '/api/invoices', tag: 'Billing' },
               { path: '/api/invoices/[id]', tag: 'Billing' },
+              { path: '/api/invoices/[id]/notify', tag: 'Email' },
+              { path: '/api/export/invoices', tag: 'Export' },
+              { path: '/api/export/inventory', tag: 'Export' },
               { path: '/api/pdf', tag: 'PDF' },
               { path: '/api/billing/tax-config', tag: 'Config' },
               { path: '/api/billing/subscription', tag: 'Stripe' },
