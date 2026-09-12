@@ -1,5 +1,6 @@
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { SignOutButton } from '@/components/dashboard/SignOutButton'
 import { getResolvedBrandTheme } from '@/lib/branding/resolver'
 import { BrandThemeInjector } from '@/components/branding/BrandThemeInjector'
@@ -185,6 +186,17 @@ export default async function DashboardLayout({
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
           <DashboardSidebarNav sections={visibleSections} />
         </nav>
+
+        {/* Manual de Usuario */}
+        <div className="p-3 border-t border-zinc-800/60">
+          <Link
+            href="/walkthrough"
+            className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 transition-all active:scale-[0.98]"
+          >
+            <span className="text-base leading-none">📖</span>
+            <span className="truncate">Manual de Usuario</span>
+          </Link>
+        </div>
 
         {/* Sign out */}
         <div className="p-3 border-t border-zinc-800/60">
