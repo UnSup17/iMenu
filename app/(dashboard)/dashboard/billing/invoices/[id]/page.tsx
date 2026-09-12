@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { InvoicePaymentAction } from '@/components/billing/invoice-payment-action'
 import { TicketPrintButton } from '@/components/billing/ticket-print-button'
 import { DianInvoiceAction } from '@/components/billing/dian-invoice-action'
+import { WhatsAppInvoiceButton } from '@/components/billing/WhatsAppInvoiceButton'
 
 export const metadata = { title: 'Detalle de Factura — iMenu' }
 
@@ -59,7 +60,19 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
           </p>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex items-center gap-3">
+          <WhatsAppInvoiceButton
+            invoiceId={invoice.id}
+            invoiceNumber={invoice.invoiceNumber}
+            restaurantName={invoice.restaurant.name}
+            totalAmount={invoice.total.toNumber()}
+            customerName={invoice.customerName}
+            itemsSummary={invoice.items.map((i) => ({
+              name: i.description,
+              quantity: i.quantity,
+              subtotal: i.subtotal.toNumber(),
+            }))}
+          />
           <TicketPrintButton invoiceId={invoice.id} />
           <Link
             href="/dashboard/billing/invoices"

@@ -51,6 +51,16 @@ export default async function InvoicesListPage({
             Registro de comprobantes generados, estado de pagos e impuestos aplicados.
           </p>
         </div>
+        <div className="flex items-center gap-3">
+          <a
+            href={statusFilter ? `/api/export/invoices?status=${statusFilter}` : '/api/export/invoices'}
+            download
+            className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-medium text-xs rounded-xl border border-zinc-700/80 transition-colors flex items-center gap-2 shadow-sm"
+          >
+            <span>📥</span>
+            <span>Exportar Excel / CSV</span>
+          </a>
+        </div>
       </div>
 
       {/* Filter Tabs */}

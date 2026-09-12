@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { MovementType } from '@prisma/client'
 import { emitInventoryUpdate, emitProductAvailable } from '@/lib/socket-server'
+import { sendLowStockAlertEmail } from '@/lib/email'
 
 const AdjustmentSchema = z.object({
   inventoryItemId: z.string().min(1),
@@ -88,6 +89,36 @@ export async function POST(request: NextRequest) {
       isLow: stockAfter <= updatedItem.minStock.toNumber(),
       isEmpty: stockAfter <= 0,
     })
+
+    // Alerta por email si el stock alcanzó el umbral mínimo
+    if (stockAfter <= updatedItem.minStock.toNumber()) {
+      prisma.user
+        .findMany({
+          where: { restaurantId, role: { in: ['RESTAURANT_ADMIN', 'MANAGER'] } },
+          select: { email: true },
+        })
+        .then(async (admins) => {
+          const rest = await prisma.restaurant.findUnique({
+            where: { id: restaurantId },
+            select: { name: true },
+          })
+          for (const admin of admins) {
+            await sendLowStockAlertEmail(
+              admin.email,
+              rest?.name || 'Restaurante',
+              [
+                {
+                  name: updatedItem.name,
+                  currentStock: stockAfter,
+                  minStock: updatedItem.minStock.toNumber(),
+                  unit: updatedItem.unit,
+                },
+              ]
+            ).catch((e) => console.warn('[Inventory] Low stock alert email error:', e))
+          }
+        })
+        .catch((e) => console.warn('[Inventory] Query admins for low stock email error:', e))
+    }
 
     return NextResponse.json(
       {

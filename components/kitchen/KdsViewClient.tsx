@@ -38,34 +38,54 @@ interface KdsViewClientProps {
   restaurantId: string
   restaurantName: string
   initialOrders: KdsOrder[]
+  fullscreenMode?: boolean
 }
 
 export function KdsViewClient({
   restaurantId,
   restaurantName,
   initialOrders,
+  fullscreenMode = false,
 }: KdsViewClientProps) {
   const [orders, setOrders] = useState<KdsOrder[]>(initialOrders)
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'RECEIVED' | 'PREPARING' | 'READY'>('ALL')
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isOverlayFullscreen, setIsOverlayFullscreen] = useState(fullscreenMode)
   const [currentTime, setCurrentTime] = useState(Date.now())
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null)
   const [newOrderAlert, setNewOrderAlert] = useState<{ id: string; tableNumber: number } | null>(null)
   const socketRef = useRef<Socket | null>(null)
 
-  // Actualizar reloj cada 1 segundo para los cronómetros en vivo
+  // Sincronizar estado de fullscreen del navegador
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(Date.now()), 1000)
-    return () => clearInterval(timer)
+    const handleFsChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement))
+    }
+    document.addEventListener('fullscreenchange', handleFsChange)
+    return () => document.removeEventListener('fullscreenchange', handleFsChange)
   }, [])
 
-  // Fullscreen toggle
+  // Fullscreen toggle con soporte HTML5 y overlay
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {})
+      document.documentElement.requestFullscreen()
+        .then(() => {
+          setIsFullscreen(true)
+          setIsOverlayFullscreen(true)
+        })
+        .catch(() => {
+          setIsOverlayFullscreen((prev) => !prev)
+        })
     } else {
-      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {})
+      document.exitFullscreen()
+        .then(() => {
+          setIsFullscreen(false)
+          if (!fullscreenMode) setIsOverlayFullscreen(false)
+        })
+        .catch(() => {
+          setIsOverlayFullscreen(false)
+        })
     }
   }
 
@@ -297,7 +317,11 @@ export function KdsViewClient({
   }, [orders])
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white flex flex-col select-none">
+    <div
+      className={`min-h-screen bg-zinc-950 text-white flex flex-col select-none ${
+        isOverlayFullscreen ? 'fixed inset-0 z-50 overflow-hidden' : ''
+      }`}
+    >
       {/* Banner de Nueva Orden Flotante */}
       {newOrderAlert && (
         <div className="fixed top-4 right-4 z-50 bg-amber-500 text-zinc-950 px-6 py-4 rounded-2xl shadow-2xl shadow-amber-500/40 font-black flex items-center gap-3 border-2 border-amber-300 animate-bounce">
@@ -319,6 +343,11 @@ export function KdsViewClient({
               <span className="text-xs bg-zinc-800 text-amber-400 font-mono px-2 py-0.5 rounded-full border border-zinc-700">
                 {restaurantName}
               </span>
+              {fullscreenMode && (
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-400 font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  Tablet View
+                </span>
+              )}
             </div>
             <p className="text-[11px] text-zinc-400">Kitchen Display System • Pantalla Táctil</p>
           </div>
@@ -386,6 +415,19 @@ export function KdsViewClient({
             </div>
           )}
 
+          {!fullscreenMode && (
+            <a
+              href="/kds"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Abrir en pestaña dedicada (Modo Tablet KDS sin barra lateral)"
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-bold transition-all cursor-pointer"
+            >
+              <span>📱</span>
+              <span>Modo Tablet</span>
+            </a>
+          )}
+
           <button
             onClick={() => {
               setSoundEnabled(!soundEnabled)
@@ -414,10 +456,17 @@ export function KdsViewClient({
 
           <button
             onClick={toggleFullscreen}
-            title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
-            className="p-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 transition-all cursor-pointer"
+            title={isFullscreen || isOverlayFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
+            className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+              isFullscreen || isOverlayFullscreen
+                ? 'bg-amber-500 text-zinc-950 border-amber-400 shadow-md font-black'
+                : 'bg-zinc-800 hover:bg-zinc-700 text-white border-zinc-700'
+            }`}
           >
-            {isFullscreen ? '🗗' : '⛶'}
+            <span>{isFullscreen || isOverlayFullscreen ? '🗗' : '⛶'}</span>
+            <span className="hidden md:inline">
+              {isFullscreen || isOverlayFullscreen ? 'Salir' : 'Pantalla Completa'}
+            </span>
           </button>
         </div>
       </header>

@@ -14,6 +14,7 @@ import { RecommendationToast } from './RecommendationToast'
 import { LanguageSelector } from './LanguageSelector'
 import { OrderHistoryTrackerModal } from './OrderHistoryTrackerModal'
 import { FeedbackModal } from './FeedbackModal'
+import { PushNotificationSubscriber } from './PushNotificationSubscriber'
 import { type Locale, translations, translateCategoryName } from '@/lib/i18n/menu-translations'
 import { soundNotifier, requestNotificationPermission, sendBrowserNotification } from '@/lib/audio/chime'
 import {
@@ -880,6 +881,9 @@ export function MenuPage({
       {/* ── Vista Lista por categorías ── */}
       {viewMode === 'list' && (
         <main className="max-w-2xl mx-auto px-4 py-4 space-y-8">
+          {!isViewOnly && (
+            <PushNotificationSubscriber tableId={tableId} restaurantName={restaurantName} />
+          )}
           {categories
             .filter((cat) => !activeCategory || cat.id === activeCategory)
             .map((cat) => (

@@ -164,6 +164,24 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       console.warn('[PATCH /api/orders/[orderId]] Socket error:', socketErr)
     }
 
+    // Notificación Web Push a la mesa cuando el pedido está listo
+    if (parsed.status === 'READY') {
+      try {
+        const rest = await prisma.restaurant.findUnique({
+          where: { id: existing.restaurantId },
+          select: { name: true },
+        })
+        const { notifyTableOrderReady } = await import('@/lib/push/send')
+        notifyTableOrderReady(
+          existing.tableId,
+          orderId.slice(-4).toUpperCase(),
+          rest?.name || 'el Restaurante'
+        ).catch((e) => console.warn('[Web Push] Error enviando push:', e))
+      } catch (pushErr) {
+        console.warn('[Web Push] Error preparando push:', pushErr)
+      }
+    }
+
     return NextResponse.json(updatedOrder)
   } catch (error) {
     if (error instanceof z.ZodError) {

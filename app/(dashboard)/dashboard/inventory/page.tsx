@@ -57,6 +57,14 @@ export default async function InventoryPage() {
           <p className="text-sm text-zinc-500 mt-1">Materias primas e ingredientes de tu restaurante</p>
         </div>
         <div className="flex gap-3">
+          <a
+            href="/api/export/inventory"
+            download
+            className="px-4 py-2 rounded-lg border border-zinc-700 bg-zinc-900/60 hover:bg-zinc-800 text-zinc-300 text-sm transition-colors flex items-center gap-2"
+          >
+            <span>📥</span>
+            <span>Exportar Excel</span>
+          </a>
           <Link
             href="/dashboard/inventory/movements"
             className="px-4 py-2 rounded-lg border border-zinc-700 text-zinc-300 text-sm hover:bg-zinc-800 transition-colors"

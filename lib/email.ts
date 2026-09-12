@@ -150,3 +150,140 @@ export async function sendInviteEmail(
     ${fallbackLink(url)}
   `))
 }
+
+/* ── Email: Factura / Comprobante de Pago ───────────────────────────────── */
+
+export interface InvoiceEmailPayload {
+  to: string
+  invoiceNumber: string
+  restaurantName: string
+  totalAmount: number
+  items: Array<{ description: string; quantity: number; unitPrice: number; subtotal: number }>
+  invoiceUrl?: string
+}
+
+export async function sendInvoiceEmail(payload: InvoiceEmailPayload) {
+  const { to, invoiceNumber, restaurantName, totalAmount, items, invoiceUrl } = payload
+  const formattedTotal = totalAmount.toLocaleString('es-CO')
+
+  const itemsRows = items
+    .map(
+      (item) => `
+      <tr>
+        <td style="padding:8px 0;color:#e4e4e7;font-size:14px;border-bottom:1px solid #27272a;">
+          ${item.description}
+        </td>
+        <td align="center" style="padding:8px 0;color:#a1a1aa;font-size:14px;border-bottom:1px solid #27272a;">
+          ${item.quantity}
+        </td>
+        <td align="right" style="padding:8px 0;color:#ffffff;font-size:14px;font-family:monospace;border-bottom:1px solid #27272a;">
+          $${item.subtotal.toLocaleString('es-CO')}
+        </td>
+      </tr>
+    `
+    )
+    .join('')
+
+  const buttonHtml = invoiceUrl ? `<div style="margin-top:24px;">${btn(invoiceUrl, 'Ver Comprobante Digital 🧾')}</div>` : ''
+
+  await sendMail(
+    to,
+    `Comprobante de Pago #${invoiceNumber} — ${restaurantName}`,
+    baseTemplate(`
+      <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#ffffff;">¡Gracias por tu visita! 🍽️</h2>
+      <p style="margin:0 0 20px;font-size:14px;color:#a1a1aa;">
+        Adjuntamos el resumen de tu consumo en <strong style="color:#f59e0b;">${restaurantName}</strong>.
+      </p>
+
+      <div style="background:#09090b;border:1px solid #27272a;border-radius:12px;padding:16px 20px;margin-bottom:20px;">
+        <div style="font-size:12px;color:#71717a;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.05em;font-weight:700;">
+          Factura N° <span style="color:#ffffff;">${invoiceNumber}</span>
+        </div>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+          <thead>
+            <tr style="border-bottom:1px solid #3f3f46;">
+              <th align="left" style="padding-bottom:8px;font-size:12px;color:#a1a1aa;font-weight:600;">Ítem</th>
+              <th align="center" style="padding-bottom:8px;font-size:12px;color:#a1a1aa;font-weight:600;">Cant.</th>
+              <th align="right" style="padding-bottom:8px;font-size:12px;color:#a1a1aa;font-weight:600;">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsRows}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="2" style="padding-top:14px;font-size:16px;font-weight:700;color:#ffffff;">Total Pagado:</td>
+              <td align="right" style="padding-top:14px;font-size:18px;font-weight:900;color:#10b981;font-family:monospace;">
+                $${formattedTotal} COP
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      ${buttonHtml}
+    `)
+  )
+}
+
+/* ── Email: Bienvenida Restaurante / Usuario ───────────────────────────── */
+
+export async function sendWelcomeEmail(to: string, userName: string, restaurantName: string) {
+  const url = `${APP_URL}/dashboard`
+  await sendMail(
+    to,
+    `¡Te damos la bienvenida a iMenu, ${userName}! 🚀`,
+    baseTemplate(`
+      <h2 style="margin:0 0 12px;font-size:22px;font-weight:700;color:#ffffff;">¡Hola, ${userName}! 👋</h2>
+      <p style="margin:0 0 16px;font-size:15px;color:#a1a1aa;line-height:1.6;">
+        Tu restaurante <strong style="color:#f59e0b;">${restaurantName}</strong> ya está configurado en <strong>iMenu</strong>.
+      </p>
+      <p style="margin:0 0 24px;font-size:14px;color:#71717a;line-height:1.5;">
+        Con iMenu puedes gestionar comandas en vivo con KDS, control de inventario automatizado, facturación electrónica, códigos QR dinámicos y branding personalizado.
+      </p>
+      ${btn(url, 'Ir a mi Panel de Control →')}
+    `)
+  )
+}
+
+/* ── Email: Alerta de Stock Bajo (Inventario) ──────────────────────────── */
+
+export async function sendLowStockAlertEmail(
+  to: string,
+  restaurantName: string,
+  lowStockItems: Array<{ name: string; currentStock: number; minStock: number; unit: string }>
+) {
+  const url = `${APP_URL}/dashboard/inventory`
+  const itemsList = lowStockItems
+    .map(
+      (item) => `
+      <li style="margin-bottom:8px;font-size:14px;color:#fca5a5;">
+        <strong>${item.name}</strong>: Stock actual 
+        <span style="font-family:monospace;color:#ffffff;">${item.currentStock} ${item.unit}</span> 
+        (Mínimo configurado: ${item.minStock} ${item.unit})
+      </li>
+    `
+    )
+    .join('')
+
+  await sendMail(
+    to,
+    `⚠️ ALERTA: ${lowStockItems.length} ingrediente(s) con stock crítico en ${restaurantName}`,
+    baseTemplate(`
+      <div style="display:inline-block;background:#ef444420;border:1px solid #ef444450;color:#f87171;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:700;margin-bottom:12px;">
+        ⚠️ Alerta de Inventario
+      </div>
+      <h2 style="margin:0 0 12px;font-size:20px;font-weight:700;color:#ffffff;">
+        Ingredientes con Existencias Críticas
+      </h2>
+      <p style="margin:0 0 16px;font-size:14px;color:#a1a1aa;line-height:1.5;">
+        Los siguientes ingredientes de <strong style="color:#f59e0b;">${restaurantName}</strong> han alcanzado o descendido por debajo de su umbral mínimo de seguridad:
+      </p>
+      <ul style="background:#09090b;border:1px solid #7f1d1d;border-radius:12px;padding:16px 20px 16px 36px;margin:0 0 24px 0;">
+        ${itemsList}
+      </ul>
+      ${btn(url, 'Gestionar Inventario →')}
+    `)
+  )
+}
+
