@@ -6,10 +6,17 @@ import { z } from 'zod'
 const UpdateProductSchema = z.object({
   categoryId: z.string().uuid().optional(),
   name: z.string().min(1).max(200).optional(),
-  description: z.string().max(500).nullable().optional(),
+  description: z.string().max(1000).nullable().optional(),
   basePrice: z.number().min(0).optional(),
   isAvailable: z.boolean().optional(),
-  imageUrl: z.string().url().nullable().optional(),
+  imageUrl: z.string().nullable().optional(),
+  orderIndex: z.number().int().min(0).optional(),
+  allergens: z.union([z.string(), z.array(z.string())]).nullable().optional(),
+  scheduledPrice: z.number().min(0).nullable().optional(),
+  scheduledPriceDays: z.union([z.string(), z.array(z.number())]).nullable().optional(),
+  scheduledPriceStart: z.string().nullable().optional(),
+  scheduledPriceEnd: z.string().nullable().optional(),
+  scheduledPriceLabel: z.string().nullable().optional(),
 })
 
 const ADMIN_ROLES = ['SUPERADMIN', 'ORG_ADMIN', 'RESTAURANT_ADMIN', 'MANAGER']
@@ -63,6 +70,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       if (!cat) return NextResponse.json({ error: 'Categoría no encontrada' }, { status: 404 })
     }
 
+    const allergensStr =
+      data.allergens !== undefined
+        ? Array.isArray(data.allergens)
+          ? JSON.stringify(data.allergens)
+          : data.allergens
+        : undefined
+
+    const daysStr =
+      data.scheduledPriceDays !== undefined
+        ? Array.isArray(data.scheduledPriceDays)
+          ? JSON.stringify(data.scheduledPriceDays)
+          : data.scheduledPriceDays
+        : undefined
+
     const product = await prisma.product.update({
       where: { id },
       data: {
@@ -72,10 +93,23 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         ...(data.basePrice !== undefined && { basePrice: data.basePrice }),
         ...(data.isAvailable !== undefined && { isAvailable: data.isAvailable }),
         ...(data.imageUrl !== undefined && { imageUrl: data.imageUrl }),
+        ...(data.orderIndex !== undefined && { orderIndex: data.orderIndex }),
+        ...(allergensStr !== undefined && { allergens: allergensStr }),
+        ...(data.scheduledPrice !== undefined && { scheduledPrice: data.scheduledPrice }),
+        ...(daysStr !== undefined && { scheduledPriceDays: daysStr }),
+        ...(data.scheduledPriceStart !== undefined && { scheduledPriceStart: data.scheduledPriceStart }),
+        ...(data.scheduledPriceEnd !== undefined && { scheduledPriceEnd: data.scheduledPriceEnd }),
+        ...(data.scheduledPriceLabel !== undefined && { scheduledPriceLabel: data.scheduledPriceLabel }),
       },
     })
 
-    return NextResponse.json({ product: { ...product, basePrice: product.basePrice.toNumber() } })
+    return NextResponse.json({
+      product: {
+        ...product,
+        basePrice: product.basePrice.toNumber(),
+        scheduledPrice: product.scheduledPrice ? product.scheduledPrice.toNumber() : null,
+      },
+    })
   } catch (err) {
     if (err instanceof z.ZodError)
       return NextResponse.json({ error: 'Datos inválidos', details: err.flatten() }, { status: 400 })

@@ -43,7 +43,7 @@ export default async function MenuManagerPage() {
     orderBy: [{ isSpecialOffer: 'asc' }, { orderIndex: 'asc' }],
     include: {
       products: {
-        orderBy: { name: 'asc' },
+        orderBy: { orderIndex: 'asc' },
         select: {
           id: true,
           name: true,
@@ -51,6 +51,13 @@ export default async function MenuManagerPage() {
           basePrice: true,
           isAvailable: true,
           imageUrl: true,
+          orderIndex: true,
+          allergens: true,
+          scheduledPrice: true,
+          scheduledPriceDays: true,
+          scheduledPriceStart: true,
+          scheduledPriceEnd: true,
+          scheduledPriceLabel: true,
         },
       },
     },
@@ -64,6 +71,7 @@ export default async function MenuManagerPage() {
     products: cat.products.map((p) => ({
       ...p,
       basePrice: p.basePrice.toNumber(),
+      scheduledPrice: p.scheduledPrice ? p.scheduledPrice.toNumber() : null,
     })),
   }))
 

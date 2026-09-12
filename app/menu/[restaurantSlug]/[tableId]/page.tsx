@@ -70,6 +70,7 @@ export default async function MenuGuestPage({ params, searchParams }: PageProps)
         include: {
           products: {
             where: { isAvailable: true },
+            orderBy: { orderIndex: 'asc' },
             include: {
               modifierGroups: {
                 include: { options: true },

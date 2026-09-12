@@ -6,10 +6,17 @@ import { z } from 'zod'
 const ProductSchema = z.object({
   categoryId: z.string().uuid(),
   name: z.string().min(1).max(200),
-  description: z.string().max(500).nullable().optional(),
+  description: z.string().max(1000).nullable().optional(),
   basePrice: z.number().min(0),
   isAvailable: z.boolean().optional().default(true),
-  imageUrl: z.string().url().nullable().optional(),
+  imageUrl: z.string().nullable().optional(),
+  orderIndex: z.number().int().min(0).optional(),
+  allergens: z.union([z.string(), z.array(z.string())]).nullable().optional(),
+  scheduledPrice: z.number().min(0).nullable().optional(),
+  scheduledPriceDays: z.union([z.string(), z.array(z.number())]).nullable().optional(),
+  scheduledPriceStart: z.string().nullable().optional(),
+  scheduledPriceEnd: z.string().nullable().optional(),
+  scheduledPriceLabel: z.string().nullable().optional(),
 })
 
 const ADMIN_ROLES = ['SUPERADMIN', 'ORG_ADMIN', 'RESTAURANT_ADMIN', 'MANAGER']
@@ -61,6 +68,23 @@ export async function POST(req: NextRequest) {
     if (!category)
       return NextResponse.json({ error: 'Categoría no encontrada' }, { status: 404 })
 
+    const allergensStr =
+      Array.isArray(data.allergens)
+        ? JSON.stringify(data.allergens)
+        : data.allergens ?? null
+
+    const daysStr =
+      Array.isArray(data.scheduledPriceDays)
+        ? JSON.stringify(data.scheduledPriceDays)
+        : data.scheduledPriceDays ?? null
+
+    // Calcular orderIndex si no viene dado
+    let orderIndex = data.orderIndex
+    if (orderIndex === undefined) {
+      const count = await prisma.product.count({ where: { categoryId: data.categoryId } })
+      orderIndex = count
+    }
+
     const product = await prisma.product.create({
       data: {
         restaurantId,
@@ -70,10 +94,23 @@ export async function POST(req: NextRequest) {
         basePrice: data.basePrice,
         isAvailable: data.isAvailable ?? true,
         imageUrl: data.imageUrl ?? null,
+        orderIndex,
+        allergens: allergensStr,
+        scheduledPrice: data.scheduledPrice ?? null,
+        scheduledPriceDays: daysStr,
+        scheduledPriceStart: data.scheduledPriceStart ?? null,
+        scheduledPriceEnd: data.scheduledPriceEnd ?? null,
+        scheduledPriceLabel: data.scheduledPriceLabel ?? null,
       },
     })
 
-    return NextResponse.json({ product: { ...product, basePrice: product.basePrice.toNumber() } }, { status: 201 })
+    return NextResponse.json({
+      product: {
+        ...product,
+        basePrice: product.basePrice.toNumber(),
+        scheduledPrice: product.scheduledPrice ? product.scheduledPrice.toNumber() : null,
+      },
+    }, { status: 201 })
   } catch (err) {
     if (err instanceof z.ZodError)
       return NextResponse.json({ error: 'Datos inválidos', details: err.flatten() }, { status: 400 })

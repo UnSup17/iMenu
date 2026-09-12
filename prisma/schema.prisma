@@ -433,6 +433,15 @@ model Product {
   specialOfferStockSold Int       @default(0) // Porciones vendidas del cupo
   specialOfferCost      Decimal?  @db.Decimal(10, 2) // Costo unitario estimado para rentabilidad
 
+  // Orden, Alérgenos & Precios Dinámicos Programados
+  orderIndex            Int       @default(0)
+  allergens             String?   // JSON string array de alérgenos
+  scheduledPrice        Decimal?  @db.Decimal(10, 2)
+  scheduledPriceDays    String?   // JSON string array de días [0..6]
+  scheduledPriceStart   String?   // "HH:MM"
+  scheduledPriceEnd     String?   // "HH:MM"
+  scheduledPriceLabel   String?   // ej: "Happy Hour 🍻"
+
   @@map("products")
 }
 

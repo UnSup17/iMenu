@@ -37,6 +37,7 @@ export default async function MenuViewOnlyPage({ params }: PageProps) {
         include: {
           products: {
             where: { isAvailable: true },
+            orderBy: { orderIndex: 'asc' },
             include: {
               modifierGroups: {
                 include: { options: true },

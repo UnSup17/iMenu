@@ -73,7 +73,7 @@ export async function GET(_req: NextRequest) {
       orderBy: { orderIndex: 'asc' },
       include: {
         products: {
-          orderBy: { name: 'asc' },
+          orderBy: { orderIndex: 'asc' },
           select: {
             id: true,
             name: true,
@@ -81,6 +81,13 @@ export async function GET(_req: NextRequest) {
             basePrice: true,
             isAvailable: true,
             imageUrl: true,
+            orderIndex: true,
+            allergens: true,
+            scheduledPrice: true,
+            scheduledPriceDays: true,
+            scheduledPriceStart: true,
+            scheduledPriceEnd: true,
+            scheduledPriceLabel: true,
           },
         },
       },
@@ -92,6 +99,7 @@ export async function GET(_req: NextRequest) {
         products: c.products.map((p) => ({
           ...p,
           basePrice: p.basePrice.toNumber(),
+          scheduledPrice: p.scheduledPrice ? p.scheduledPrice.toNumber() : null,
         })),
       })),
     })
