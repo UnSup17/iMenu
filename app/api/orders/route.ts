@@ -97,6 +97,90 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
 
+    // DETECCIÓN DE PEDIDO MULTI-RESTAURANTE (Plaza Gastronómica)
+    // Si los items contienen diferentes restaurantIds o se pasa flag isFoodCourtUnified
+    const hasMultipleRestaurants =
+      Array.isArray(body.items) &&
+      body.items.some((i: any) => i.restaurantId && i.restaurantId !== body.restaurantId)
+
+    if (hasMultipleRestaurants) {
+      // Agrupar items por restaurantId
+      const itemsByRestaurant = new Map<string, any[]>()
+      for (const item of body.items) {
+        const rId = item.restaurantId || body.restaurantId
+        if (!itemsByRestaurant.has(rId)) {
+          itemsByRestaurant.set(rId, [])
+        }
+        itemsByRestaurant.get(rId)!.push(item)
+      }
+
+      const orderResults: any[] = []
+      const session = await getTableSession(body.sessionToken)
+
+      // Procesar orden para cada restaurante
+      for (const [rId, restItems] of itemsByRestaurant.entries()) {
+        const subPayload = {
+          ...body,
+          restaurantId: rId,
+          items: restItems,
+        }
+
+        const result = await createOrderTransaction(subPayload)
+        orderResults.push({ ...result, restaurantId: rId })
+
+        // 1. Emitir evento al staff del restaurante correspondiente
+        emitNewOrder(rId, {
+          orderId: result.orderId,
+          restaurantId: rId,
+          tableId: body.tableId,
+          tableNumber: result.tableNumber,
+          totalAmount: result.totalAmount,
+          itemsCount: result.itemsCount,
+          createdAt: result.createdAt,
+        })
+
+        // 2. Emitir evento a los comensales de la mesa
+        const confirmedPayload: ConfirmedOrderPayload = {
+          orderId: result.orderId,
+          status: result.status,
+          totalAmount: result.totalAmount,
+          itemsCount: result.itemsCount,
+          createdAt: result.createdAt,
+          items: result.items,
+        }
+        emitOrderConfirmedToTable(rId, body.tableId, confirmedPayload, session?.foodCourtId)
+
+        // 3. Descontar inventario en segundo plano
+        deductStockForOrder(result.orderId, rId, 'system').catch((err) => {
+          console.error(`[POST /api/orders] Error descontando stock para rest ${rId}:`, err)
+        })
+      }
+
+      // Limpiar carrito compartido
+      await storeSharedTableCart(body.tableId, [])
+
+      // Devolver resumen unificado
+      const combinedTotal = orderResults.reduce((acc, r) => acc + r.totalAmount, 0)
+      const combinedItemsCount = orderResults.reduce((acc, r) => acc + r.itemsCount, 0)
+      const combinedItems = orderResults.flatMap((r) => r.items)
+
+      return NextResponse.json(
+        {
+          success: true,
+          unified: true,
+          orders: orderResults,
+          orderId: orderResults[0]?.orderId,
+          status: 'RECEIVED',
+          tableNumber: orderResults[0]?.tableNumber,
+          totalAmount: combinedTotal,
+          itemsCount: combinedItemsCount,
+          createdAt: new Date().toISOString(),
+          items: combinedItems,
+        },
+        { status: 201 },
+      )
+    }
+
     const result = await createOrderTransaction(body)
 
     // 1. Emitir evento en tiempo real al staff del restaurante

@@ -29,6 +29,8 @@ export interface CartItem {
   cartItemId: string // Hash único: productId + modificadores + adiciones + remociones + notas
   productId: string
   name: string
+  restaurantId?: string
+  restaurantName?: string
   basePrice: number
   unitCalculatedPrice: number // basePrice + sum(modificadores) + sum(adiciones)
   quantity: number
@@ -44,6 +46,7 @@ import { type ConfirmedOrderPayload } from '@/types/websocket-events'
 export interface IndividualUserBreakdownItem {
   cartItemId: string
   name: string
+  restaurantName?: string
   quantity: number
   unitCalculatedPrice: number
   total: number
@@ -351,6 +354,7 @@ export const useCartStore = create<CartState>()(
             userBreakdown.items.push({
               cartItemId: item.cartItemId,
               name: item.name,
+              restaurantName: item.restaurantName,
               quantity: orderEntry.quantity,
               unitCalculatedPrice: item.unitCalculatedPrice,
               total: lineTotal,

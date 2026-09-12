@@ -53,6 +53,11 @@ export function CartSheet({
   const grandCount = getGrandItemsCount()
   const breakdown = getBreakdownByUser()
 
+  const uniqueRestaurants = Array.from(
+    new Set(items.map((i) => i.restaurantName || i.restaurantId).filter(Boolean))
+  )
+  const isMultiVendor = uniqueRestaurants.length > 1
+
   const formatPrice = (amount: number) =>
     new Intl.NumberFormat('es-MX', { style: 'currency', currency }).format(amount)
 
@@ -82,6 +87,11 @@ export function CartSheet({
     setSubmitting(true)
     setErrorMsg(null)
 
+    const uniqueRestaurants = Array.from(
+      new Set(items.map((i) => i.restaurantName || i.restaurantId).filter(Boolean))
+    )
+    const isMultiVendor = uniqueRestaurants.length > 1
+
     const payload = {
       restaurantId,
       tableId,
@@ -89,6 +99,7 @@ export function CartSheet({
       items: items.map((item) => ({
         productId: item.productId,
         quantity: item.quantity,
+        restaurantId: item.restaurantId,
         selectedModifierOptionIds: item.selectedModifiers.map((m) => m.optionId),
         selectedAdditions: (item.selectedAdditions || []).map((a) => ({
           additionId: a.additionId,
@@ -116,8 +127,19 @@ export function CartSheet({
 
       const result = await res.json()
 
-      // 1. Guardar la orden confirmada en el estado local de la mesa
-      if (result.orderId) {
+      // 1. Guardar la orden o las órdenes confirmadas en el estado local de la mesa
+      if (result.orders && Array.isArray(result.orders)) {
+        for (const ord of result.orders) {
+          addConfirmedOrder({
+            orderId: ord.orderId,
+            status: ord.status || 'RECEIVED',
+            totalAmount: ord.totalAmount,
+            itemsCount: ord.itemsCount,
+            createdAt: ord.createdAt || new Date().toISOString(),
+            items: ord.items || [],
+          })
+        }
+      } else if (result.orderId) {
         addConfirmedOrder({
           orderId: result.orderId,
           status: result.status || 'RECEIVED',
@@ -159,9 +181,13 @@ export function CartSheet({
         <div className="bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 p-3 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300 flex-shrink-0">
           <span className="text-2xl">✨</span>
           <div className="flex-1 text-xs">
-            <p className="font-bold text-white">¡Ronda enviada a cocina!</p>
+            <p className="font-bold text-white">
+              {isMultiVendor ? '¡Pedido unificado enviado a las cocinas!' : '¡Ronda enviada a cocina!'}
+            </p>
             <p className="text-emerald-400/90 mt-0.5">
-              Tu pedido está en preparación. Puedes seguir agregando más platillos cuando desees.
+              {isMultiVendor
+                ? 'Tus órdenes fueron despachadas simultáneamente a los restaurantes correspondientes en una sola transacción.'
+                : 'Tu pedido está en preparación. Puedes seguir agregando más platillos cuando desees.'}
             </p>
           </div>
           <button
@@ -241,6 +267,16 @@ export function CartSheet({
                     Editable antes de enviar
                   </span>
                 </div>
+
+                {isMultiVendor && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs">
+                    <span className="text-base">🏬</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-[11px] leading-tight">Pedido Unificado Multi-Restaurante</p>
+                      <p className="text-[10px] text-zinc-400">Contiene platillos de {uniqueRestaurants.length} locales de la plaza</p>
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-2">
                   {items.map((item) => (
                     <GlobalCartItemRow
@@ -380,6 +416,11 @@ export function CartSheet({
                             <span className="truncate block" style={{ color: 'var(--brand-text)' }}>
                               {line.name}
                             </span>
+                            {line.restaurantName && (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-amber-400">
+                                🏪 {line.restaurantName}
+                              </span>
+                            )}
                             {line.selectedAdditions && line.selectedAdditions.length > 0 && (
                               <p className="text-[10px] font-medium" style={{ color: 'var(--brand-accent)' }}>
                                 + {line.selectedAdditions.map(a => `${a.quantity > 1 ? `${a.quantity}x ` : ''}${a.name}`).join(', ')}
@@ -475,11 +516,13 @@ export function CartSheet({
               {submitting ? (
                 <>
                   <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Enviando a cocina...</span>
+                  <span>Enviando a cocinas...</span>
                 </>
               ) : (
                 <span>
-                  {confirmedOrders.length > 0
+                  {isMultiVendor
+                    ? `Enviar Pedido Unificado (${draftCount}) • ${uniqueRestaurants.length} Locales → ${formatPrice(draftAmount)}`
+                    : confirmedOrders.length > 0
                     ? `Enviar Pedido Adicional (${draftCount}) → ${formatPrice(draftAmount)}`
                     : `Enviar Pedido a Cocina (${draftCount}) → ${formatPrice(draftAmount)}`}
                 </span>
@@ -646,9 +689,17 @@ function GlobalCartItemRow({
     >
       <div className="flex items-start justify-between gap-2">
         <div className="space-y-1 min-w-0">
-          <p className="font-bold text-sm leading-tight" style={{ color: 'var(--brand-text)' }}>
-            {item.name}
-          </p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <p className="font-bold text-sm leading-tight" style={{ color: 'var(--brand-text)' }}>
+              {item.name}
+            </p>
+            {item.restaurantName && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                <span>🏪</span>
+                <span>{item.restaurantName}</span>
+              </span>
+            )}
+          </div>
 
           {/* Chips con los nombres de quienes pidieron este platillo */}
           <div className="flex flex-wrap gap-1 pt-0.5">

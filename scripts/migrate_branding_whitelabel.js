@@ -48,9 +48,30 @@ async function main() {
     }
   }
 
-  console.log('--- Branding & White-Label migration completed successfully ---')
+  // 3. Columnas en food_court_memberships
+  const fcCols = [
+    { name: 'commissionPercentage', def: 'DECIMAL(5, 2) NOT NULL DEFAULT 0.00' },
+    { name: 'commissionFixedFee', def: 'DECIMAL(10, 2) NOT NULL DEFAULT 0.00' },
+  ]
+
+  for (const col of fcCols) {
+    const exists = await columnExists('food_court_memberships', col.name)
+    if (exists) {
+      console.log(`  ✓ Column food_court_memberships.${col.name} already exists.`)
+    } else {
+      await prisma.$executeRawUnsafe(`ALTER TABLE \`food_court_memberships\` ADD COLUMN \`${col.name}\` ${col.def};`)
+      console.log(`  + Added column food_court_memberships.${col.name}`)
+    }
+  }
+
+  console.log('--- Migration completed successfully ---')
 }
 
 main()
-  .catch(console.error)
-  .finally(() => prisma.$disconnect())
+  .catch((e) => {
+    console.error('Migration failed:', e)
+    process.exit(1)
+  })
+  .finally(async () => {
+    await prisma.$disconnect()
+  })

@@ -102,27 +102,67 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'No autorizado para esta plaza' }, { status: 403 })
     }
     const body = await request.json()
-    const parsed = ReorderMembershipsSchema.parse(body)
 
-    // Actualizar los índices en una transacción
-    await prisma.$transaction(
-      parsed.memberships.map((m) =>
-        prisma.foodCourtMembership.update({
-          where: {
-            foodCourtId_restaurantId: {
-              foodCourtId,
-              restaurantId: m.restaurantId,
+    // Caso 1: Reordenar membresías
+    if (body.memberships && Array.isArray(body.memberships)) {
+      const parsed = ReorderMembershipsSchema.parse(body)
+      await prisma.$transaction(
+        parsed.memberships.map((m) =>
+          prisma.foodCourtMembership.update({
+            where: {
+              foodCourtId_restaurantId: {
+                foodCourtId,
+                restaurantId: m.restaurantId,
+              },
+            },
+            data: { orderIndex: m.orderIndex },
+          }),
+        ),
+      )
+      return NextResponse.json({ success: true })
+    }
+
+    // Caso 2: Actualizar comisión o estado de un restaurante individual
+    if (body.restaurantId) {
+      const updateData: Record<string, any> = {}
+      if (typeof body.commissionPercentage === 'number') {
+        updateData.commissionPercentage = body.commissionPercentage
+      }
+      if (typeof body.commissionFixedFee === 'number') {
+        updateData.commissionFixedFee = body.commissionFixedFee
+      }
+      if (typeof body.isActive === 'boolean') {
+        updateData.isActive = body.isActive
+      }
+
+      const updated = await prisma.foodCourtMembership.update({
+        where: {
+          foodCourtId_restaurantId: {
+            foodCourtId,
+            restaurantId: body.restaurantId,
+          },
+        },
+        data: updateData,
+        include: {
+          restaurant: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              logoUrl: true,
+              cuisineType: true,
             },
           },
-          data: { orderIndex: m.orderIndex },
-        }),
-      ),
-    )
+        },
+      })
 
-    return NextResponse.json({ success: true })
+      return NextResponse.json(updated)
+    }
+
+    return NextResponse.json({ error: 'Datos no reconocidos' }, { status: 400 })
   } catch (error: any) {
     console.error('[PATCH /api/food-courts/[id]/memberships] Error:', error)
-    return NextResponse.json({ error: error.message || 'Error al reordenar restaurantes' }, { status: 400 })
+    return NextResponse.json({ error: error.message || 'Error al actualizar membresía' }, { status: 400 })
   }
 }
 

@@ -1096,6 +1096,8 @@ export function MenuPage({
       {selectedProduct && (
         <ProductModal
           product={selectedProduct}
+          restaurantId={restaurantId}
+          restaurantName={restaurantName}
           currency={currency}
           stockIssue={stockIssues.find((si) => si.productId === selectedProduct.id)}
           recommendationInfo={recommendationsMap.get(selectedProduct.id) || null}

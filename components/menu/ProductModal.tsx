@@ -42,6 +42,8 @@ export interface ProductAdditionOption {
 export interface ProductModalData {
   id: string
   name: string
+  restaurantId?: string
+  restaurantName?: string
   description?: string | null
   basePrice: number
   imageUrl?: string | null
@@ -52,6 +54,8 @@ export interface ProductModalData {
 
 interface ProductModalProps {
   product: ProductModalData
+  restaurantId?: string
+  restaurantName?: string
   currency?: string
   stockIssue?: { productId: string; ingredientName: string; reason?: string }
   recommendationInfo?: { fromUserName: string; note?: string } | null
@@ -62,6 +66,8 @@ interface ProductModalProps {
 
 export function ProductModal({
   product,
+  restaurantId,
+  restaurantName,
   currency = 'MXN',
   stockIssue,
   recommendationInfo,
@@ -238,6 +244,8 @@ export function ProductModal({
     addItem({
       productId: product.id,
       name: product.name,
+      restaurantId: restaurantId || product.restaurantId,
+      restaurantName: restaurantName || product.restaurantName,
       basePrice: product.basePrice,
       quantity,
       selectedModifiers,

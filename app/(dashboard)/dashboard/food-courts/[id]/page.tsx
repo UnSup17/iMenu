@@ -130,6 +130,8 @@ export default async function FoodCourtDetailPage({ params }: PageProps) {
             restaurantId: m.restaurantId,
             orderIndex: m.orderIndex,
             isActive: m.isActive,
+            commissionPercentage: Number(m.commissionPercentage ?? 0),
+            commissionFixedFee: Number(m.commissionFixedFee ?? 0),
             restaurant: m.restaurant,
           })),
           tables: foodCourt.tables.map((t) => {
