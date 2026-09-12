@@ -14,6 +14,7 @@ import { RecommendationToast } from './RecommendationToast'
 import { LanguageSelector } from './LanguageSelector'
 import { OrderHistoryTrackerModal } from './OrderHistoryTrackerModal'
 import { FeedbackModal } from './FeedbackModal'
+import { SplitBillPaymentModal } from './SplitBillPaymentModal'
 import { PushNotificationSubscriber } from './PushNotificationSubscriber'
 import { type Locale, translations, translateCategoryName } from '@/lib/i18n/menu-translations'
 import { soundNotifier, requestNotificationPermission, sendBrowserNotification } from '@/lib/audio/chime'
@@ -142,9 +143,10 @@ export function MenuPage({
     [locale],
   )
 
-  // Tracker y Feedback
+  // Tracker, Feedback y Pago Dividido
   const [isTrackerOpen, setIsTrackerOpen] = useState(false)
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false)
+  const [isSplitPaymentOpen, setIsSplitPaymentOpen] = useState(false)
   const [statusAlert, setStatusAlert] = useState<{
     title: string
     message: string
@@ -1226,9 +1228,10 @@ export function MenuPage({
         locale={locale}
         estimatedMinutes={kitchenInfo.estimatedMinutes}
         onOpenFeedback={() => setIsFeedbackOpen(true)}
+        onOpenSplitPayment={() => setIsSplitPaymentOpen(true)}
       />
 
-      {/* ── Modal de Calificación y Feedback ── */}
+      {/* ── Modal de Calificación y Feedback con Programa de Lealtad ── */}
       <FeedbackModal
         isOpen={isFeedbackOpen}
         onClose={() => setIsFeedbackOpen(false)}
@@ -1236,7 +1239,30 @@ export function MenuPage({
         tableId={tableId}
         sessionToken={sessionToken}
         userAlias={userAlias}
+        orderAmount={confirmedTotalAmount}
         locale={locale}
+      />
+
+      {/* ── Modal de División de Cuenta y Pasarela de Pago ── */}
+      <SplitBillPaymentModal
+        isOpen={isSplitPaymentOpen}
+        onClose={() => setIsSplitPaymentOpen(false)}
+        orders={confirmedOrders}
+        currency={currency}
+        tableNumber={tableNumber}
+        tableId={tableId}
+        sessionId={sessionToken}
+        restaurantId={restaurantId}
+        userAlias={userAlias}
+        locale={locale}
+        onPaymentSuccess={(paidAmount, reference) => {
+          setStatusAlert({
+            title: '¡Pago Aprobado!',
+            message: `Tu pago de ${currency} ${paidAmount.toLocaleString()} ha sido procesado (Ref: ${reference}).`,
+            emoji: '💳',
+            timestamp: Date.now(),
+          })
+        }}
       />
     </div>
   )

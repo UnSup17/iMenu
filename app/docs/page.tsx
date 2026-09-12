@@ -84,12 +84,16 @@ const modules: ModuleSection[] = [
       { route: '/api/orders', view: 'POST pedido a cocina y GET órdenes confirmadas de la mesa actual', status: 'done', roles: 'Público (sesión de mesa)' },
       { route: '/api/kitchen/load', view: 'GET cálculo de carga de cocina y tiempo estimado de preparación en minutos', status: 'done', roles: 'Público / Sistema' },
       { route: '/api/feedback', view: 'POST calificación de experiencia de servicio y GET métricas agregadas', status: 'done', roles: 'Público (POST) / ADMIN (GET)' },
+      { route: '/api/payments/split', view: 'POST procesamiento y división de cuenta individual por comensal en pasarela de pago (Wompi, MercadoPago, Tarjeta)', status: 'done', roles: 'Público (clientes)' },
+      { route: '/api/loyalty', view: 'POST acreditación de puntos de lealtad por consumo y calificación; GET consulta de puntos y nivel', status: 'done', roles: 'Público / Clientes' },
       { route: '/waiter/[tableId]', view: 'Llamada al mesero desde QR secundario o botón flotante', status: 'done', roles: 'Público (clientes)' },
       { route: '/sw.js', view: 'Service Worker de Web Push: recepción de notificaciones push en segundo plano y apertura de comanda', status: 'done', roles: 'Público / Sistema' },
     ],
     observations: [
       'Las sesiones de mesa son colaborativas y sincronizadas en tiempo real vía Socket.IO entre comensales.',
       'Historial de rondas de pedidos accesible desde el menú con stepper de estado (RECEIVED ➔ PREPARING ➔ READY ➔ DELIVERED).',
+      'División de cuenta individual por comensal en pasarela de pago digital (Wompi, MercadoPago, Tarjeta) con 4 modalidades: Mi Consumo, Partes Iguales, Selección de Platos o Cuenta Completa, con propina voluntaria y comprobante digital.',
+      'Programa de lealtad y puntos para clientes frecuentes integrado al registro de calificación (50 pts base + 1 pt por cada $1.000 COP consumidos), niveles (Bronce, Plata, Oro, Platino) y cupones de recompensa automáticos.',
       'Soporte completo de Web Push API con banner interactivo para que el comensal active avisos en su celular con 1 toque y reciba alerta cuando su pedido esté listo.',
       'Alertas en vivo con chime armónico (Web Audio API) y notificaciones de navegador (Web Notification API) al cambiar de estado el pedido.',
       'Internacionalización (i18n) completa con selector fluido para Español (es), English (en) y Português (pt).',
@@ -100,11 +104,9 @@ const modules: ModuleSection[] = [
       'Disponibilidad de ingredientes y stock actualizada en tiempo real vía Socket.IO.',
     ],
     missing: [
-      'Soporte para división de cuenta individual por comensal directamente en pasarela de pago.',
       'Sugerencias de maridaje o upselling inteligente impulsado por IA según los ítems del carrito.',
     ],
     opportunities: [
-      'Integración de programa de lealtad / puntos para clientes frecuentes al registrar su calificación.',
       'Traducción automática y enriquecimiento de descripciones de platillos usando LLMs.',
     ],
   },

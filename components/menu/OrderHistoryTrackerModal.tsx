@@ -17,6 +17,7 @@ interface OrderHistoryTrackerModalProps {
   estimatedMinutes?: number
   kitchenPace?: 'calm' | 'normal' | 'busy'
   onOpenFeedback?: () => void
+  onOpenSplitPayment?: () => void
   locale?: Locale
 }
 
@@ -40,6 +41,7 @@ export function OrderHistoryTrackerModal({
   estimatedMinutes = 20,
   kitchenPace = 'normal',
   onOpenFeedback,
+  onOpenSplitPayment,
   locale = 'es',
 }: OrderHistoryTrackerModalProps) {
   const storeOrders = useCartStore((s) => s.confirmedOrders)
@@ -254,6 +256,20 @@ export function OrderHistoryTrackerModal({
               {formatPrice(totalTableConfirmed)}
             </span>
           </div>
+
+          {onOpenSplitPayment && totalTableConfirmed > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose()
+                onOpenSplitPayment()
+              }}
+              className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer transition-all active:scale-[0.99]"
+            >
+              <span>💳</span>
+              <span>Dividir Cuenta / Pagar mi Parte en Pasarela</span>
+            </button>
+          )}
 
           <div className="flex items-center gap-2.5">
             {onOpenFeedback && (

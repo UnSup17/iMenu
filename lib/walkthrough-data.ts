@@ -463,6 +463,104 @@ export const WALKTHROUGH_DATA: FunctionalityItem[] = [
     },
   },
 
+  // ─── 4b. Menú QR: Auto-Pago, División de Cuenta & Puntos de Lealtad ────────
+  {
+    id: 'menu-split-loyalty',
+    title: 'Menú QR: Auto-Pago, División de Cuenta & Puntos de Lealtad',
+    module: 'Toma de Pedidos',
+    moduleIcon: '💳',
+    route: '/dashboard/orders',
+    allowedRoles: ['SUPERADMIN', 'ORG_ADMIN', 'RESTAURANT_ADMIN', 'MANAGER', 'WAITER', 'ACCOUNTANT'],
+    targetAudience: 'Meseros, Cajeros, Administradores y Personal de Salón.',
+    summary:
+      'Permite a los comensales pagar su consumo directamente desde el celular con pasarelas digitales (Wompi, MercadoPago, Tarjeta), dividir la cuenta en 4 modalidades (individual por alias, partes iguales, selección de platos o total) y acumular puntos de lealtad con cupones de recompensa al calificar el servicio.',
+    difficulty: 'Básico',
+    estimatedMinutes: 6,
+    tags: ['Menú QR', 'División de Cuenta', 'Pasarela de Pago', 'Wompi', 'Nequi', 'Lealtad', 'Puntos'],
+    uiMockup: {
+      previewTitle: 'Auto-Pago & División de Cuenta desde la Mesa',
+      previewBadge: 'Wompi, Mercado Pago y Tarjeta Integrados',
+      uiType: 'cashier',
+      pins: [
+        {
+          id: 1,
+          label: 'Selector de Modalidad',
+          description: 'Permite pagar consumo individual por alias, división igualitaria (N personas), selección libre de platos o total.',
+          zone: 'Cabecera de opciones',
+        },
+        {
+          id: 2,
+          label: 'Propina Voluntaria',
+          description: 'Calcula montos sugeridos del 0%, 5%, 10% y 15% con actualización instantánea del total.',
+          zone: 'Bloque de propina',
+        },
+        {
+          id: 3,
+          label: 'Pasarela Digital Segura',
+          description: 'Conecta con Wompi/Nequi, PSE y Tarjetas de crédito con comprobante digital descargable y compartible por WhatsApp.',
+          zone: 'Botón de pago y pasarela',
+        },
+        {
+          id: 4,
+          label: 'Club de Lealtad & Puntos',
+          description: 'Al calificar la experiencia con estrellas y celular, otorga +50 puntos de bienvenida más 1 punto por cada $1.000 consumidos.',
+          zone: 'Modal de satisfacción',
+        },
+      ],
+    },
+    steps: [
+      {
+        stepNumber: 1,
+        title: 'Abrir el Selector de Pago desde la Mesa',
+        detail:
+          'En el Menú QR de la mesa (/menu/[slug]/[tableId]), el cliente abre el botón flotante del pedido o el modal de historial y pulsa "💳 Dividir Cuenta / Pagar mi Parte en Pasarela".',
+        tip: 'Funciona tanto para mesas con múltiples comensales como para clientes individuales.',
+      },
+      {
+        stepNumber: 2,
+        title: 'Elegir Modalidad de División de la Cuenta',
+        detail:
+          'El comensal selecciona: "Mi Consumo" (calcula automáticamente sus platos según su apodo), "Partes Iguales" (indica número de comensales para dividir equitativamente), o "Elegir Platos" (marca con casillas qué productos paga).',
+      },
+      {
+        stepNumber: 3,
+        title: 'Seleccionar Propina y Pasarela de Pago',
+        detail:
+          'Elige la propina voluntaria sugerida (10%) y selecciona el medio de pago: Wompi (Nequi / Bancolombia), Mercado Pago (PSE / Tarjeta) o Tarjeta de Débito/Crédito.',
+      },
+      {
+        stepNumber: 4,
+        title: 'Comprobante Digital y Descuento del Saldo',
+        detail:
+          'Tras procesar el pago, el sistema genera la referencia única (ej: PAY-846671-1077), descuenta el valor del saldo de la mesa en tiempo real y permite enviar el comprobante por WhatsApp.',
+      },
+      {
+        stepNumber: 5,
+        title: 'Calificar y Recibir Cupón de Lealtad',
+        detail:
+          'El cliente abre "⭐ Calificar Experiencia", califica el servicio y registra su celular: recibe puntos automáticos y un cupón de beneficio para su próxima visita.',
+        tip: 'Los cupones se generan con código único (ej: LEAL-4567-654) y descuento según su nivel alcanzado.',
+      },
+    ],
+    considerations: {
+      prerequisites: [
+        'Tener al menos una ronda de pedidos confirmada en la mesa.',
+        'Contar con conexión a internet en el dispositivo móvil del comensal.',
+      ],
+      warnings: [
+        'Los pagos parciales descuentan el saldo de la mesa; el mesero y cajero deben verificar en su panel que el saldo restante de la mesa sea $0 antes de liberarla físicamente.',
+      ],
+      bestPractices: [
+        'Incentiva a los comensales a ingresar su nombre/apodo al entrar al menú para que la división por consumo propio sea 100% automática.',
+        'Promueve el registro de celular en la calificación para fidelizar clientes frecuentes con descuentos progresivos.',
+      ],
+      crossModuleImpact: [
+        'Cada auto-pago exitoso se registra en /api/payments/split y descuenta la pre-cuenta en el módulo de Facturación y Caja.',
+        'Los puntos acumulados quedan guardados en el sistema para consultas o futuras campañas de marketing.',
+      ],
+    },
+  },
+
   // ─── 5. Menú & Catálogo: Gestor de Platos & Precios ────────────────────────
   {
     id: 'menu-catalog',
