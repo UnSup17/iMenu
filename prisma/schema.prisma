@@ -177,6 +177,7 @@ model Restaurant {
   currency       String        @default("COP")
   isActive       Boolean       @default(true)
   pdfUrl         String?       @db.VarChar(512) // URL del PDF del menú subido a Vercel Blob
+  pdfPageImages  Json?                          // Array de URLs de páginas WebP del PDF en Vercel Blob
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 

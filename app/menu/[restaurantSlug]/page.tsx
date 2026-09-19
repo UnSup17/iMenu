@@ -1,10 +1,14 @@
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
+import fs from 'fs'
+import path from 'path'
 import { prisma } from '@/lib/prisma'
 import { MenuPage } from '@/components/menu/MenuPage'
 import { isCategoryScheduleActive } from '@/lib/menu-schedule'
 import { BrandThemeInjector } from '@/components/branding/BrandThemeInjector'
 import { getResolvedBrandTheme } from '@/lib/branding/resolver'
+
+export const revalidate = 60 // Next.js ISR Cache: 60 segundos de respuesta instantánea del servidor
 
 interface PageProps {
   params: Promise<{ restaurantSlug: string }>
@@ -181,6 +185,36 @@ export default async function MenuViewOnlyPage({ params }: PageProps) {
 
   const brandTheme = await getResolvedBrandTheme({ restaurantId: restaurant.id })
 
+  // Detección de páginas WebP pre-renderizadas en servidor para carga instantánea
+  let pageImages: string[] = []
+  const rawPageImages = (restaurant as { pdfPageImages?: unknown }).pdfPageImages
+  if (Array.isArray(rawPageImages) && rawPageImages.length > 0) {
+    pageImages = rawPageImages as string[]
+  } else if (typeof rawPageImages === 'string' && rawPageImages.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(rawPageImages)
+      if (Array.isArray(parsed)) pageImages = parsed
+    } catch {}
+  }
+  if (pageImages.length === 0) {
+    try {
+      const cacheDir = path.join(process.cwd(), 'public', 'menu-cache', restaurant.slug)
+      if (fs.existsSync(cacheDir)) {
+        const files = fs
+          .readdirSync(cacheDir)
+          .filter((f) => f.startsWith('page-') && f.endsWith('.webp'))
+          .sort((a, b) => {
+            const numA = parseInt(a.replace('page-', '').replace('.webp', ''), 10)
+            const numB = parseInt(b.replace('page-', '').replace('.webp', ''), 10)
+            return numA - numB
+          })
+        pageImages = files.map((f) => `/menu-cache/${restaurant.slug}/${f}`)
+      }
+    } catch {
+      // Si falla el fs, se utiliza el pdfUrl como fallback
+    }
+  }
+
   return (
     <>
       <BrandThemeInjector theme={brandTheme} />
@@ -193,6 +227,7 @@ export default async function MenuViewOnlyPage({ params }: PageProps) {
         currency={restaurant.currency}
         categories={categories}
         pdfUrl={restaurant.pdfUrl ?? null}
+        pageImages={pageImages}
         pdfHotspots={pdfHotspots}
         initialStockIssues={[]}
         brandLogoUrl={brandTheme.logoUrl}

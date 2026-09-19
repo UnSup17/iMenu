@@ -86,10 +86,38 @@ export function ProductModal({
   const [notes, setNotes] = useState('')
   const [quantity, setQuantity] = useState(1)
   const [error, setError] = useState<string | null>(null)
+  const [copiedLink, setCopiedLink] = useState(false)
 
   // Ref para trap de foco — primer elemento focusable
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const addButtonRef = useRef<HTMLButtonElement>(null)
+
+  // Compartir producto
+  const handleShare = async () => {
+    if (typeof window === 'undefined') return
+    const shareData = {
+      title: product.name,
+      text: product.description || `¡Mira ${product.name}!`,
+      url: window.location.href,
+    }
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData)
+        return
+      } catch {
+        // Ignorar si el usuario canceló
+      }
+    }
+    if (navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(window.location.href)
+        setCopiedLink(true)
+        setTimeout(() => setCopiedLink(false), 2200)
+      } catch {
+        // Fallback silencioso
+      }
+    }
+  }
 
   // Al montar, enfocar el botón de cierre (primer elemento focusable del dialog)
   useEffect(() => {
@@ -112,8 +140,14 @@ export function ProductModal({
     return () => { document.body.style.overflow = prev }
   }, [])
 
-  const formatPrice = (amount: number) =>
-    new Intl.NumberFormat('es-MX', { style: 'currency', currency }).format(amount)
+  const formatPrice = (amount: number) => {
+    const isCop = currency === 'COP'
+    return new Intl.NumberFormat(isCop ? 'es-CO' : 'es-MX', {
+      style: 'currency',
+      currency: currency || 'COP',
+      maximumFractionDigits: isCop ? 0 : 2,
+    }).format(amount)
+  }
 
   // Calcular precio dinámico
   const calculatedUnitPrice = (() => {
@@ -283,38 +317,87 @@ export function ProductModal({
         }}
       >
 
-        {/* Imagen del producto */}
-        {product.imageUrl && (
-          <div className="relative h-44 sm:h-52 flex-shrink-0 overflow-hidden">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={product.imageUrl}
-              alt={product.name}
-              className="w-full h-full object-cover"
-            />
-            <div
-              className="absolute inset-0"
+        {/* Imagen del producto & Botones flotantes */}
+        <div className="relative w-full flex-shrink-0">
+          {product.imageUrl ? (
+            <div className="relative w-full aspect-[4/3] sm:aspect-[16/10] overflow-hidden bg-black select-none">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={product.imageUrl}
+                alt={product.name}
+                className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+              />
+              {/* Sutil viñeta para contraste superior y transición suave al contenido */}
+              <div
+                className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-[var(--brand-surface,#18181b)]"
+                aria-hidden="true"
+              />
+            </div>
+          ) : (
+            /* Espacio decorativo superior si no hay imagen */
+            <div className="h-6" />
+          )}
+
+          {/* Botones de acción flotantes (Compartir & Cerrar) estilo Menüpp */}
+          <div className="absolute top-3.5 right-3.5 flex items-center gap-2 z-20">
+            {/* Botón de Compartir */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={handleShare}
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all duration-150 active:scale-90 shadow-md hover:brightness-110 cursor-pointer border-0 outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none"
+                style={{
+                  backgroundColor: 'var(--brand-primary, #e11d48)',
+                  color: '#ffffff',
+                }}
+                title="Compartir platillo"
+                aria-label="Compartir platillo"
+              >
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+              </button>
+
+              {/* Toast confirmación de copiado */}
+              {copiedLink && (
+                <div className="absolute -bottom-8 right-0 bg-black/90 text-white text-[11px] font-semibold px-2.5 py-1 rounded-md shadow-lg whitespace-nowrap animate-in fade-in zoom-in-95 pointer-events-none">
+                  ¡Enlace copiado!
+                </div>
+              )}
+            </div>
+
+            {/* Botón de Cerrar (círculo rojo con ✕ blanca) */}
+            <button
+              ref={closeButtonRef}
+              type="button"
+              onClick={onClose}
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all duration-150 active:scale-90 shadow-md hover:brightness-110 cursor-pointer border-0 outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none"
               style={{
-                background: 'linear-gradient(to top, var(--brand-surface) 0%, transparent 100%)',
+                backgroundColor: 'var(--brand-primary, #e11d48)',
+                color: '#ffffff',
               }}
-              aria-hidden="true"
-            />
+              aria-label="Cerrar ventana"
+            >
+              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
-        )}
+        </div>
 
         {/* Banner de Recomendación si el platillo fue sugerido */}
         {recommendationInfo && (
           <div
-            className="mx-5 mt-4 p-3 rounded-2xl border flex items-start gap-3 animate-in fade-in slide-in-from-top-2"
+            className="mx-5 mt-3 p-3 rounded-2xl border flex items-start gap-3 animate-in fade-in slide-in-from-top-2"
             style={{
-              backgroundColor: 'color-mix(in srgb, var(--brand-primary, #f59e0b) 15%, transparent)',
-              borderColor: 'color-mix(in srgb, var(--brand-primary, #f59e0b) 35%, transparent)',
-              boxShadow: '0 0 20px -4px color-mix(in srgb, var(--brand-primary, #f59e0b) 25%, transparent)',
+              backgroundColor: 'color-mix(in srgb, var(--brand-primary, #e11d48) 15%, transparent)',
+              borderColor: 'color-mix(in srgb, var(--brand-primary, #e11d48) 35%, transparent)',
+              boxShadow: '0 0 20px -4px color-mix(in srgb, var(--brand-primary, #e11d48) 25%, transparent)',
             }}
           >
             <span className="text-xl shrink-0 animate-bounce">⭐</span>
             <div className="min-w-0 flex-1">
-              <p className="text-xs sm:text-sm font-bold text-[var(--brand-primary)]">
+              <p className="text-xs sm:text-sm font-bold" style={{ color: 'var(--brand-primary, #e11d48)' }}>
                 {recommendationInfo.fromUserName} recomienda este platillo
               </p>
               {recommendationInfo.note && (
@@ -326,63 +409,53 @@ export function ProductModal({
           </div>
         )}
 
-        {/* Header */}
-        <div className="flex-shrink-0 px-5 pt-5 pb-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex-1">
-              <h2
-                id="product-modal-title"
-                className="text-xl font-bold leading-tight"
-                style={{
-                  color: 'var(--brand-text)',
-                  fontFamily: 'var(--brand-font-heading)',
-                }}
-              >
-                {product.name}
-              </h2>
-              {product.description && (
-                <p
-                  id="product-modal-desc"
-                  className="text-sm mt-1.5 leading-relaxed"
-                  style={{ color: 'var(--brand-muted)' }}
-                >
-                  {product.description}
-                </p>
-              )}
-            </div>
-            {/* Acciones de cabecera: Recomendar + Cerrar */}
-            <div className="flex items-center gap-2 shrink-0">
-              {onOpenRecommend && (
-                <button
-                  type="button"
-                  onClick={onOpenRecommend}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all active:scale-95 shadow-sm hover:brightness-110 cursor-pointer"
-                  style={{
-                    backgroundColor: 'color-mix(in srgb, var(--brand-primary, #f59e0b) 15%, transparent)',
-                    borderColor: 'color-mix(in srgb, var(--brand-primary, #f59e0b) 35%, transparent)',
-                    color: 'var(--brand-primary, #f59e0b)',
-                  }}
-                  title="Recomendar este platillo a la mesa"
-                  aria-label="Recomendar platillo a la mesa"
-                >
-                  <span className="text-base leading-none">💡</span>
-                  <span className="inline">Recomendar</span>
-                </button>
-              )}
+        {/* Header con Título, Descripción y Precio (Visual idéntico a referencia) */}
+        <div className="flex-shrink-0 px-5 pt-3 pb-2">
+          {/* Título en color llamativo y mayúsculas */}
+          <h2
+            id="product-modal-title"
+            className="text-xl sm:text-2xl font-black uppercase tracking-wide leading-tight"
+            style={{
+              color: 'var(--brand-primary, #e11d48)',
+              fontFamily: 'var(--brand-font-heading, inherit)',
+            }}
+          >
+            {product.name}
+          </h2>
+
+          {/* Descripción detallada */}
+          {product.description && (
+            <p
+              id="product-modal-desc"
+              className="text-sm sm:text-base text-zinc-300 leading-relaxed font-normal mt-2.5"
+            >
+              {product.description}
+            </p>
+          )}
+
+          {/* Precio y botón de recomendar */}
+          <div className="mt-3.5 flex items-center justify-between gap-3">
+            <span className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+              {formatPrice(product.basePrice)}
+            </span>
+
+            {onOpenRecommend && (
               <button
-                ref={closeButtonRef}
-                onClick={onClose}
-                className="w-10 h-10 rounded-xl border flex items-center justify-center text-lg transition-colors focus-visible:outline-none cursor-pointer"
+                type="button"
+                onClick={onOpenRecommend}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold border transition-all active:scale-95 shadow-sm hover:brightness-110 cursor-pointer"
                 style={{
-                  backgroundColor: 'color-mix(in srgb, var(--brand-surface) 80%, var(--brand-bg) 20%)',
-                  borderColor: 'color-mix(in srgb, var(--brand-surface) 60%, var(--brand-text) 15%)',
-                  color: 'var(--brand-text)',
+                  backgroundColor: 'color-mix(in srgb, var(--brand-primary, #e11d48) 15%, transparent)',
+                  borderColor: 'color-mix(in srgb, var(--brand-primary, #e11d48) 35%, transparent)',
+                  color: 'var(--brand-primary, #e11d48)',
                 }}
-                aria-label="Cerrar"
+                title="Recomendar este platillo a la mesa"
+                aria-label="Recomendar platillo a la mesa"
               >
-                ✕
+                <span className="text-sm leading-none">💡</span>
+                <span>Recomendar</span>
               </button>
-            </div>
+            )}
           </div>
         </div>
 

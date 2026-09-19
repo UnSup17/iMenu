@@ -22,7 +22,8 @@ interface PdfHotspot {
 }
 
 interface PdfMenuViewProps {
-  pdfUrl: string
+  pdfUrl?: string | null
+  pageImages?: string[]
   hotspots: PdfHotspot[]
   recommendedMap?: Map<string, { fromUserName: string; note?: string }>
   onSelectProduct: (product: ProductModalData) => void
@@ -32,17 +33,25 @@ interface PdfMenuViewProps {
 
 export function PdfMenuView({
   pdfUrl,
+  pageImages,
   hotspots,
   recommendedMap,
   onSelectProduct,
 }: PdfMenuViewProps) {
-  const [pageDataUrls, setPageDataUrls] = useState<string[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const hasPreRendered = Boolean(pageImages && pageImages.length > 0)
+  const [pageDataUrls, setPageDataUrls] = useState<string[]>(pageImages || [])
+  const [isLoading, setIsLoading] = useState(!hasPreRendered)
   const containerRef = useRef<HTMLDivElement>(null)
 
   const getOrderedByForProduct = useCartStore((s) => s.getOrderedByForProduct)
 
   const renderAllPages = useCallback(async () => {
+    // Si ya disponemos de imágenes WebP pre-renderizadas en caché, no necesitamos PDF.js en el cliente
+    if (hasPreRendered || !pdfUrl) {
+      setIsLoading(false)
+      return
+    }
+
     try {
       if (!pdfjsLib) {
         pdfjsLib = await import('pdfjs-dist')
@@ -74,11 +83,16 @@ export function PdfMenuView({
     } finally {
       setIsLoading(false)
     }
-  }, [pdfUrl])
+  }, [pdfUrl, hasPreRendered])
 
   useEffect(() => {
-    renderAllPages()
-  }, [renderAllPages])
+    if (pageImages && pageImages.length > 0) {
+      setPageDataUrls(pageImages)
+      setIsLoading(false)
+    } else if (!hasPreRendered) {
+      renderAllPages()
+    }
+  }, [pageImages, hasPreRendered, renderAllPages])
 
   if (isLoading) {
     return (
@@ -116,6 +130,8 @@ export function PdfMenuView({
               alt={`Página ${pageIndex + 1}`}
               className="block w-full"
               draggable={false}
+              loading={pageIndex < 2 ? 'eager' : 'lazy'}
+              decoding="async"
             />
 
             {/* Hotspots como botones transparentes con badges */}

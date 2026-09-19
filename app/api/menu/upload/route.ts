@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
-import fs from 'fs'
-import path from 'path'
 import crypto from 'crypto'
+import { uploadBlob } from '@/lib/storage'
 
 const ADMIN_ROLES = ['SUPERADMIN', 'ORG_ADMIN', 'RESTAURANT_ADMIN', 'MANAGER']
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
@@ -15,7 +14,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    const user = session.user as { id: string; role: string }
+    const user = session.user as { id: string; role: string; restaurantId?: string }
     if (!ADMIN_ROLES.includes(user.role)) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
@@ -48,22 +47,22 @@ export async function POST(req: NextRequest) {
     else if (file.type === 'image/gif') ext = '.gif'
     else if (file.type === 'image/svg+xml') ext = '.svg'
 
-    const hash = crypto.randomBytes(12).toString('hex')
-    const fileName = `dish_${Date.now()}_${hash}${ext}`
+    const hash = crypto.randomBytes(8).toString('hex')
+    const fileName = `prod_${Date.now()}_${hash}${ext}`
 
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'menu')
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true })
-    }
+    const targetRestaurantId =
+      (formData.get('restaurantId') as string) || user.restaurantId || 'general'
+    const pathname = `restaurants/${targetRestaurantId}/products/${fileName}`
 
-    const filePath = path.join(uploadDir, fileName)
-    fs.writeFileSync(filePath, buffer)
-
-    const publicUrl = `/uploads/menu/${fileName}`
+    const result = await uploadBlob({
+      pathname,
+      buffer,
+      contentType: file.type || 'image/webp',
+    })
 
     return NextResponse.json({
       success: true,
-      url: publicUrl,
+      url: result.url,
       fileName,
       size: file.size,
     })

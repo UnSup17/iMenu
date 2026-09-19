@@ -52,6 +52,10 @@ export function TableCheckoutForm({
   >('CASH')
   const [discount, setDiscount] = useState('0')
 
+  // Tip (propina voluntaria)
+  const [tipPreset, setTipPreset] = useState<0 | 10 | 15 | 20 | -1>(0) // -1 = custom
+  const [customTip, setCustomTip] = useState('')
+
   // Aggregate items across all orders of this table
   const itemMap = new Map<
     string,
@@ -86,6 +90,13 @@ export function TableCheckoutForm({
   const taxTotal = subtotalAfterDiscount * taxRate
   const finalTotal = subtotalAfterDiscount + taxTotal
 
+  // Tip calculation
+  const tipAmount =
+    tipPreset === -1
+      ? Math.max(0, parseFloat(customTip) || 0)
+      : Math.round((finalTotal * tipPreset) / 100)
+  const grandTotal = finalTotal + tipAmount
+
   async function handleCheckout(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
@@ -115,13 +126,14 @@ export function TableCheckoutForm({
       const invoiceId = data.invoice.id
       const invoiceTotal = typeof data.invoice.total === 'number' ? data.invoice.total : parseFloat(data.invoice.total)
 
-      // 2. Register initial payment
+      // 2. Register initial payment (including tip)
       const payRes = await fetch(`/api/invoices/${invoiceId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount: invoiceTotal,
+          amount: invoiceTotal + tipAmount,
           method: paymentMethod,
+          tipAmount: tipAmount > 0 ? tipAmount : undefined,
         }),
       })
 
@@ -193,10 +205,65 @@ export function TableCheckoutForm({
             <span>${taxTotal.toLocaleString('es-CO', { maximumFractionDigits: 0 })}</span>
           </div>
 
+          {/* Propina voluntaria */}
+          <div className="pt-3 border-t border-zinc-800/70">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Propina Voluntaria</span>
+              {tipAmount > 0 && (
+                <span className="text-xs font-mono font-bold text-amber-400">
+                  +${tipAmount.toLocaleString('es-CO', { maximumFractionDigits: 0 })}
+                </span>
+              )}
+            </div>
+            <div className="grid grid-cols-4 gap-1.5 mb-2">
+              {([0, 10, 15, 20] as const).map((pct) => (
+                <button
+                  key={pct}
+                  type="button"
+                  onClick={() => setTipPreset(pct)}
+                  className={`py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                    tipPreset === pct
+                      ? 'bg-amber-500 text-zinc-950 border-amber-400 shadow font-black'
+                      : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-600'
+                  }`}
+                >
+                  {pct === 0 ? 'Sin propina' : `${pct}%`}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setTipPreset(-1)}
+              className={`w-full py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer mb-2 ${
+                tipPreset === -1
+                  ? 'bg-zinc-700 border-zinc-500 text-white'
+                  : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white'
+              }`}
+            >
+              💬 Monto libre
+            </button>
+            {tipPreset === -1 && (
+              <input
+                type="number"
+                min="0"
+                step="1000"
+                placeholder="Ej. 5000"
+                value={customTip}
+                onChange={(e) => setCustomTip(e.target.value)}
+                className="w-full bg-zinc-950 border border-amber-500/40 rounded-lg px-3 py-2 text-white text-xs font-mono focus:outline-none focus:border-amber-500"
+              />
+            )}
+          </div>
+
           <div className="flex justify-between text-xl font-bold text-emerald-400 pt-3 border-t border-zinc-800">
             <span>TOTAL A PAGAR:</span>
-            <span>${finalTotal.toLocaleString('es-CO')}</span>
+            <span>${grandTotal.toLocaleString('es-CO')}</span>
           </div>
+          {tipAmount > 0 && (
+            <p className="text-[10px] text-zinc-500 text-right -mt-1">
+              Incluye ${tipAmount.toLocaleString('es-CO')} de propina voluntaria
+            </p>
+          )}
         </div>
       </div>
 

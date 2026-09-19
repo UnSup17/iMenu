@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 import { InvoiceStatus } from '@prisma/client'
+import { TicketPrintButton } from '@/components/billing/ticket-print-button'
 
 export const metadata = { title: 'Facturas Emitidas — iMenu' }
 
@@ -149,12 +150,16 @@ export default async function InvoicesListPage({
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <Link
-                        href={`/dashboard/billing/invoices/${inv.id}`}
-                        className="text-xs font-medium text-amber-500 hover:text-amber-400"
-                      >
-                        Ver Detalle / Cobrar
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <Link
+                          href={`/dashboard/billing/invoices/${inv.id}`}
+                          className="text-xs font-medium text-amber-500 hover:text-amber-400 whitespace-nowrap"
+                        >
+                          Ver / Cobrar
+                        </Link>
+                        <span className="text-zinc-700">|</span>
+                        <TicketPrintButton invoiceId={inv.id} compact />
+                      </div>
                     </td>
                   </tr>
                 )

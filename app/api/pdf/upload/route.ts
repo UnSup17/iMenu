@@ -1,11 +1,9 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { writeFile, mkdir } from 'fs/promises'
-import { join } from 'path'
+import { Prisma } from '@prisma/client'
+import { uploadBlob, deleteBlob } from '@/lib/storage'
 
 export const runtime = 'nodejs'
-
-const USE_VERCEL_BLOB = Boolean(process.env.BLOB_READ_WRITE_TOKEN)
 
 // ─── POST: subir PDF ──────────────────────────────────────────────────────
 export async function POST(request: Request) {
@@ -50,39 +48,21 @@ export async function POST(request: Request) {
       return Response.json({ error: 'El PDF no puede superar los 20 MB' }, { status: 400 })
     }
 
-    let pdfUrl: string
+    const bytes = await file.arrayBuffer()
+    const buffer = Buffer.from(bytes)
 
-    if (USE_VERCEL_BLOB) {
-      // ── Producción: Vercel Blob ──────────────────────────────────────────
-      const { put } = await import('@vercel/blob')
-      const blob = await put(`menus/${targetRestaurantId}/menu.pdf`, file, {
-        access: 'public',
-        contentType: 'application/pdf',
-      })
-      pdfUrl = blob.url
-    } else {
-      // Si estamos en producción o en Vercel, o no estamos en desarrollo local, fallar preventivamente
-      if (process.env.NODE_ENV !== 'development' || process.env.VERCEL) {
-        return Response.json({
-          error: 'La subida de archivos no está configurada en producción. Por favor, configura Vercel Blob (BLOB_READ_WRITE_TOKEN) en tu panel de Vercel.'
-        }, { status: 400 })
-      }
-
-      // ── Desarrollo local: public/uploads/ ────────────────────────────────
-      const bytes = await file.arrayBuffer()
-      const buffer = Buffer.from(bytes)
-      const dir = join(process.cwd(), 'public', 'uploads', 'menus', targetRestaurantId)
-      await mkdir(dir, { recursive: true })
-      await writeFile(join(dir, 'menu.pdf'), buffer)
-      pdfUrl = `/uploads/menus/${targetRestaurantId}/menu.pdf`
-    }
+    const uploadResult = await uploadBlob({
+      pathname: `restaurants/${targetRestaurantId}/menu/menu.pdf`,
+      buffer,
+      contentType: 'application/pdf',
+    })
 
     await prisma.restaurant.update({
       where: { id: targetRestaurantId },
-      data: { pdfUrl },
+      data: { pdfUrl: uploadResult.url },
     })
 
-    return Response.json({ url: pdfUrl })
+    return Response.json({ url: uploadResult.url })
   } catch (error) {
     console.error('[POST /api/pdf/upload] Error:', error)
     return Response.json({
@@ -108,9 +88,26 @@ export async function DELETE() {
       return Response.json({ error: 'No tienes un restaurante asignado' }, { status: 400 })
     }
 
+    const rest = await prisma.restaurant.findUnique({
+      where: { id: user.restaurantId },
+      select: { pdfUrl: true, pdfPageImages: true },
+    })
+
+    if (rest?.pdfUrl) {
+      await deleteBlob(rest.pdfUrl)
+    }
+
+    if (Array.isArray(rest?.pdfPageImages)) {
+      for (const imgUrl of rest.pdfPageImages) {
+        if (typeof imgUrl === 'string') {
+          await deleteBlob(imgUrl)
+        }
+      }
+    }
+
     await prisma.restaurant.update({
       where: { id: user.restaurantId },
-      data: { pdfUrl: null },
+      data: { pdfUrl: null, pdfPageImages: Prisma.DbNull },
     })
 
     return Response.json({ ok: true })

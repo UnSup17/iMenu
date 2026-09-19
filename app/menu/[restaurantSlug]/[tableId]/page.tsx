@@ -1,5 +1,7 @@
 import { notFound, redirect } from 'next/navigation'
 import type { Metadata } from 'next'
+import fs from 'fs'
+import path from 'path'
 import { prisma } from '@/lib/prisma'
 import { getTableSession } from '@/lib/redis'
 import { MenuPage } from '@/components/menu/MenuPage'
@@ -222,6 +224,29 @@ export default async function MenuGuestPage({ params, searchParams }: PageProps)
 
   const brandTheme = await getResolvedBrandTheme({ restaurantId: restaurant.id })
 
+  // Detección de páginas WebP pre-renderizadas en servidor para carga instantánea
+  let pageImages: string[] = []
+  if (Array.isArray(restaurant.pdfPageImages) && restaurant.pdfPageImages.length > 0) {
+    pageImages = restaurant.pdfPageImages as string[]
+  } else {
+    try {
+      const cacheDir = path.join(process.cwd(), 'public', 'menu-cache', restaurant.slug)
+      if (fs.existsSync(cacheDir)) {
+        const files = fs
+          .readdirSync(cacheDir)
+          .filter((f) => f.startsWith('page-') && f.endsWith('.webp'))
+          .sort((a, b) => {
+            const numA = parseInt(a.replace('page-', '').replace('.webp', ''), 10)
+            const numB = parseInt(b.replace('page-', '').replace('.webp', ''), 10)
+            return numA - numB
+          })
+        pageImages = files.map((f) => `/menu-cache/${restaurant.slug}/${f}`)
+      }
+    } catch {
+      // Fallback a pdfUrl
+    }
+  }
+
   return (
     <>
       <BrandThemeInjector theme={brandTheme} />
@@ -234,6 +259,7 @@ export default async function MenuGuestPage({ params, searchParams }: PageProps)
         currency={restaurant.currency}
         categories={categories}
         pdfUrl={restaurant.pdfUrl ?? null}
+        pageImages={pageImages}
         pdfHotspots={pdfHotspots}
         initialStockIssues={initialStockIssues}
         brandLogoUrl={brandTheme.logoUrl}

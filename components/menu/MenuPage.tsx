@@ -64,6 +64,7 @@ interface MenuPageProps {
   currency: string
   categories: Category[]
   pdfUrl?: string | null
+  pageImages?: string[]
   pdfHotspots?: PdfHotspot[]
   initialStockIssues?: StockIssueItem[]
   // Soporte de contexto de Plaza Gastronómica
@@ -112,6 +113,7 @@ export function MenuPage({
   currency,
   categories,
   pdfUrl,
+  pageImages,
   pdfHotspots = [],
   initialStockIssues = [],
   foodCourtSlug,
@@ -125,7 +127,7 @@ export function MenuPage({
   whiteLabelEnabled = false,
   isViewOnly = false,
 }: MenuPageProps) {
-  const hasPdf = Boolean(pdfUrl)
+  const hasPdf = Boolean(pdfUrl || (pageImages && pageImages.length > 0))
 
   const [selectedProduct, setSelectedProduct] = useState<ProductModalData | null>(null)
   const [activeCategory, setActiveCategory] = useState<string>(categories[0]?.id ?? '')
@@ -869,10 +871,11 @@ export function MenuPage({
       )}
 
       {/* ── Vista PDF ── */}
-      {viewMode === 'pdf' && pdfUrl && (
+      {viewMode === 'pdf' && (pdfUrl || (pageImages && pageImages.length > 0)) && (
         <main className="max-w-2xl mx-auto px-2 py-4">
           <PdfMenuView
             pdfUrl={pdfUrl}
+            pageImages={pageImages}
             hotspots={pdfHotspots}
             recommendedMap={recommendationsMap}
             onSelectProduct={setSelectedProduct}

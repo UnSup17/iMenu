@@ -7,6 +7,7 @@
  * Railway/Render/VPS. Vercel no soporta WebSockets de larga duración.
  *
  * En Vercel, los eventos se deben manejar via Upstash Redis Pub/Sub + SSE.
+ * Vercel Blob CDN enabled.
  */
 
 import { createServer } from 'http'

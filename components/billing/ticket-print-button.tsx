@@ -2,7 +2,13 @@
 
 import { useState } from 'react'
 
-export function TicketPrintButton({ invoiceId }: { invoiceId: string }) {
+export function TicketPrintButton({
+  invoiceId,
+  compact = false,
+}: {
+  invoiceId: string
+  compact?: boolean
+}) {
   const [printing, setPrinting] = useState(false)
 
   async function handlePrintTicket() {
@@ -109,6 +115,19 @@ export function TicketPrintButton({ invoiceId }: { invoiceId: string }) {
     } finally {
       setPrinting(false)
     }
+  }
+
+  if (compact) {
+    return (
+      <button
+        onClick={handlePrintTicket}
+        disabled={printing}
+        title="Reimprimir ticket térmica"
+        className="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-amber-500/20 hover:border-amber-500/40 border border-zinc-700 text-zinc-400 hover:text-amber-400 flex items-center justify-center text-sm transition-all disabled:opacity-50 cursor-pointer"
+      >
+        {printing ? '⏳' : '🖨️'}
+      </button>
+    )
   }
 
   return (

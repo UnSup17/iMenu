@@ -46,3 +46,6 @@ next-env.d.ts
 
 # Uploads locales (desarrollo) — en producción se usa Vercel Blob
 /public/uploads/
+/public/menu-cache/
+/public/images/products/
+/public/*.pdf
