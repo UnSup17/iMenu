@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { ExpenseCategory, PaymentMethod, InvoiceStatus } from '@prisma/client'
-import { PLReportData, VatReportData, CashRegisterLiveSummary, ExpenseSummaryItem } from './types'
+import { PLReportData, VatReportData, CashRegisterLiveSummary, ExpenseSummaryItem, CashflowReportData } from './types'
 
 export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   FOOD_INGREDIENTS: 'Insumos y Alimentos',
@@ -462,6 +462,186 @@ export async function calculateSpecialOffersReport(
     },
     byOffer,
     dishes: Array.from(dishMap.values()),
+  }
+}
+
+/**
+ * Calcula el Flujo de Caja (Cashflow) de un restaurante en un rango de fechas.
+ * Desglosa entradas reales por método de pago, salidas operativas por categoría y tendencia diaria.
+ */
+export async function calculateCashflow(
+  restaurantId: string,
+  startDate: Date,
+  endDate: Date,
+  periodLabel?: string
+): Promise<CashflowReportData> {
+  // 1. Inflows: Pagos recibidos dentro del rango para facturas pagadas
+  const payments = await prisma.payment.findMany({
+    where: {
+      receivedAt: { gte: startDate, lte: endDate },
+      invoice: {
+        restaurantId,
+        status: InvoiceStatus.PAID,
+      },
+    },
+    select: {
+      id: true,
+      amount: true,
+      method: true,
+      receivedAt: true,
+    },
+  })
+
+  // 2. Outflows: Gastos registrados dentro del rango
+  const expenses = await prisma.expense.findMany({
+    where: {
+      restaurantId,
+      date: { gte: startDate, lte: endDate },
+    },
+    select: {
+      id: true,
+      amount: true,
+      category: true,
+      date: true,
+      description: true,
+    },
+  })
+
+  // Agrupar entradas por método de pago
+  const methodMap: Record<string, { label: string; amount: number; count: number }> = {
+    CASH: { label: 'Efectivo', amount: 0, count: 0 },
+    CREDIT_CARD: { label: 'Tarjeta de Crédito', amount: 0, count: 0 },
+    DEBIT_CARD: { label: 'Tarjeta de Débito', amount: 0, count: 0 },
+    TRANSFER: { label: 'Transferencia (Nequi / Daviplata / Banco)', amount: 0, count: 0 },
+    QR_CODE: { label: 'Código QR / Billetera Digital', amount: 0, count: 0 },
+    OTHER: { label: 'Otros Medios de Pago', amount: 0, count: 0 },
+  }
+
+  let totalInflows = 0
+  for (const p of payments) {
+    const amt = Number(p.amount)
+    totalInflows += amt
+    const key = p.method in methodMap ? p.method : 'OTHER'
+    methodMap[key].amount += amt
+    methodMap[key].count += 1
+  }
+
+  const inflowItems = Object.entries(methodMap)
+    .filter(([_, data]) => data.count > 0 || data.amount > 0)
+    .map(([method, data]) => ({
+      method,
+      methodLabel: data.label,
+      amount: data.amount,
+      count: data.count,
+      percentOfTotal: totalInflows > 0 ? parseFloat(((data.amount / totalInflows) * 100).toFixed(1)) : 0,
+    }))
+    .sort((a, b) => b.amount - a.amount)
+
+  // Agrupar salidas por categoría de gasto
+  const categoryMap: Record<ExpenseCategory, { amount: number; count: number }> = {
+    FOOD_INGREDIENTS: { amount: 0, count: 0 },
+    BEVERAGES: { amount: 0, count: 0 },
+    LABOR: { amount: 0, count: 0 },
+    UTILITIES: { amount: 0, count: 0 },
+    RENT: { amount: 0, count: 0 },
+    EQUIPMENT: { amount: 0, count: 0 },
+    MARKETING: { amount: 0, count: 0 },
+    ADMIN: { amount: 0, count: 0 },
+    TAXES: { amount: 0, count: 0 },
+    OTHER: { amount: 0, count: 0 },
+  }
+
+  let totalOutflows = 0
+  for (const exp of expenses) {
+    const amt = Number(exp.amount)
+    totalOutflows += amt
+    if (exp.category in categoryMap) {
+      categoryMap[exp.category].amount += amt
+      categoryMap[exp.category].count += 1
+    } else {
+      categoryMap.OTHER.amount += amt
+      categoryMap.OTHER.count += 1
+    }
+  }
+
+  const outflowItems = (Object.entries(categoryMap) as [ExpenseCategory, { amount: number; count: number }][])
+    .filter(([_, data]) => data.count > 0 || data.amount > 0)
+    .map(([cat, data]) => ({
+      category: cat,
+      categoryLabel: EXPENSE_CATEGORY_LABELS[cat] || cat,
+      amount: data.amount,
+      count: data.count,
+      percentOfTotal: totalOutflows > 0 ? parseFloat(((data.amount / totalOutflows) * 100).toFixed(1)) : 0,
+    }))
+    .sort((a, b) => b.amount - a.amount)
+
+  // Serie de tiempo diaria
+  const dayMap = new Map<string, { inflows: number; outflows: number }>()
+
+  // Inicializar días en el rango
+  const curr = new Date(startDate)
+  while (curr <= endDate) {
+    const key = curr.toISOString().slice(0, 10)
+    dayMap.set(key, { inflows: 0, outflows: 0 })
+    curr.setDate(curr.getDate() + 1)
+  }
+
+  for (const p of payments) {
+    const day = p.receivedAt.toISOString().slice(0, 10)
+    const existing = dayMap.get(day)
+    if (existing) {
+      existing.inflows += Number(p.amount)
+    }
+  }
+
+  for (const e of expenses) {
+    const day = e.date.toISOString().slice(0, 10)
+    const existing = dayMap.get(day)
+    if (existing) {
+      existing.outflows += Number(e.amount)
+    }
+  }
+
+  let cumulative = 0
+  const dailyTrend = Array.from(dayMap.entries()).map(([day, stats]) => {
+    const net = stats.inflows - stats.outflows
+    cumulative += net
+    const dateObj = new Date(day + 'T00:00:00')
+    const dayLabel = dateObj.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })
+    return {
+      date: day,
+      dayLabel,
+      inflows: stats.inflows,
+      outflows: stats.outflows,
+      net,
+      cumulativeNet: cumulative,
+    }
+  })
+
+  const netCashflow = totalInflows - totalOutflows
+  const cashConversionRatio = totalInflows > 0 ? parseFloat(((netCashflow / totalInflows) * 100).toFixed(1)) : 0
+
+  return {
+    periodLabel: periodLabel || `${startDate.toLocaleDateString('es-CO')} - ${endDate.toLocaleDateString('es-CO')}`,
+    startDate: startDate.toISOString(),
+    endDate: endDate.toISOString(),
+    summary: {
+      totalInflows,
+      totalOutflows,
+      netCashflow,
+      cashConversionRatio,
+      inflowTransactionsCount: payments.length,
+      outflowTransactionsCount: expenses.length,
+    },
+    inflows: {
+      byMethod: inflowItems,
+      total: totalInflows,
+    },
+    outflows: {
+      byCategory: outflowItems,
+      total: totalOutflows,
+    },
+    dailyTrend,
   }
 }
 

@@ -11,6 +11,12 @@ const TaxConfigSchema = z.object({
   vatEnabled: z.boolean().optional(),
   serviceChargeRate: z.number().min(0).max(1).optional(),
   serviceChargeEnabled: z.boolean().optional(),
+  reteFuenteEnabled: z.boolean().optional(),
+  reteFuenteRate: z.number().min(0).max(1).optional(),
+  reteIvaEnabled: z.boolean().optional(),
+  reteIvaRate: z.number().min(0).max(1).optional(),
+  reteIcaEnabled: z.boolean().optional(),
+  reteIcaRate: z.number().min(0).max(1).optional(),
   legalName: z.string().max(200).optional(),
   taxId: z.string().max(30).optional(),
   address: z.string().max(300).optional(),
@@ -43,7 +49,7 @@ export async function GET() {
     const user = session.user as { restaurantId?: string; role: string }
     if (!user.restaurantId) return NextResponse.json({ error: 'Sin restaurante' }, { status: 403 })
 
-    const allowedRoles = ['SUPERADMIN', 'RESTAURANT_ADMIN', 'ACCOUNTANT', 'MANAGER']
+    const allowedRoles = ['SUPERADMIN', 'ORG_ADMIN', 'RESTAURANT_ADMIN', 'ACCOUNTANT', 'MANAGER']
     if (!allowedRoles.includes(user.role)) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     let config = await prisma.taxConfig.findUnique({
@@ -62,6 +68,9 @@ export async function GET() {
         ...config,
         vatRate: config.vatRate.toNumber(),
         serviceChargeRate: config.serviceChargeRate.toNumber(),
+        reteFuenteRate: (config as any).reteFuenteRate ? Number((config as any).reteFuenteRate) : 0.025,
+        reteIvaRate: (config as any).reteIvaRate ? Number((config as any).reteIvaRate) : 0.15,
+        reteIcaRate: (config as any).reteIcaRate ? Number((config as any).reteIcaRate) : 0.00966,
       },
     })
   } catch (error) {
@@ -82,7 +91,7 @@ export async function PATCH(request: NextRequest) {
     const user = session.user as { restaurantId?: string; role: string }
     if (!user.restaurantId) return NextResponse.json({ error: 'Sin restaurante' }, { status: 403 })
 
-    const adminRoles = ['SUPERADMIN', 'RESTAURANT_ADMIN']
+    const adminRoles = ['SUPERADMIN', 'ORG_ADMIN', 'RESTAURANT_ADMIN']
     if (!adminRoles.includes(user.role)) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const body = await request.json()
@@ -99,6 +108,9 @@ export async function PATCH(request: NextRequest) {
         ...config,
         vatRate: config.vatRate.toNumber(),
         serviceChargeRate: config.serviceChargeRate.toNumber(),
+        reteFuenteRate: (config as any).reteFuenteRate ? Number((config as any).reteFuenteRate) : 0.025,
+        reteIvaRate: (config as any).reteIvaRate ? Number((config as any).reteIvaRate) : 0.15,
+        reteIcaRate: (config as any).reteIcaRate ? Number((config as any).reteIcaRate) : 0.00966,
       },
     })
   } catch (error) {

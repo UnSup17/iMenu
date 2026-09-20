@@ -11,6 +11,8 @@ import {
 } from '@/types/websocket-events'
 import QRCode from 'qrcode'
 
+import { FloorPlanVisualizer, type EnrichedTable } from '@/components/tables/FloorPlanVisualizer'
+
 type StaffSocket = Socket<ServerToClientEvents, StaffToServerEvents>
 
 export interface TablePaymentItem {
@@ -38,6 +40,12 @@ export interface FoodCourtTableItem {
   tableNumber: number
   zone?: string | null
   status: string
+  capacity?: number
+  posX?: number
+  posY?: number
+  width?: number
+  height?: number
+  shape?: string
   activeSession?: TableActiveSession | null
 }
 
@@ -66,6 +74,7 @@ export function FoodCourtStaffTables({
 }: FoodCourtStaffTablesProps) {
   const [tables, setTables] = useState<FoodCourtTableItem[]>(initialTables)
   const [filter, setFilter] = useState<'ALL' | 'ACTIVE' | 'PENDING' | 'PAID_ALL' | 'AVAILABLE'>('ALL')
+  const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid')
   const [searchQuery, setSearchQuery] = useState('')
   const [isLiveConnected, setIsLiveConnected] = useState(false)
   const socketRef = useRef<StaffSocket | null>(null)
@@ -275,6 +284,31 @@ export function FoodCourtStaffTables({
       return true
     })
   }, [tables, filter, searchQuery])
+
+  // Preparar mesas enriquecidas para el visualizador del plano SVG
+  const enrichedTables: EnrichedTable[] = useMemo(() => {
+    return filteredTables.map((t) => ({
+      id: t.id,
+      foodCourtId,
+      tableNumber: t.tableNumber,
+      zone: t.zone || null,
+      status: t.status,
+      capacity: t.capacity || 4,
+      posX: t.posX || 0,
+      posY: t.posY || 0,
+      width: t.width || 80,
+      height: t.height || 80,
+      shape: (t.shape as any) || 'square',
+      activeSession: t.activeSession
+        ? {
+            id: t.activeSession.id,
+            sessionToken: t.activeSession.sessionToken,
+            createdAt: t.activeSession.startedAt,
+            status: 'ACTIVE',
+          }
+        : null,
+    }))
+  }, [filteredTables, foodCourtId])
 
   // Crear nueva mesa
   const handleCreateTable = async (e: React.FormEvent) => {
@@ -600,28 +634,88 @@ export function FoodCourtStaffTables({
           </button>
         </div>
 
-        {/* Input de búsqueda */}
-        <div className="relative w-full sm:w-64">
-          <input
-            type="text"
-            placeholder="Buscar mesa o zona..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500/50"
-          />
-          {searchQuery && (
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          {/* Selector de modo de vista: Cuadrícula vs Plano SVG */}
+          <div className="flex items-center bg-zinc-900 border border-zinc-800 p-1 rounded-xl shrink-0">
             <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white text-xs"
+              onClick={() => setViewMode('grid')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                viewMode === 'grid'
+                  ? 'bg-amber-500 text-black shadow-md shadow-amber-500/20'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+              title="Vista de cuadrícula con checklist de cobro"
             >
-              ✕
+              <span>📋</span>
+              <span>Cuadrícula</span>
             </button>
-          )}
+            <button
+              onClick={() => setViewMode('map')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                viewMode === 'map'
+                  ? 'bg-amber-500 text-black shadow-md shadow-amber-500/20'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+              title="Plano de salón interactivo SVG con coordenadas"
+            >
+              <span>🗺️</span>
+              <span>Plano SVG</span>
+            </button>
+          </div>
+
+          {/* Input de búsqueda */}
+          <div className="relative w-full sm:w-56">
+            <input
+              type="text"
+              placeholder="Buscar mesa o zona..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500/50"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white text-xs"
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Grid de Mesas */}
-      {filteredTables.length === 0 ? (
+      {/* Contenido según el modo de vista */}
+      {viewMode === 'map' ? (
+        <div className="bg-zinc-900/60 border border-zinc-800 rounded-3xl p-6 shadow-xl space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-zinc-800">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <span>🗺️</span>
+                <span>Plano General del Salón — Plaza Gastronómica</span>
+              </h3>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Representación visual interactiva en tiempo real con coordenadas, aforo y estado de servicio.
+                Haz clic en una mesa para ver pedidos o generar QR.
+              </p>
+            </div>
+            <span className="text-xs font-mono text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full self-start sm:self-auto">
+              {enrichedTables.length} mesas en plano
+            </span>
+          </div>
+
+          <FloorPlanVisualizer
+            tables={enrichedTables}
+            onSelectTable={(table) => {
+              const orig = tables.find((t) => t.id === table.id)
+              if (orig) setSelectedBillTable(orig)
+            }}
+            onOpenSession={(table) => {
+              const orig = tables.find((t) => t.id === table.id)
+              if (orig) handleGenerateSession(orig)
+            }}
+          />
+        </div>
+      ) : filteredTables.length === 0 ? (
         <div className="text-center py-16 text-zinc-500 text-xs bg-zinc-900/30 rounded-3xl border border-zinc-800/60">
           No se encontraron mesas que coincidan con el filtro seleccionado.
         </div>

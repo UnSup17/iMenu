@@ -41,6 +41,13 @@ export async function saveTablePushSubscription(
   }
 }
 
+export interface TableOrderReadyOptions {
+  foodCourtName?: string
+  targetUrl?: string
+  customTitle?: string
+  customBody?: string
+}
+
 /**
  * Envía una notificación Web Push a todos los comensales sentados en una mesa
  */
@@ -48,8 +55,13 @@ export async function notifyTableOrderReady(
   tableId: string,
   orderNumber: string,
   restaurantName: string,
-  targetUrl?: string
+  optionsOrUrl?: string | TableOrderReadyOptions
 ): Promise<number> {
+  const options: TableOrderReadyOptions =
+    typeof optionsOrUrl === 'string'
+      ? { targetUrl: optionsOrUrl }
+      : optionsOrUrl || {}
+
   const wp = getWebPush()
   const subscriptions = new Set<string>()
 
@@ -75,11 +87,22 @@ export async function notifyTableOrderReady(
     return 0
   }
 
+  const plazaContext = options.foodCourtName ? ` en ${options.foodCourtName}` : ''
+  const title =
+    options.customTitle ||
+    (options.foodCourtName
+      ? `🔔 ¡Pedido listo de ${restaurantName}! (${options.foodCourtName})`
+      : `🔔 ¡Tu pedido #${orderNumber} está listo!`)
+
+  const body =
+    options.customBody ||
+    `Tu orden #${orderNumber} de ${restaurantName}${plazaContext} ya ha salido de cocina y va en camino a tu mesa. ¡Buen provecho!`
+
   const payload = JSON.stringify({
-    title: `🔔 ¡Tu pedido #${orderNumber} está listo!`,
-    body: `Tu orden de ${restaurantName} ya ha salido de cocina y va en camino a tu mesa. ¡Buen provecho!`,
+    title,
+    body,
     icon: '/favicon.ico',
-    url: targetUrl || '/',
+    url: options.targetUrl || '/',
   })
 
   let sentCount = 0

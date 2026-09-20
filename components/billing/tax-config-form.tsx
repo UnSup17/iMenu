@@ -12,6 +12,12 @@ interface TaxConfigFormProps {
     vatEnabled?: boolean
     serviceChargeRate?: { toString(): string } | number
     serviceChargeEnabled?: boolean
+    reteFuenteRate?: { toString(): string } | number
+    reteFuenteEnabled?: boolean
+    reteIvaRate?: { toString(): string } | number
+    reteIvaEnabled?: boolean
+    reteIcaRate?: { toString(): string } | number
+    reteIcaEnabled?: boolean
     legalName?: string | null
     taxId?: string | null
     address?: string | null
@@ -58,6 +64,19 @@ export function TaxConfigForm({ initialData }: TaxConfigFormProps) {
   const [serviceChargeRate, setServiceChargeRate] = useState(initialServiceRate.toString())
   const [serviceChargeEnabled, setServiceChargeEnabled] = useState(initialData?.serviceChargeEnabled ?? false)
 
+  const [reteFuenteEnabled, setReteFuenteEnabled] = useState(initialData?.reteFuenteEnabled ?? false)
+  const [reteFuenteRate, setReteFuenteRate] = useState(
+    initialData?.reteFuenteRate ? (Number(initialData.reteFuenteRate) * 100).toString() : '2.5'
+  )
+  const [reteIvaEnabled, setReteIvaEnabled] = useState(initialData?.reteIvaEnabled ?? false)
+  const [reteIvaRate, setReteIvaRate] = useState(
+    initialData?.reteIvaRate ? (Number(initialData.reteIvaRate) * 100).toString() : '15'
+  )
+  const [reteIcaEnabled, setReteIcaEnabled] = useState(initialData?.reteIcaEnabled ?? false)
+  const [reteIcaRate, setReteIcaRate] = useState(
+    initialData?.reteIcaRate ? (Number(initialData.reteIcaRate) * 1000).toString() : '9.66'
+  )
+
   const [legalName, setLegalName] = useState(initialData?.legalName ?? '')
   const [taxId, setTaxId] = useState(initialData?.taxId ?? '')
   const [address, setAddress] = useState(initialData?.address ?? '')
@@ -92,6 +111,12 @@ export function TaxConfigForm({ initialData }: TaxConfigFormProps) {
           vatEnabled,
           serviceChargeRate: (parseFloat(serviceChargeRate) || 0) / 100,
           serviceChargeEnabled,
+          reteFuenteEnabled,
+          reteFuenteRate: (parseFloat(reteFuenteRate) || 0) / 100,
+          reteIvaEnabled,
+          reteIvaRate: (parseFloat(reteIvaRate) || 0) / 100,
+          reteIcaEnabled,
+          reteIcaRate: (parseFloat(reteIcaRate) || 0) / 1000,
           legalName: legalName.trim() || undefined,
           taxId: taxId.trim() || undefined,
           address: address.trim() || undefined,
@@ -231,6 +256,98 @@ export function TaxConfigForm({ initialData }: TaxConfigFormProps) {
               onChange={(e) => setServiceChargeRate(e.target.value)}
               className="w-full bg-zinc-950 border border-zinc-800 disabled:opacity-50 rounded-lg px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-amber-500"
             />
+          </div>
+        </div>
+      </div>
+
+      {/* Retenciones Tributarias (B2B / DIAN) */}
+      <div className="space-y-4 pt-4 border-t border-zinc-800">
+        <div>
+          <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+            Retenciones Tributarias (B2B / Clientes Jurídicos DIAN)
+          </h2>
+          <p className="text-[11px] text-zinc-500 mt-0.5">
+            Configura las tasas aplicables cuando una empresa con NIT solicita factura y practica retención en la fuente.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* ReteFuente */}
+          <div className="bg-zinc-950/60 border border-zinc-800 p-3 rounded-xl">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs text-zinc-300 font-medium">ReteFuente (%)</label>
+              <label className="flex items-center gap-1.5 text-xs text-zinc-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={reteFuenteEnabled}
+                  onChange={(e) => setReteFuenteEnabled(e.target.checked)}
+                  className="rounded border-zinc-800 text-amber-500 bg-zinc-900"
+                />
+                Activar
+              </label>
+            </div>
+            <input
+              type="number"
+              step="0.01"
+              disabled={!reteFuenteEnabled}
+              value={reteFuenteRate}
+              onChange={(e) => setReteFuenteRate(e.target.value)}
+              placeholder="2.5"
+              className="w-full bg-zinc-900 border border-zinc-800 disabled:opacity-40 rounded-lg px-3 py-1.5 text-white font-mono text-xs focus:outline-none focus:border-amber-500"
+            />
+            <span className="text-[10px] text-zinc-500 block mt-1">2.5% compras / 3.5% no declarantes</span>
+          </div>
+
+          {/* ReteIVA */}
+          <div className="bg-zinc-950/60 border border-zinc-800 p-3 rounded-xl">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs text-zinc-300 font-medium">ReteIVA (% del IVA)</label>
+              <label className="flex items-center gap-1.5 text-xs text-zinc-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={reteIvaEnabled}
+                  onChange={(e) => setReteIvaEnabled(e.target.checked)}
+                  className="rounded border-zinc-800 text-amber-500 bg-zinc-900"
+                />
+                Activar
+              </label>
+            </div>
+            <input
+              type="number"
+              step="0.1"
+              disabled={!reteIvaEnabled}
+              value={reteIvaRate}
+              onChange={(e) => setReteIvaRate(e.target.value)}
+              placeholder="15.0"
+              className="w-full bg-zinc-900 border border-zinc-800 disabled:opacity-40 rounded-lg px-3 py-1.5 text-white font-mono text-xs focus:outline-none focus:border-amber-500"
+            />
+            <span className="text-[10px] text-zinc-500 block mt-1">15% del valor total del IVA facturado</span>
+          </div>
+
+          {/* ReteICA */}
+          <div className="bg-zinc-950/60 border border-zinc-800 p-3 rounded-xl">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs text-zinc-300 font-medium">ReteICA (por mil)</label>
+              <label className="flex items-center gap-1.5 text-xs text-zinc-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={reteIcaEnabled}
+                  onChange={(e) => setReteIcaEnabled(e.target.checked)}
+                  className="rounded border-zinc-800 text-amber-500 bg-zinc-900"
+                />
+                Activar
+              </label>
+            </div>
+            <input
+              type="number"
+              step="0.001"
+              disabled={!reteIcaEnabled}
+              value={reteIcaRate}
+              onChange={(e) => setReteIcaRate(e.target.value)}
+              placeholder="9.66"
+              className="w-full bg-zinc-900 border border-zinc-800 disabled:opacity-40 rounded-lg px-3 py-1.5 text-white font-mono text-xs focus:outline-none focus:border-amber-500"
+            />
+            <span className="text-[10px] text-zinc-500 block mt-1">Ej: 9.66 x 1000 según municipio</span>
           </div>
         </div>
       </div>

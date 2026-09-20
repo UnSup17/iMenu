@@ -141,6 +141,12 @@ export default async function FoodCourtDetailPage({ params }: PageProps) {
               tableNumber: t.tableNumber,
               zone: t.zone,
               status: t.status,
+              capacity: t.capacity,
+              posX: t.posX,
+              posY: t.posY,
+              width: t.width,
+              height: t.height,
+              shape: t.shape,
               activeSession: activeSession
                 ? {
                     id: activeSession.id,

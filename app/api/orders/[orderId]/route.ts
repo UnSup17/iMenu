@@ -167,15 +167,31 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // Notificación Web Push a la mesa cuando el pedido está listo
     if (parsed.status === 'READY') {
       try {
-        const rest = await prisma.restaurant.findUnique({
-          where: { id: existing.restaurantId },
-          select: { name: true },
-        })
+        const [rest, table] = await Promise.all([
+          prisma.restaurant.findUnique({
+            where: { id: existing.restaurantId },
+            select: { name: true },
+          }),
+          prisma.table.findUnique({
+            where: { id: existing.tableId },
+            select: {
+              foodCourtId: true,
+              foodCourt: { select: { name: true, slug: true } },
+            },
+          }),
+        ])
+
         const { notifyTableOrderReady } = await import('@/lib/push/send')
         notifyTableOrderReady(
           existing.tableId,
           orderId.slice(-4).toUpperCase(),
-          rest?.name || 'el Restaurante'
+          rest?.name || 'el Restaurante',
+          {
+            foodCourtName: table?.foodCourt?.name,
+            targetUrl: table?.foodCourt
+              ? `/plaza/${table.foodCourt.slug}/${existing.tableId}`
+              : undefined,
+          }
         ).catch((e) => console.warn('[Web Push] Error enviando push:', e))
       } catch (pushErr) {
         console.warn('[Web Push] Error preparando push:', pushErr)

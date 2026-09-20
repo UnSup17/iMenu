@@ -46,18 +46,27 @@ export default function PLReportPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <input
             type="month"
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(e.target.value)}
             className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500"
           />
+          <a
+            href={`/api/export/accounting/pl?month=${selectedMonth}`}
+            download
+            className="px-3.5 py-2 text-sm font-semibold rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition flex items-center gap-1.5"
+          >
+            <span>📥</span>
+            <span>Excel</span>
+          </a>
           <button
             onClick={() => window.print()}
-            className="px-4 py-2 text-sm font-semibold rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition"
+            className="px-3.5 py-2 text-sm font-semibold rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition flex items-center gap-1.5"
           >
-            🖨️ Imprimir
+            <span>🖨️</span>
+            <span>Imprimir</span>
           </button>
         </div>
       </div>

@@ -122,6 +122,33 @@ export function FoodCourtListClient({ initialFoodCourts, canCreate }: FoodCourtL
         )}
       </div>
 
+      {/* KPI Overview Summary */}
+      {foodCourts.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4">
+            <span className="text-xs text-zinc-400 block mb-1">Plazas Gastronómicas</span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-black text-white font-mono">{foodCourts.length}</span>
+              <span className="text-xs text-emerald-400 font-medium">
+                ({foodCourts.filter((f) => f.isActive).length} activas)
+              </span>
+            </div>
+          </div>
+          <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4">
+            <span className="text-xs text-zinc-400 block mb-1">Restaurantes Participando</span>
+            <span className="text-2xl font-black text-amber-400 font-mono">
+              {foodCourts.reduce((sum, f) => sum + f.memberships.length, 0)}
+            </span>
+          </div>
+          <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4">
+            <span className="text-xs text-zinc-400 block mb-1">Total Mesas en Plazas</span>
+            <span className="text-2xl font-black text-purple-400 font-mono">
+              {foodCourts.reduce((sum, f) => sum + f._count.tables, 0)}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Grid of Food Courts */}
       {foodCourts.length === 0 ? (
         <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-12 text-center max-w-lg mx-auto">

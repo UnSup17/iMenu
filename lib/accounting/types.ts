@@ -68,3 +68,51 @@ export interface CashRegisterLiveSummary {
   expectedCashInDrawer: number
   invoicesPaidCount: number
 }
+
+export interface CashflowInflowItem {
+  method: string
+  methodLabel: string
+  amount: number
+  count: number
+  percentOfTotal: number
+}
+
+export interface CashflowOutflowItem {
+  category: ExpenseCategory
+  categoryLabel: string
+  amount: number
+  count: number
+  percentOfTotal: number
+}
+
+export interface CashflowDailyPoint {
+  date: string
+  dayLabel: string
+  inflows: number
+  outflows: number
+  net: number
+  cumulativeNet: number
+}
+
+export interface CashflowReportData {
+  periodLabel: string
+  startDate: string
+  endDate: string
+  summary: {
+    totalInflows: number
+    totalOutflows: number
+    netCashflow: number
+    cashConversionRatio: number // (Net cash / total inflows) * 100
+    inflowTransactionsCount: number
+    outflowTransactionsCount: number
+  }
+  inflows: {
+    byMethod: CashflowInflowItem[]
+    total: number
+  }
+  outflows: {
+    byCategory: CashflowOutflowItem[]
+    total: number
+  }
+  dailyTrend: CashflowDailyPoint[]
+}

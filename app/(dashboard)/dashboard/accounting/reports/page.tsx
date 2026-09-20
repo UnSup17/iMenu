@@ -32,8 +32,8 @@ const REPORTS = [
     title: 'Flujo de Caja (Cashflow)',
     description: 'Entradas y salidas de efectivo en el período: cobros, pagos a proveedores, nómina y saldo neto.',
     color: 'from-cyan-500/20 to-cyan-600/10 border-cyan-500/30 hover:border-cyan-400',
-    badge: 'Próximamente',
-    badgeColor: 'bg-zinc-700/60 text-zinc-400 border-zinc-600',
+    badge: 'Disponible',
+    badgeColor: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
   },
   {
     href: '/dashboard/accounting/periods',

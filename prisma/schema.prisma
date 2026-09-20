@@ -230,6 +230,7 @@ model Restaurant {
   reservations            Reservation[]
   suppliers               Supplier[]               // Proveedores (Fase 3)
   purchaseOrders          PurchaseOrder[]          // Órdenes de compra (Fase 3)
+  fixedAssets             FixedAsset[]             // Activos fijos y depreciación (Fase 4)
 
   @@map("restaurants")
 }
@@ -854,6 +855,14 @@ model TaxConfig {
   serviceChargeRate    Decimal    @default(0.00) @db.Decimal(5, 4)
   serviceChargeEnabled Boolean    @default(false)
 
+  // Retenciones tributarias (Colombia B2B)
+  reteFuenteEnabled    Boolean    @default(false)
+  reteFuenteRate       Decimal    @default(0.025) @db.Decimal(5, 4) // 2.5% compras generales
+  reteIvaEnabled       Boolean    @default(false)
+  reteIvaRate          Decimal    @default(0.150) @db.Decimal(5, 4) // 15% del IVA
+  reteIcaEnabled       Boolean    @default(false)
+  reteIcaRate          Decimal    @default(0.00966) @db.Decimal(6, 5) // 9.66 x 1000
+
   // Datos del negocio
   legalName            String?    // Razón social
   taxId                String?    // NIT (Colombia), RFC (México), RUT (Chile)
@@ -1053,6 +1062,35 @@ model AccountingPeriod {
 
   @@unique([restaurantId, year, month])
   @@map("accounting_periods")
+}
+
+enum AssetCategory {
+  KITCHEN_EQUIPMENT
+  FURNITURE
+  COMPUTING_POS
+  VEHICLE
+  OTHER
+}
+
+// Activo fijo con cálculo de depreciación en línea recta (Fase 4)
+model FixedAsset {
+  id               String        @id @default(uuid())
+  restaurantId     String
+  restaurant       Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  name             String
+  category         AssetCategory @default(KITCHEN_EQUIPMENT)
+  serialNumber     String?
+  acquisitionCost  Decimal       @db.Decimal(14, 2)
+  salvageValue     Decimal       @default(0) @db.Decimal(14, 2)
+  usefulLifeMonths Int           @default(60) // 5 años default
+  acquisitionDate  DateTime
+  notes            String?       @db.Text
+  isActive         Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([restaurantId])
+  @@map("fixed_assets")
 }
 
 // ============================================================

@@ -98,7 +98,7 @@ export function FoodCourtDetailClient({
   canManage,
 }: FoodCourtDetailClientProps) {
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<'tables' | 'reports' | 'commissions' | 'members' | 'settings'>('tables')
+  const [activeTab, setActiveTab] = useState<'tables' | 'reports' | 'commissions' | 'analytics' | 'members' | 'settings'>('tables')
 
   // Membership state
   const [selectedRestaurantId, setSelectedRestaurantId] = useState('')
@@ -159,7 +159,7 @@ export function FoodCourtDetailClient({
   }
 
   useEffect(() => {
-    if (activeTab === 'reports' || activeTab === 'commissions') {
+    if (activeTab === 'reports' || activeTab === 'commissions' || activeTab === 'analytics') {
       fetchReports(reportTimeframe)
     }
   }, [activeTab, reportTimeframe])
@@ -401,6 +401,16 @@ export function FoodCourtDetailClient({
           }`}
         >
           💰 Comisiones & Liquidación
+        </button>
+        <button
+          onClick={() => setActiveTab('analytics')}
+          className={`pb-3 transition-colors border-b-2 whitespace-nowrap cursor-pointer ${
+            activeTab === 'analytics'
+              ? 'border-amber-400 text-amber-400'
+              : 'border-transparent text-zinc-400 hover:text-white'
+          }`}
+        >
+          📈 Benchmarking & Analytics
         </button>
         <button
           onClick={() => setActiveTab('members')}
@@ -712,27 +722,39 @@ export function FoodCourtDetailClient({
               </p>
             </div>
 
-            <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 p-1 rounded-xl">
-              {(
-                [
-                  { id: 'today', label: 'Hoy' },
-                  { id: '7d', label: '7 Días' },
-                  { id: '30d', label: '30 Días' },
-                  { id: 'all', label: 'Histórico' },
-                ] as const
-              ).map((tf) => (
-                <button
-                  key={tf.id}
-                  onClick={() => setReportTimeframe(tf.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    reportTimeframe === tf.id
-                      ? 'bg-amber-500 text-black shadow-md'
-                      : 'text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  {tf.label}
-                </button>
-              ))}
+            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+              <a
+                href={`/api/food-courts/${foodCourt.id}/settlements/export?timeframe=${reportTimeframe}`}
+                download
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-bold text-zinc-200 transition-colors shadow-sm"
+                title="Descargar archivo CSV con BOM UTF-8 de liquidaciones de la plaza"
+              >
+                <span>📥</span>
+                <span>Exportar Liquidaciones (CSV)</span>
+              </a>
+
+              <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 p-1 rounded-xl">
+                {(
+                  [
+                    { id: 'today', label: 'Hoy' },
+                    { id: '7d', label: '7 Días' },
+                    { id: '30d', label: '30 Días' },
+                    { id: 'all', label: 'Histórico' },
+                  ] as const
+                ).map((tf) => (
+                  <button
+                    key={tf.id}
+                    onClick={() => setReportTimeframe(tf.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      reportTimeframe === tf.id
+                        ? 'bg-amber-500 text-black shadow-md'
+                        : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    {tf.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -985,25 +1007,317 @@ export function FoodCourtDetailClient({
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-2 pt-2">
-                  <button
-                    onClick={() => {
-                      window.print()
-                    }}
-                    className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold cursor-pointer"
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-zinc-800">
+                  <a
+                    href={`/api/food-courts/${foodCourt.id}/settlements/export?timeframe=${reportTimeframe}&restaurantId=${selectedVendorStatement.restaurantId}`}
+                    download
+                    className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold flex items-center gap-1.5 transition-colors"
                   >
-                    🖨️ Imprimir Liquidación
-                  </button>
-                  <button
-                    onClick={() => setSelectedVendorStatement(null)}
-                    className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold cursor-pointer"
-                  >
-                    Cerrar
-                  </button>
+                    <span>📥</span>
+                    <span>Descargar CSV</span>
+                  </a>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        window.print()
+                      }}
+                      className="px-4 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-bold cursor-pointer flex items-center gap-1.5"
+                    >
+                      <span>🖨️</span>
+                      <span>Imprimir PDF Oficial</span>
+                    </button>
+                    <button
+                      onClick={() => setSelectedVendorStatement(null)}
+                      className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold cursor-pointer"
+                    >
+                      Cerrar
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* TAB 4: Benchmarking & Comparative Analytics                  */}
+      {/* ============================================================ */}
+      {activeTab === 'analytics' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-black text-white">Benchmarking &amp; Analytics Comparativos</h2>
+              <p className="text-xs text-zinc-400">
+                Comparativa de ticket promedio, cuota de mercado, volumen de órdenes y rotación de mesas entre locales
+              </p>
+            </div>
+
+            <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 p-1 rounded-xl">
+              {(
+                [
+                  { id: 'today', label: 'Hoy' },
+                  { id: '7d', label: '7 Días' },
+                  { id: '30d', label: '30 Días' },
+                  { id: 'all', label: 'Histórico' },
+                ] as const
+              ).map((tf) => (
+                <button
+                  key={tf.id}
+                  onClick={() => setReportTimeframe(tf.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    reportTimeframe === tf.id
+                      ? 'bg-amber-500 text-black shadow-md'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  {tf.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {isLoadingReports ? (
+            <div className="py-16 text-center text-zinc-500 space-y-3">
+              <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto" />
+              <p className="text-xs">Cargando métricas de benchmarking...</p>
+            </div>
+          ) : reportsData ? (
+            <>
+              {/* KPIs de Salón y Rotación */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-5">
+                  <span className="text-xs text-zinc-400 block mb-1">Rotación Media de Salón</span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-black text-amber-400 font-mono">
+                      {reportsData.kpis.tablesCount > 0
+                        ? (reportsData.kpis.totalSessionsCount / reportsData.kpis.tablesCount).toFixed(1)
+                        : '0.0'}
+                    </span>
+                    <span className="text-xs text-zinc-500">giros / mesa</span>
+                  </div>
+                  <span className="text-[10px] text-zinc-500 mt-1 block">
+                    {reportsData.kpis.totalSessionsCount} sesiones en {reportsData.kpis.tablesCount} mesas
+                  </span>
+                </div>
+
+                <div className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-5">
+                  <span className="text-xs text-zinc-400 block mb-1">Ticket Promedio Global</span>
+                  <span className="text-2xl font-black text-white font-mono">
+                    {formatPrice(reportsData.kpis.avgTicket)}
+                  </span>
+                  <span className="text-[10px] text-zinc-500 mt-1 block">
+                    Media consolidada de toda la plaza
+                  </span>
+                </div>
+
+                <div className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-5">
+                  <span className="text-xs text-zinc-400 block mb-1">Total Pedidos Despachados</span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-black text-emerald-400 font-mono">
+                      {reportsData.kpis.totalOrders}
+                    </span>
+                    <span className="text-xs text-zinc-500">órdenes</span>
+                  </div>
+                  <span className="text-[10px] text-zinc-500 mt-1 block">
+                    {reportsData.kpis.totalSessionsCount > 0
+                      ? (reportsData.kpis.totalOrders / reportsData.kpis.totalSessionsCount).toFixed(1)
+                      : '0'}{' '}
+                    pedidos / mesa ocupada
+                  </span>
+                </div>
+
+                <div className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-5">
+                  <span className="text-xs text-zinc-400 block mb-1">Locales Miembros Activos</span>
+                  <span className="text-2xl font-black text-purple-400 font-mono">
+                    {foodCourt.memberships.length}
+                  </span>
+                  <span className="text-[10px] text-zinc-500 mt-1 block">
+                    Participando en el mosaico de la plaza
+                  </span>
+                </div>
+              </div>
+
+              {/* Comparativa de Ventas & Cuota de Mercado (Market Share) */}
+              <div className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-6 shadow-xl space-y-5">
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <span>🏆</span>
+                      <span>Participación de Mercado &amp; Ranking de Ventas</span>
+                    </h3>
+                    <p className="text-xs text-zinc-400">
+                      Contribución porcentual de cada local sobre la facturación bruta total ({formatPrice(reportsData.kpis.totalGrossSales)})
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {[...reportsData.vendors]
+                    .sort((a, b) => b.grossSales - a.grossSales)
+                    .map((vendor, idx) => {
+                      const share =
+                        reportsData.kpis.totalGrossSales > 0
+                          ? (vendor.grossSales / reportsData.kpis.totalGrossSales) * 100
+                          : 0
+                      const rankBadge =
+                        idx === 0
+                          ? '🥇 #1'
+                          : idx === 1
+                          ? '🥈 #2'
+                          : idx === 2
+                          ? '🥉 #3'
+                          : `#${idx + 1}`
+
+                      return (
+                        <div
+                          key={vendor.restaurantId}
+                          className="bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-4 space-y-3"
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div className="flex items-center gap-3">
+                              <span className="font-mono text-xs font-bold text-amber-400 w-8">
+                                {rankBadge}
+                              </span>
+                              {vendor.restaurantLogo ? (
+                                <img
+                                  src={vendor.restaurantLogo}
+                                  alt=""
+                                  className="w-9 h-9 rounded-xl object-cover bg-zinc-800 shrink-0"
+                                />
+                              ) : (
+                                <div className="w-9 h-9 rounded-xl bg-zinc-800 flex items-center justify-center text-sm shrink-0">
+                                  🍽️
+                                </div>
+                              )}
+                              <div>
+                                <h4 className="text-xs font-bold text-white">{vendor.restaurantName}</h4>
+                                <span className="text-[10px] text-zinc-400">
+                                  {vendor.cuisineType || 'Comida'} • {vendor.ordersCount} pedidos
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-6 text-xs text-right">
+                              <div>
+                                <span className="text-[10px] text-zinc-500 block">Ventas</span>
+                                <span className="font-bold text-white font-mono">
+                                  {formatPrice(vendor.grossSales)}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-zinc-500 block">Cuota</span>
+                                <span className="font-black text-amber-400 font-mono">
+                                  {share.toFixed(1)}%
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-zinc-500 block">Ticket Medio</span>
+                                <span
+                                  className={`font-bold font-mono ${
+                                    vendor.averageTicket >= reportsData.kpis.avgTicket
+                                      ? 'text-emerald-400'
+                                      : 'text-zinc-300'
+                                  }`}
+                                >
+                                  {formatPrice(vendor.averageTicket)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Progress bar visual */}
+                          <div className="w-full bg-zinc-800/80 rounded-full h-2 overflow-hidden">
+                            <div
+                              className="bg-gradient-to-r from-amber-500 to-amber-300 h-2 rounded-full transition-all duration-500"
+                              style={{ width: `${Math.min(100, Math.max(1, share))}%` }}
+                            />
+                          </div>
+                        </div>
+                      )
+                    })}
+                </div>
+              </div>
+
+              {/* Matriz Comparativa de Desempeño */}
+              <div className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-6 shadow-xl space-y-4">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <span>📊</span>
+                  <span>Matriz Comparativa de Ticket Medio vs. Promedio General</span>
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="border-b border-zinc-800 text-zinc-400">
+                      <tr>
+                        <th className="pb-3 font-semibold">Local</th>
+                        <th className="pb-3 font-semibold text-right">Órdenes</th>
+                        <th className="pb-3 font-semibold text-right">Ticket Medio</th>
+                        <th className="pb-3 font-semibold text-right">Diferencia vs Plaza</th>
+                        <th className="pb-3 font-semibold text-center">Clasificación</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800/50">
+                      {reportsData.vendors.map((v) => {
+                        const diffPct =
+                          reportsData.kpis.avgTicket > 0
+                            ? ((v.averageTicket - reportsData.kpis.avgTicket) / reportsData.kpis.avgTicket) * 100
+                            : 0
+                        const isAbove = diffPct >= 0
+
+                        let badgeLabel = 'En Crecimiento'
+                        let badgeStyle = 'bg-zinc-800 text-zinc-300'
+
+                        if (v.grossSales >= (reportsData.kpis.totalGrossSales / (reportsData.vendors.length || 1))) {
+                          if (isAbove) {
+                            badgeLabel = '🌟 Estrella'
+                            badgeStyle = 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                          } else {
+                            badgeLabel = '⚡ Alto Volumen'
+                            badgeStyle = 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                          }
+                        } else if (isAbove) {
+                          badgeLabel = '💎 Alta Gama'
+                          badgeStyle = 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+                        }
+
+                        return (
+                          <tr key={v.restaurantId} className="hover:bg-zinc-800/30">
+                            <td className="py-3 font-bold text-white flex items-center gap-2">
+                              <span>🍽️</span>
+                              <span>{v.restaurantName}</span>
+                            </td>
+                            <td className="py-3 text-right font-mono text-zinc-300">
+                              {v.ordersCount}
+                            </td>
+                            <td className="py-3 text-right font-mono font-bold text-white">
+                              {formatPrice(v.averageTicket)}
+                            </td>
+                            <td className="py-3 text-right font-mono font-bold">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[11px] ${
+                                  isAbove
+                                    ? 'text-emerald-400 bg-emerald-500/10'
+                                    : 'text-rose-400 bg-rose-500/10'
+                                }`}
+                              >
+                                {isAbove ? `+${diffPct.toFixed(1)}%` : `${diffPct.toFixed(1)}%`}
+                              </span>
+                            </td>
+                            <td className="py-3 text-center">
+                              <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${badgeStyle}`}>
+                                {badgeLabel}
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          ) : null}
         </div>
       )}
 

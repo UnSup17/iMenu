@@ -10,7 +10,8 @@ interface RouteParams {
 
 const UpdatePaymentSchema = z.object({
   sessionId: z.string().min(1),
-  restaurantId: z.string().min(1),
+  restaurantId: z.string().optional(),
+  unified: z.boolean().optional(),
   status: z.enum(['PENDING', 'PAID', 'VOIDED']),
   paymentMethod: z.enum([
     'CASH',
@@ -125,11 +126,57 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Sesión no encontrada en esta plaza' }, { status: 404 })
     }
 
+    // ── Cobro Unificado de Toda la Mesa ─────────────────────────────────────────
+    if (parsed.unified || parsed.restaurantId === 'ALL' || !parsed.restaurantId) {
+      const allPayments = await prisma.foodCourtTablePayment.findMany({
+        where: { sessionId: parsed.sessionId },
+        include: { restaurant: true },
+      })
+
+      if (allPayments.length === 0) {
+        return NextResponse.json({ error: 'No hay pagos registrados para esta sesión' }, { status: 400 })
+      }
+
+      const now = new Date()
+      const updatedList = []
+
+      for (const p of allPayments) {
+        const updated = await prisma.foodCourtTablePayment.update({
+          where: { id: p.id },
+          data: {
+            status: parsed.status,
+            paidAt: parsed.status === 'PAID' ? now : null,
+          },
+          include: { restaurant: true },
+        })
+
+        updatedList.push(updated)
+
+        emitFoodCourtPaymentUpdated(foodCourtId, session.tableId, {
+          foodCourtId,
+          tableId: session.tableId,
+          sessionId: parsed.sessionId,
+          restaurantId: p.restaurantId,
+          status: parsed.status,
+          totalAmount: Number(updated.totalAmount),
+          paidAt: updated.paidAt?.toISOString() || null,
+        })
+      }
+
+      return NextResponse.json({
+        success: true,
+        unified: true,
+        updatedCount: updatedList.length,
+        payments: updatedList,
+      })
+    }
+
+    // ── Cobro Individual por Restaurante ────────────────────────────────────────
     const payment = await prisma.foodCourtTablePayment.findUnique({
       where: {
         sessionId_restaurantId: {
           sessionId: parsed.sessionId,
-          restaurantId: parsed.restaurantId,
+          restaurantId: parsed.restaurantId!,
         },
       },
     })
@@ -154,7 +201,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       foodCourtId,
       tableId: session.tableId,
       sessionId: parsed.sessionId,
-      restaurantId: parsed.restaurantId,
+      restaurantId: parsed.restaurantId!,
       status: parsed.status,
       totalAmount: Number(updatedPayment.totalAmount),
       paidAt: updatedPayment.paidAt?.toISOString() || null,

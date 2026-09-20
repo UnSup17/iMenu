@@ -47,6 +47,9 @@ export function FoodCourtBillSheet({
   onPaymentUpdated,
 }: FoodCourtBillSheetProps) {
   const [processingId, setProcessingId] = useState<string | null>(null)
+  const [isProcessingUnified, setIsProcessingUnified] = useState(false)
+  const [unifiedSuccess, setUnifiedSuccess] = useState(false)
+  const [unifiedMethod, setUnifiedMethod] = useState<'CASH' | 'DEBIT_CARD' | 'CREDIT_CARD' | 'TRANSFER' | 'QR_CODE'>('TRANSFER')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   if (!isOpen) return null
@@ -102,6 +105,45 @@ export function FoodCourtBillSheet({
       setErrorMsg(e.message || 'Error al procesar cobro')
     } finally {
       setProcessingId(null)
+    }
+  }
+
+  const handleUnifiedPayment = async () => {
+    try {
+      setIsProcessingUnified(true)
+      setErrorMsg(null)
+
+      const res = await fetch(`/api/food-courts/${foodCourtId}/payments`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          unified: true,
+          status: 'PAID',
+          paymentMethod: unifiedMethod,
+        }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Error al procesar cobro unificado')
+      }
+
+      setUnifiedSuccess(true)
+      const nowIso = new Date().toISOString()
+      payments.forEach((p) => {
+        if (p.status !== 'PAID' && onPaymentUpdated) {
+          onPaymentUpdated({
+            ...p,
+            status: 'PAID',
+            paidAt: nowIso,
+          })
+        }
+      })
+    } catch (e: any) {
+      setErrorMsg(e.message || 'Error al procesar cobro unificado')
+    } finally {
+      setIsProcessingUnified(false)
     }
   }
 
@@ -306,6 +348,52 @@ export function FoodCourtBillSheet({
             <div className="flex justify-between items-center text-xs pt-1 border-t border-zinc-800">
               <span className="text-amber-400 font-medium">Pendiente de cobro:</span>
               <span className="font-black text-amber-400 text-sm">{formatPrice(pendingAmount)}</span>
+            </div>
+          )}
+
+          {pendingAmount > 0 && (
+            <div className="pt-3 border-t border-zinc-800/80 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-zinc-300">Medio de Pago Unificado:</span>
+                <select
+                  value={unifiedMethod}
+                  onChange={(e) => setUnifiedMethod(e.target.value as any)}
+                  className="bg-zinc-950 border border-zinc-700 rounded-lg text-xs px-2.5 py-1 text-white focus:outline-none focus:border-amber-500"
+                >
+                  <option value="TRANSFER">📲 Transferencia / Nequi / Daviplata</option>
+                  <option value="DEBIT_CARD">💳 Tarjeta de Débito</option>
+                  <option value="CREDIT_CARD">💳 Tarjeta de Crédito</option>
+                  <option value="CASH">💵 Efectivo en Caja</option>
+                  <option value="QR_CODE">📱 Código QR</option>
+                </select>
+              </div>
+
+              <button
+                onClick={handleUnifiedPayment}
+                disabled={isProcessingUnified}
+                className="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-black font-black text-sm transition-all shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {isProcessingUnified ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                    <span>Liquidando todos los locales...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>💳</span>
+                    <span>Pagar Cuenta Unificada ({formatPrice(pendingAmount)})</span>
+                  </>
+                )}
+              </button>
+              <p className="text-[10px] text-zinc-400 text-center">
+                Unifica el cobro en una sola transacción y dispersa la cobranza internamente a cada local.
+              </p>
+            </div>
+          )}
+
+          {unifiedSuccess && (
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-center text-xs font-bold text-emerald-400">
+              ✓ Toda la cuenta fue liquidada en una sola transacción unificada.
             </div>
           )}
 
