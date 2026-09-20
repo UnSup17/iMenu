@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { TaxConfigForm } from '@/components/billing/tax-config-form'
+import { DianTestSetCard } from '@/components/billing/dian-test-set-card'
 
 export const metadata = { title: 'Configuración Fiscal y Facturación — iMenu' }
 
@@ -27,6 +28,8 @@ export default async function BillingConfigPage() {
           Personaliza las tarifas de impuestos (IVA), información legal, resolución de facturación (DIAN / SAT) e impresiones de ticket.
         </p>
       </div>
+
+      <DianTestSetCard />
 
       <TaxConfigForm initialData={config} />
     </div>

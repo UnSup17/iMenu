@@ -1,9 +1,23 @@
-import { DianDocumentPayload } from './types'
+import {
+  DianDocumentPayload,
+  DianCreditNotePayload,
+  DianDebitNotePayload,
+  DianEventPayload,
+} from './types'
 
 /**
  * Construye el XML UBL 2.1 estándar de la DIAN para Factura Electrónica de Venta.
+ * Soporta modo normal (Tipo 01) y modos de contingencia (Tipo 03 Talonario / Tipo 04 Contingencia DIAN).
  */
 export function buildUbl21Xml(payload: DianDocumentPayload, cufe: string, qrCodeUrl: string): string {
+  const invoiceTypeCode = payload.invoiceTypeCode || (payload.isContingency ? '03' : '01')
+  const profileLabel =
+    invoiceTypeCode === '03'
+      ? 'DIAN 2.1: Factura por Talonario o de Papel (Contingencia Facturador)'
+      : invoiceTypeCode === '04'
+      ? 'DIAN 2.1: Factura Electrónica de Venta (Contingencia DIAN)'
+      : 'DIAN 2.1: Factura Electrónica de Venta'
+
   const itemsXml = payload.items
     .map(
       (item, idx) => `
@@ -72,12 +86,12 @@ export function buildUbl21Xml(payload: DianDocumentPayload, cufe: string, qrCode
 
   <cbc:UBLVersionID>UBL 2.1</cbc:UBLVersionID>
   <cbc:CustomizationID>10</cbc:CustomizationID>
-  <cbc:ProfileID>DIAN 2.1: Factura Electrónica de Venta</cbc:ProfileID>
+  <cbc:ProfileID>${profileLabel}</cbc:ProfileID>
   <cbc:ID>${payload.fullNumber}</cbc:ID>
   <cbc:UUID schemeID="${payload.environment}" schemeName="CUFE-SHA384">${cufe}</cbc:UUID>
   <cbc:IssueDate>${payload.issueDate}</cbc:IssueDate>
   <cbc:IssueTime>${payload.issueTime}</cbc:IssueTime>
-  <cbc:InvoiceTypeCode>01</cbc:InvoiceTypeCode>
+  <cbc:InvoiceTypeCode>${invoiceTypeCode}</cbc:InvoiceTypeCode>
   <cbc:DocumentCurrencyCode>COP</cbc:DocumentCurrencyCode>
 
   <!-- Emisor (Restaurante) -->
@@ -152,7 +166,307 @@ export function buildUbl21Xml(payload: DianDocumentPayload, cufe: string, qrCode
 </Invoice>`
 }
 
-function escapeXml(unsafe: string): string {
+/**
+ * Construye el XML UBL 2.1 estándar de la DIAN para Nota Crédito Electrónica (Código 91).
+ */
+export function buildCreditNoteUblXml(
+  payload: DianCreditNotePayload,
+  cude: string,
+  qrCodeUrl: string
+): string {
+  const linesXml = payload.items
+    .map(
+      (item, idx) => `
+    <cac:CreditNoteLine>
+      <cbc:ID>${idx + 1}</cbc:ID>
+      <cbc:CreditedQuantity unitCode="EA">${item.quantity}</cbc:CreditedQuantity>
+      <cbc:LineExtensionAmount currencyID="COP">${item.subtotal.toFixed(2)}</cbc:LineExtensionAmount>
+      <cac:TaxTotal>
+        <cbc:TaxAmount currencyID="COP">${item.taxAmount.toFixed(2)}</cbc:TaxAmount>
+        <cac:TaxSubtotal>
+          <cbc:TaxableAmount currencyID="COP">${item.subtotal.toFixed(2)}</cbc:TaxableAmount>
+          <cbc:TaxAmount currencyID="COP">${item.taxAmount.toFixed(2)}</cbc:TaxAmount>
+          <cac:TaxCategory>
+            <cbc:Percent>${(item.taxRate * 100).toFixed(2)}</cbc:Percent>
+            <cac:TaxScheme>
+              <cbc:ID>01</cbc:ID>
+              <cbc:Name>IVA</cbc:Name>
+            </cac:TaxScheme>
+          </cac:TaxCategory>
+        </cac:TaxSubtotal>
+      </cac:TaxTotal>
+      <cac:Item>
+        <cbc:Description>${escapeXml(item.description)}</cbc:Description>
+        <cac:StandardItemIdentification>
+          <cbc:ID schemeID="999">${item.code || `ITEM-${idx + 1}`}</cbc:ID>
+        </cac:StandardItemIdentification>
+      </cac:Item>
+      <cac:Price>
+        <cbc:PriceAmount currencyID="COP">${item.unitPrice.toFixed(2)}</cbc:PriceAmount>
+      </cac:Price>
+    </cac:CreditNoteLine>`
+    )
+    .join('')
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<CreditNote xmlns="urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2"
+            xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+            xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
+            xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
+            xmlns:sts="dian:gov:co:facturaelectronica:Structures-2-1">
+  <ext:UBLExtensions>
+    <ext:UBLExtension>
+      <ext:ExtensionContent>
+        <sts:DianExtensions>
+          <sts:InvoiceSource>
+            <cbc:IdentificationCode listAgencyID="6" listAgencyName="United Nations Economic Commission for Europe" listSchemeURI="urn:oasis:names:specification:ubl:codelist:gc:CountryIdentificationCode-2.1">CO</cbc:IdentificationCode>
+          </sts:InvoiceSource>
+          <sts:SoftwareProvider>
+            <sts:ProviderID schemeAgencyID="195" schemeAgencyName="CO, DIAN" schemeID="6">${payload.company.taxId}</sts:ProviderID>
+            <sts:SoftwareID schemeAgencyID="195" schemeAgencyName="CO, DIAN">iMenu-Software-ID</sts:SoftwareID>
+          </sts:SoftwareProvider>
+          <sts:SoftwareSecurityCode>${cude}</sts:SoftwareSecurityCode>
+          <sts:QRCode>${escapeXml(qrCodeUrl)}</sts:QRCode>
+        </sts:DianExtensions>
+      </ext:ExtensionContent>
+    </ext:UBLExtension>
+  </ext:UBLExtensions>
+
+  <cbc:UBLVersionID>UBL 2.1</cbc:UBLVersionID>
+  <cbc:CustomizationID>20</cbc:CustomizationID>
+  <cbc:ProfileID>DIAN 2.1: Nota Crédito de Factura Electrónica de Venta</cbc:ProfileID>
+  <cbc:ID>${payload.fullNumber}</cbc:ID>
+  <cbc:UUID schemeID="${payload.environment}" schemeName="CUDE-SHA384">${cude}</cbc:UUID>
+  <cbc:IssueDate>${payload.issueDate}</cbc:IssueDate>
+  <cbc:IssueTime>${payload.issueTime}</cbc:IssueTime>
+  <cbc:CreditNoteTypeCode>91</cbc:CreditNoteTypeCode>
+  <cbc:DocumentCurrencyCode>COP</cbc:DocumentCurrencyCode>
+
+  <!-- Motivo de la Nota Crédito -->
+  <cac:DiscrepancyResponse>
+    <cbc:ReferenceID>${payload.originalInvoiceNumber}</cbc:ReferenceID>
+    <cbc:ResponseCode>${payload.discrepancyCode}</cbc:ResponseCode>
+    <cbc:Description>${escapeXml(payload.discrepancyDescription)}</cbc:Description>
+  </cac:DiscrepancyResponse>
+
+  <!-- Factura de Referencia -->
+  <cac:BillingReference>
+    <cac:InvoiceDocumentReference>
+      <cbc:ID>${payload.originalInvoiceNumber}</cbc:ID>
+      <cbc:UUID schemeName="CUFE-SHA384">${payload.originalCufe}</cbc:UUID>
+      <cbc:IssueDate>${payload.originalIssueDate}</cbc:IssueDate>
+    </cac:InvoiceDocumentReference>
+  </cac:BillingReference>
+
+  <!-- Emisor (Restaurante) -->
+  <cac:AccountingSupplierParty>
+    <cbc:AdditionalAccountID>1</cbc:AdditionalAccountID>
+    <cac:Party>
+      <cac:PartyName>
+        <cbc:Name>${escapeXml(payload.company.legalName)}</cbc:Name>
+      </cac:PartyName>
+      <cac:PartyTaxScheme>
+        <cbc:RegistrationName>${escapeXml(payload.company.legalName)}</cbc:RegistrationName>
+        <cbc:CompanyID schemeAgencyID="195" schemeAgencyName="CO, DIAN" schemeID="${payload.company.dv}">${payload.company.taxId}</cbc:CompanyID>
+        <cac:TaxScheme>
+          <cbc:ID>01</cbc:ID>
+          <cbc:Name>IVA</cbc:Name>
+        </cac:TaxScheme>
+      </cac:PartyTaxScheme>
+    </cac:Party>
+  </cac:AccountingSupplierParty>
+
+  <!-- Receptor (Cliente) -->
+  <cac:AccountingCustomerParty>
+    <cbc:AdditionalAccountID>2</cbc:AdditionalAccountID>
+    <cac:Party>
+      <cac:PartyName>
+        <cbc:Name>${escapeXml(payload.customer.name)}</cbc:Name>
+      </cac:PartyName>
+      <cac:PartyTaxScheme>
+        <cbc:RegistrationName>${escapeXml(payload.customer.name)}</cbc:RegistrationName>
+        <cbc:CompanyID schemeAgencyID="195" schemeAgencyName="CO, DIAN">${payload.customer.taxId || '222222222222'}</cbc:CompanyID>
+        <cac:TaxScheme>
+          <cbc:ID>01</cbc:ID>
+          <cbc:Name>IVA</cbc:Name>
+        </cac:TaxScheme>
+      </cac:PartyTaxScheme>
+    </cac:Party>
+  </cac:AccountingCustomerParty>
+
+  <!-- Impuestos Totales -->
+  <cac:TaxTotal>
+    <cbc:TaxAmount currencyID="COP">${payload.taxTotal.toFixed(2)}</cbc:TaxAmount>
+    <cac:TaxSubtotal>
+      <cbc:TaxableAmount currencyID="COP">${payload.subtotal.toFixed(2)}</cbc:TaxableAmount>
+      <cbc:TaxAmount currencyID="COP">${payload.taxTotal.toFixed(2)}</cbc:TaxAmount>
+      <cac:TaxCategory>
+        <cbc:Percent>19.00</cbc:Percent>
+        <cac:TaxScheme>
+          <cbc:ID>01</cbc:ID>
+          <cbc:Name>IVA</cbc:Name>
+        </cac:TaxScheme>
+      </cac:TaxCategory>
+    </cac:TaxSubtotal>
+  </cac:TaxTotal>
+
+  <!-- Totales Monetarios -->
+  <cac:LegalMonetaryTotal>
+    <cbc:LineExtensionAmount currencyID="COP">${payload.subtotal.toFixed(2)}</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="COP">${payload.subtotal.toFixed(2)}</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="COP">${payload.total.toFixed(2)}</cbc:TaxInclusiveAmount>
+    <cbc:PayableAmount currencyID="COP">${payload.total.toFixed(2)}</cbc:PayableAmount>
+  </cac:LegalMonetaryTotal>
+
+  <!-- Líneas de Nota Crédito -->
+  ${linesXml}
+</CreditNote>`
+}
+
+/**
+ * Construye el XML UBL 2.1 estándar de la DIAN para Nota Débito Electrónica (Código 92).
+ */
+export function buildDebitNoteUblXml(
+  payload: DianDebitNotePayload,
+  cude: string,
+  qrCodeUrl: string
+): string {
+  const linesXml = payload.items
+    .map(
+      (item, idx) => `
+    <cac:DebitNoteLine>
+      <cbc:ID>${idx + 1}</cbc:ID>
+      <cbc:DebitedQuantity unitCode="EA">${item.quantity}</cbc:DebitedQuantity>
+      <cbc:LineExtensionAmount currencyID="COP">${item.subtotal.toFixed(2)}</cbc:LineExtensionAmount>
+      <cac:TaxTotal>
+        <cbc:TaxAmount currencyID="COP">${item.taxAmount.toFixed(2)}</cbc:TaxAmount>
+      </cac:TaxTotal>
+      <cac:Item>
+        <cbc:Description>${escapeXml(item.description)}</cbc:Description>
+      </cac:Item>
+      <cac:Price>
+        <cbc:PriceAmount currencyID="COP">${item.unitPrice.toFixed(2)}</cbc:PriceAmount>
+      </cac:Price>
+    </cac:DebitNoteLine>`
+    )
+    .join('')
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<DebitNote xmlns="urn:oasis:names:specification:ubl:schema:xsd:DebitNote-2"
+           xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+           xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
+           xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
+           xmlns:sts="dian:gov:co:facturaelectronica:Structures-2-1">
+  <cbc:UBLVersionID>UBL 2.1</cbc:UBLVersionID>
+  <cbc:CustomizationID>30</cbc:CustomizationID>
+  <cbc:ProfileID>DIAN 2.1: Nota Débito de Factura Electrónica de Venta</cbc:ProfileID>
+  <cbc:ID>${payload.fullNumber}</cbc:ID>
+  <cbc:UUID schemeID="${payload.environment}" schemeName="CUDE-SHA384">${cude}</cbc:UUID>
+  <cbc:IssueDate>${payload.issueDate}</cbc:IssueDate>
+  <cbc:IssueTime>${payload.issueTime}</cbc:IssueTime>
+  <cbc:DebitNoteTypeCode>92</cbc:DebitNoteTypeCode>
+  <cbc:DocumentCurrencyCode>COP</cbc:DocumentCurrencyCode>
+
+  <cac:DiscrepancyResponse>
+    <cbc:ReferenceID>${payload.originalInvoiceNumber}</cbc:ReferenceID>
+    <cbc:ResponseCode>${payload.discrepancyCode}</cbc:ResponseCode>
+    <cbc:Description>${escapeXml(payload.discrepancyDescription)}</cbc:Description>
+  </cac:DiscrepancyResponse>
+
+  <cac:BillingReference>
+    <cac:InvoiceDocumentReference>
+      <cbc:ID>${payload.originalInvoiceNumber}</cbc:ID>
+      <cbc:UUID schemeName="CUFE-SHA384">${payload.originalCufe}</cbc:UUID>
+      <cbc:IssueDate>${payload.originalIssueDate}</cbc:IssueDate>
+    </cac:InvoiceDocumentReference>
+  </cac:BillingReference>
+
+  <cac:AccountingSupplierParty>
+    <cac:Party>
+      <cac:PartyTaxScheme>
+        <cbc:RegistrationName>${escapeXml(payload.company.legalName)}</cbc:RegistrationName>
+        <cbc:CompanyID schemeAgencyID="195" schemeAgencyName="CO, DIAN" schemeID="${payload.company.dv}">${payload.company.taxId}</cbc:CompanyID>
+        <cac:TaxScheme><cbc:ID>01</cbc:ID></cac:TaxScheme>
+      </cac:PartyTaxScheme>
+    </cac:Party>
+  </cac:AccountingSupplierParty>
+
+  <cac:AccountingCustomerParty>
+    <cac:Party>
+      <cac:PartyTaxScheme>
+        <cbc:RegistrationName>${escapeXml(payload.customer.name)}</cbc:RegistrationName>
+        <cbc:CompanyID schemeAgencyID="195" schemeAgencyName="CO, DIAN">${payload.customer.taxId || '222222222222'}</cbc:CompanyID>
+        <cac:TaxScheme><cbc:ID>01</cbc:ID></cac:TaxScheme>
+      </cac:PartyTaxScheme>
+    </cac:Party>
+  </cac:AccountingCustomerParty>
+
+  <cac:RequestedMonetaryTotal>
+    <cbc:LineExtensionAmount currencyID="COP">${payload.subtotal.toFixed(2)}</cbc:LineExtensionAmount>
+    <cbc:PayableAmount currencyID="COP">${payload.total.toFixed(2)}</cbc:PayableAmount>
+  </cac:RequestedMonetaryTotal>
+
+  ${linesXml}
+</DebitNote>`
+}
+
+/**
+ * Construye el XML ApplicationResponse UBL 2.1 para Eventos DIAN / RADIAN
+ * (030: Acuse recibo factura, 032: Recibo bien/servicio, 033: Aceptación expresa, 034: Reclamo, 04: Anulación).
+ */
+export function buildApplicationResponseXml(payload: DianEventPayload): string {
+  const now = new Date()
+  const dateStr = now.toISOString().slice(0, 10)
+  const timeStr = `${now.toTimeString().slice(0, 8)}-05:00`
+  const eventId = `EV-${Date.now()}`
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<ApplicationResponse xmlns="urn:oasis:names:specification:ubl:schema:xsd:ApplicationResponse-2"
+                     xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+                     xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
+                     xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2">
+  <cbc:UBLVersionID>UBL 2.1</cbc:UBLVersionID>
+  <cbc:CustomizationID>1</cbc:CustomizationID>
+  <cbc:ProfileID>DIAN 2.1: ApplicationResponse</cbc:ProfileID>
+  <cbc:ID>${eventId}</cbc:ID>
+  <cbc:IssueDate>${dateStr}</cbc:IssueDate>
+  <cbc:IssueTime>${timeStr}</cbc:IssueTime>
+
+  <!-- Emisor del Evento -->
+  <cac:SenderParty>
+    <cac:PartyTaxScheme>
+      <cbc:RegistrationName>${escapeXml(payload.issuer.legalName)}</cbc:RegistrationName>
+      <cbc:CompanyID schemeAgencyID="195" schemeAgencyName="CO, DIAN" schemeID="${payload.issuer.dv}">${payload.issuer.taxId}</cbc:CompanyID>
+      <cac:TaxScheme><cbc:ID>01</cbc:ID></cac:TaxScheme>
+    </cac:PartyTaxScheme>
+  </cac:SenderParty>
+
+  <!-- Receptor del Evento -->
+  <cac:ReceiverParty>
+    <cac:PartyTaxScheme>
+      <cbc:RegistrationName>${escapeXml(payload.receiver.name)}</cbc:RegistrationName>
+      <cbc:CompanyID schemeAgencyID="195" schemeAgencyName="CO, DIAN">${payload.receiver.taxId || '222222222222'}</cbc:CompanyID>
+      <cac:TaxScheme><cbc:ID>01</cbc:ID></cac:TaxScheme>
+    </cac:PartyTaxScheme>
+  </cac:ReceiverParty>
+
+  <!-- Respuesta y Referencia al Documento -->
+  <cac:DocumentResponse>
+    <cac:Response>
+      <cbc:ResponseCode>${payload.eventCode}</cbc:ResponseCode>
+      <cbc:Description>${escapeXml(payload.eventDescription)}</cbc:Description>
+      ${payload.comment ? `<cbc:Note>${escapeXml(payload.comment)}</cbc:Note>` : ''}
+    </cac:Response>
+    <cac:DocumentReference>
+      <cbc:ID>${payload.invoiceNumber}</cbc:ID>
+      <cbc:UUID schemeName="CUFE-SHA384">${payload.invoiceCufe}</cbc:UUID>
+      <cbc:IssueDate>${payload.invoiceIssueDate}</cbc:IssueDate>
+    </cac:DocumentReference>
+  </cac:DocumentResponse>
+</ApplicationResponse>`
+}
+
+export function escapeXml(unsafe: string): string {
   if (!unsafe) return ''
   return unsafe
     .replace(/&/g, '&amp;')

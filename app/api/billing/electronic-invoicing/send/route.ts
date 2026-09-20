@@ -7,6 +7,8 @@ import { z } from 'zod'
 
 const sendDianSchema = z.object({
   invoiceId: z.string(),
+  isContingency: z.boolean().optional(),
+  contingencyType: z.enum(['03', '04']).optional(),
 })
 
 export async function POST(req: Request) {
@@ -27,7 +29,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: parsed.error.format() }, { status: 400 })
     }
 
-    const { invoiceId } = parsed.data
+    const { invoiceId, isContingency, contingencyType } = parsed.data
 
     const [invoice, taxConfig, dianConfig] = await Promise.all([
       prisma.invoice.findUnique({
@@ -86,6 +88,8 @@ export async function POST(req: Request) {
       paymentMethod: invoice.paymentMethod === 'CASH' ? '10' : '48',
       technicalKey: dianConfig?.technicalKey || undefined,
       environment: dianConfig?.testMode === false ? '1' : '2',
+      isContingency: isContingency || false,
+      invoiceTypeCode: contingencyType || (isContingency ? '03' : '01'),
     }
 
     const dianResult = await sendInvoiceToDian(payload)
@@ -117,6 +121,8 @@ export async function POST(req: Request) {
       qrCodeUrl: dianResult.qrCodeUrl,
       status: dianResult.status,
       message: dianResult.message,
+      isContingency: Boolean(payload.isContingency),
+      invoiceTypeCode: payload.invoiceTypeCode,
     })
   } catch (error) {
     console.error('Error al emitir factura DIAN:', error)

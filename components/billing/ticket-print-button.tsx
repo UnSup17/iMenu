@@ -100,6 +100,18 @@ export function TicketPrintButton({
               </tr>
             </table>
 
+            ${inv.electronicInvoiceId ? `
+            <div class="divider"></div>
+            <div class="center bold" style="font-size: 10px;">COMPROBANTE FISCAL ELECTRÓNICO DIAN</div>
+            <div style="font-size: 8px; word-break: break-all; margin-top: 2px;">
+              <strong>CUFE:</strong><br/>${inv.electronicInvoiceId}
+            </div>
+            <div class="center" style="font-size: 8px; margin-top: 4px; border: 1px solid #000; padding: 4px;">
+              <strong>Verificación pública DIAN:</strong><br/>
+              <span style="text-decoration: underline;">https://catalogo-vpfe.dian.gov.co/document/searchqr?documentkey=${inv.electronicInvoiceId}</span>
+            </div>
+            ` : ''}
+
             <div class="divider"></div>
             <div class="center">¡Gracias por su visita!</div>
             ${inv.restaurant?.brandTheme?.whiteLabelEnabled ? '' : '<div class="center" style="font-size: 9px; margin-top: 4px; opacity: 0.7;">Powered by iMenu POS</div>'}

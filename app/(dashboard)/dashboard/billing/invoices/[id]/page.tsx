@@ -74,6 +74,18 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
             }))}
           />
           <TicketPrintButton invoiceId={invoice.id} />
+          {invoice.electronicInvoiceId && (
+            <a
+              href={`https://catalogo-vpfe.dian.gov.co/document/searchqr?documentkey=${invoice.electronicInvoiceId}`}
+              target="_blank"
+              rel="noreferrer"
+              title="Consultar comprobante oficial en la DIAN"
+              className="px-3 py-2 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-800/80 text-emerald-300 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5"
+            >
+              <span>🏛️</span>
+              <span>Verificar en DIAN ↗</span>
+            </a>
+          )}
           <Link
             href="/dashboard/billing/invoices"
             className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm rounded-lg transition-colors"
