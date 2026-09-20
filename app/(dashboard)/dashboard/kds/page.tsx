@@ -45,7 +45,7 @@ export default async function KdsPage() {
       },
       items: {
         include: {
-          product: { select: { name: true } },
+          product: { select: { name: true, kitchenStation: true, prepTimeMinutes: true } },
           modifiers: { include: { modifierOption: true } },
           additions: { include: { addition: true } },
         },
@@ -75,6 +75,8 @@ export default async function KdsPage() {
       subtotal: i.subtotal.toNumber(),
       itemNotes: i.itemNotes,
       isPrepared: Boolean(i.isPrepared),
+      kitchenStation: i.product.kitchenStation,
+      prepTimeMinutes: i.product.prepTimeMinutes ?? null,
       modifiers: i.modifiers.map((m) => m.modifierOption.name),
       additions: i.additions.map((a) => ({
         id: a.additionId,

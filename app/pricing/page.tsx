@@ -18,6 +18,24 @@ export default function PublicPricingPage() {
 
         <div className="flex items-center gap-4">
           <Link
+            href="/specs"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-semibold text-amber-400 hover:text-amber-300 transition flex items-center gap-1"
+          >
+            <span>Specs Técnicas</span>
+            <span className="text-[10px]">↗</span>
+          </Link>
+          <Link
+            href="/docs"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-semibold text-zinc-400 hover:text-white transition flex items-center gap-1"
+          >
+            <span>Docs</span>
+            <span className="text-[10px]">↗</span>
+          </Link>
+          <Link
             href="/login"
             className="text-xs font-semibold text-zinc-400 hover:text-white transition"
           >

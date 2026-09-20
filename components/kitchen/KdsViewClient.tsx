@@ -16,6 +16,8 @@ export interface KdsOrderItem {
   isPrepared: boolean
   modifiers: string[]
   additions: { id: string; name: string; quantity: number; price: number }[]
+  kitchenStation?: string | null   // HOT, COLD, GRILL, PASTRY, BAR, GENERAL
+  prepTimeMinutes?: number | null  // Tiempo estimado de preparación del producto
 }
 
 export interface KdsOrder {
@@ -49,6 +51,8 @@ export function KdsViewClient({
 }: KdsViewClientProps) {
   const [orders, setOrders] = useState<KdsOrder[]>(initialOrders)
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'RECEIVED' | 'PREPARING' | 'READY'>('ALL')
+  const [stationFilter, setStationFilter] = useState<'ALL' | 'HOT' | 'COLD' | 'GRILL' | 'PASTRY' | 'BAR' | 'GENERAL'>('ALL')
+  const [zoneFilter, setZoneFilter] = useState<string>('ALL')
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isOverlayFullscreen, setIsOverlayFullscreen] = useState(fullscreenMode)
@@ -288,12 +292,31 @@ export function KdsViewClient({
     }
   }
 
+  // Zonas únicas disponibles en las órdenes activas
+  const availableZones = useMemo(() => {
+    const zones = new Set<string>()
+    orders.forEach(o => { if (o.zone) zones.add(o.zone) })
+    return Array.from(zones).sort()
+  }, [orders])
+
   // Filtrado y ordenamiento de comandas (Urgentes primero, luego más antiguas)
   const filteredOrders = useMemo(() => {
     let list = orders
 
     if (statusFilter !== 'ALL') {
       list = list.filter((o) => o.status === statusFilter)
+    }
+
+    // Filtro de zona de mesas
+    if (zoneFilter !== 'ALL') {
+      list = list.filter((o) => o.zone === zoneFilter)
+    }
+
+    // Filtro de estación de cocina (filtra órdenes que tengan AL MENOS UN ítem de esa estación)
+    if (stationFilter !== 'ALL') {
+      list = list.filter((o) =>
+        o.items.some((i) => (i.kitchenStation || 'GENERAL') === stationFilter)
+      )
     }
 
     return [...list].sort((a, b) => {
@@ -303,7 +326,7 @@ export function KdsViewClient({
       // Luego por orden de antigüedad (más viejas primero)
       return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
     })
-  }, [orders, statusFilter])
+  }, [orders, statusFilter, stationFilter, zoneFilter])
 
   // Contadores
   const counts = useMemo(() => {
@@ -406,6 +429,74 @@ export function KdsViewClient({
           </button>
         </div>
 
+        {/* Segunda fila: Filtros de Estación de Cocina y Zona */}
+        <div className="w-full flex flex-wrap items-center gap-3 pt-2 border-t border-zinc-800/60">
+          {/* Filtro de Estación */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Estación:</span>
+            <div className="flex items-center bg-zinc-950/80 p-0.5 rounded-lg border border-zinc-800 gap-0.5">
+              {([
+                { id: 'ALL', label: 'Todas', emoji: '🍽️' },
+                { id: 'HOT', label: 'Fuegos', emoji: '🔥' },
+                { id: 'COLD', label: 'Fría', emoji: '❄️' },
+                { id: 'GRILL', label: 'Parrilla', emoji: '🥩' },
+                { id: 'PASTRY', label: 'Repostería', emoji: '🍰' },
+                { id: 'BAR', label: 'Barra', emoji: '🍹' },
+              ] as const).map(({ id, label, emoji }) => (
+                <button
+                  key={id}
+                  onClick={() => setStationFilter(id)}
+                  title={label}
+                  className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                    stationFilter === id
+                      ? 'bg-orange-500 text-zinc-950 shadow font-black'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  {emoji} <span className="hidden sm:inline">{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Filtro de Zona */}
+          {availableZones.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Zona:</span>
+              <div className="flex items-center bg-zinc-950/80 p-0.5 rounded-lg border border-zinc-800 gap-0.5">
+                <button
+                  onClick={() => setZoneFilter('ALL')}
+                  className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                    zoneFilter === 'ALL' ? 'bg-zinc-600 text-white shadow' : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  Todas
+                </button>
+                {availableZones.map(zone => (
+                  <button
+                    key={zone}
+                    onClick={() => setZoneFilter(zone)}
+                    className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                      zoneFilter === zone ? 'bg-zinc-600 text-white shadow' : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    {zone}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Indicador de filtros activos */}
+          {(stationFilter !== 'ALL' || zoneFilter !== 'ALL') && (
+            <button
+              onClick={() => { setStationFilter('ALL'); setZoneFilter('ALL') }}
+              className="text-[10px] text-zinc-500 hover:text-red-400 transition-colors cursor-pointer ml-auto"
+            >
+              × Limpiar filtros ({filteredOrders.length}/{orders.length})
+            </button>
+          )}
+        </div>
         {/* Acciones del KDS */}
         <div className="flex items-center gap-2">
           {counts.urgent > 0 && (
@@ -574,6 +665,24 @@ export function KdsViewClient({
                             <span className="font-black text-sm text-white">
                               {item.quantity}× {item.name}
                             </span>
+                            {/* Badge de estación por ítem */}
+                            {item.kitchenStation && item.kitchenStation !== 'GENERAL' && (
+                              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border shrink-0 ${
+                                item.kitchenStation === 'HOT' ? 'bg-red-500/20 text-red-300 border-red-500/30' :
+                                item.kitchenStation === 'COLD' ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' :
+                                item.kitchenStation === 'GRILL' ? 'bg-orange-500/20 text-orange-300 border-orange-500/30' :
+                                item.kitchenStation === 'PASTRY' ? 'bg-pink-500/20 text-pink-300 border-pink-500/30' :
+                                item.kitchenStation === 'BAR' ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' :
+                                'bg-zinc-700/40 text-zinc-400 border-zinc-700'
+                              }`}>
+                                {item.kitchenStation === 'HOT' ? '🔥' :
+                                 item.kitchenStation === 'COLD' ? '❄️' :
+                                 item.kitchenStation === 'GRILL' ? '🥩' :
+                                 item.kitchenStation === 'PASTRY' ? '🍰' :
+                                 item.kitchenStation === 'BAR' ? '🍹' : ''}
+                                {' '}{item.kitchenStation}
+                              </span>
+                            )}
                           </div>
 
                           {/* Modificadores */}

@@ -187,8 +187,21 @@ export default async function DashboardLayout({
           <DashboardSidebarNav sections={visibleSections} />
         </nav>
 
-        {/* Manual de Usuario */}
-        <div className="p-3 border-t border-zinc-800/60">
+        {/* Manual de Usuario & Especificaciones Técnicas */}
+        <div className="p-3 border-t border-zinc-800/60 space-y-1.5">
+          <Link
+            href="/specs"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-zinc-300 hover:text-white bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700/50 transition-all active:scale-[0.98] group"
+          >
+            <div className="flex items-center gap-2 truncate">
+              <span className="text-sm leading-none">⚡</span>
+              <span className="truncate">Specs Técnicas &amp; Hardware</span>
+            </div>
+            <span className="text-[10px] text-zinc-500 group-hover:text-amber-400">↗</span>
+          </Link>
+
           <Link
             href="/walkthrough"
             className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 transition-all active:scale-[0.98]"

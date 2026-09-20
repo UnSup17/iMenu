@@ -175,15 +175,15 @@ const modules: ModuleSection[] = [
       'Checklists táctiles plato por plato en la tablet de cocina con sincronización instantánea vía WebSockets.',
       'Priorización de órdenes (URGENTE / NORMAL) con ordenamiento prioritario al inicio de la cola.',
       'Historial diario completo con buscador predictivo y métricas consolidadas de facturación y despacho.',
-      'Auditoría automática de tiempos de preparación (preparedAt y deliveredAt) para detección de cuellos de botella.',
       'Al cancelar una orden, el stock de inventario se restaura automáticamente.',
+      'Soporte completo para impresión térmica ESC/POS de red en /api/hardware/print-escpos y lib/hardware/esc-pos-printer.ts: buffer binario en TypeScript enviado por TCP socket al puerto 9100 (Epson TM-T20/T88, Bixolon SRP-350, RONGTA).',
+      'Ruteo multi-estación de cocina (CALIENTE, FRIA, BAR, POSTRES, PARRILLA, EMPAQUE) con filtrado y badges en KDS.',
+      'Algoritmo dinámico de predicción de tiempo (ETA) en /api/kitchen/load combinando historial real de 24h + prepTimeMinutes por producto + carga activa.',
     ],
     missing: [
-      'Integración con impresoras térmicas de cocina (ESC/POS de red o Bluetooth) para comandas en papel.',
-      'Ruteo multi-estación de cocina (separar comandas por estación: parrilla, freidora, barra fría).',
+      'Configuración visual de IPs de impresoras por estación desde la UI de ajustes (Fase 9).',
     ],
     opportunities: [
-      'Algoritmo de estimación de despacho con Machine Learning basado en histórico de horas pico.',
       'Filtro dinámico de comandas por zona de mesas (ej. terraza vs. salón principal) en el KDS.',
     ],
   },
@@ -609,6 +609,15 @@ export default function DocsPage() {
             <span className="text-sm text-zinc-400 font-medium">Documentación Técnica</span>
           </div>
           <div className="flex items-center gap-3">
+            <Link
+              href="/specs"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-semibold text-amber-400 hover:text-amber-300 bg-amber-500/10 border border-amber-500/25 px-3 py-1.5 rounded-lg transition flex items-center gap-1"
+            >
+              <span>Ficha Técnica &amp; Hardware</span>
+              <span className="text-[10px]">↗</span>
+            </Link>
             <Link href="/" className="text-sm text-zinc-400 hover:text-white transition-colors">← Landing</Link>
             <Link
               href="/login"
@@ -624,7 +633,7 @@ export default function DocsPage() {
       <div className="max-w-7xl mx-auto px-6 py-16">
 
         {/* ── Header ── */}
-        <div className="mb-16">
+        <div className="mb-12">
           <div className="inline-flex items-center gap-2 text-xs font-semibold text-amber-400
                           bg-amber-500/10 border border-amber-500/20 rounded-full px-4 py-1.5 mb-6">
             📖 Documentación interna — iMenu v4.0
@@ -657,6 +666,29 @@ export default function DocsPage() {
               <div className="text-xs text-zinc-500">Módulos</div>
             </div>
           </div>
+        </div>
+
+        {/* ── Banner a Especificaciones Técnicas (Hardware & Arquitectura) ── */}
+        <div className="mb-14 p-6 sm:p-8 rounded-2xl bg-gradient-to-r from-amber-500/15 via-zinc-900 to-zinc-900 border border-amber-500/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-xl">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono font-bold uppercase tracking-wider text-amber-400">⚡ Hardware &amp; Red Homologado</span>
+              <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 px-2 py-0.5 rounded-full font-bold">Producción</span>
+            </div>
+            <h3 className="text-xl font-bold text-white">Especificaciones Técnicas &amp; Periféricos ESC/POS</h3>
+            <p className="text-xs text-zinc-400 max-w-2xl leading-relaxed">
+              Consulta la ficha técnica: buffers ESC/POS construidos en TypeScript transmitidos por TCP directo al puerto 9100, compatibilidad verificada con Epson TM-T20/T88, Bixolon SRP-350 y RONGTA, ruteo multi-estación KDS y SOAP UBL 2.1 DIAN.
+            </p>
+          </div>
+          <Link
+            href="/specs"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs transition shadow-lg shadow-amber-500/20 active:scale-95"
+          >
+            <span>Ver Especificaciones Técnicas</span>
+            <span>↗</span>
+          </Link>
         </div>
 
         {/* ── Table of Contents ── */}

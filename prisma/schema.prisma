@@ -85,6 +85,19 @@ enum MovementType {
 }
 
 // ============================================================
+// Enums — Cocina / KDS
+// ============================================================
+
+enum KitchenStation {
+  HOT       // Fuegos / Plancha caliente
+  COLD      // Estación fría (ensaladas, crudo)
+  GRILL     // Parrilla / BBQ
+  PASTRY    // Reposteria / Panadería
+  BAR       // Barra de bebidas
+  GENERAL   // Sin estación específica (defecto)
+}
+
+// ============================================================
 // Enums — Facturación
 // ============================================================
 
@@ -447,6 +460,10 @@ model Product {
   scheduledPriceStart   String?   // "HH:MM"
   scheduledPriceEnd     String?   // "HH:MM"
   scheduledPriceLabel   String?   // ej: "Happy Hour 🍻"
+
+  // Ruteo a estación de cocina (KDS)
+  kitchenStation        KitchenStation @default(GENERAL)  // HOT, COLD, GRILL, PASTRY, BAR
+  prepTimeMinutes       Int?           // Tiempo estimado de preparación del plato en minutos
 
   @@map("products")
 }
