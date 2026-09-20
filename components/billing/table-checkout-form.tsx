@@ -56,6 +56,15 @@ export function TableCheckoutForm({
   const [tipPreset, setTipPreset] = useState<0 | 10 | 15 | 20 | -1>(0) // -1 = custom
   const [customTip, setCustomTip] = useState('')
 
+  // División de cuenta / Pagos múltiples en caja
+  const [isSplitPayment, setIsSplitPayment] = useState(false)
+  const [splitRows, setSplitRows] = useState<
+    { id: string; method: 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'TRANSFER' | 'QR_CODE'; amount: number }[]
+  >([
+    { id: '1', method: 'CASH', amount: 0 },
+    { id: '2', method: 'CREDIT_CARD', amount: 0 },
+  ])
+
   // Aggregate items across all orders of this table
   const itemMap = new Map<
     string,
@@ -97,10 +106,23 @@ export function TableCheckoutForm({
       : Math.round((finalTotal * tipPreset) / 100)
   const grandTotal = finalTotal + tipAmount
 
+  const totalSplitAssigned = splitRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
+  const splitRemaining = grandTotal - totalSplitAssigned
+
   async function handleCheckout(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError(null)
+
+    if (isSplitPayment) {
+      if (Math.abs(splitRemaining) > 1) {
+        setError(
+          `La suma de los métodos de pago ($${totalSplitAssigned.toLocaleString('es-CO')}) debe ser igual al total a pagar ($${grandTotal.toLocaleString('es-CO')}). Faltan $${splitRemaining.toLocaleString('es-CO')}.`
+        )
+        setLoading(false)
+        return
+      }
+    }
 
     try {
       // 1. Create invoice
@@ -126,20 +148,39 @@ export function TableCheckoutForm({
       const invoiceId = data.invoice.id
       const invoiceTotal = typeof data.invoice.total === 'number' ? data.invoice.total : parseFloat(data.invoice.total)
 
-      // 2. Register initial payment (including tip)
-      const payRes = await fetch(`/api/invoices/${invoiceId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: invoiceTotal + tipAmount,
-          method: paymentMethod,
-          tipAmount: tipAmount > 0 ? tipAmount : undefined,
-        }),
-      })
+      // 2. Register payment(s)
+      if (isSplitPayment) {
+        for (const row of splitRows) {
+          if (row.amount > 0) {
+            const payRes = await fetch(`/api/invoices/${invoiceId}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                amount: row.amount,
+                method: row.method,
+              }),
+            })
+            if (!payRes.ok) {
+              const payData = await payRes.json()
+              throw new Error(payData.error || 'Error al registrar pago parcial')
+            }
+          }
+        }
+      } else {
+        const payRes = await fetch(`/api/invoices/${invoiceId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: invoiceTotal + tipAmount,
+            method: paymentMethod,
+            tipAmount: tipAmount > 0 ? tipAmount : undefined,
+          }),
+        })
 
-      if (!payRes.ok) {
-        const payData = await payRes.json()
-        throw new Error(payData.error || 'Factura creada pero error al registrar el pago')
+        if (!payRes.ok) {
+          const payData = await payRes.json()
+          throw new Error(payData.error || 'Factura creada pero error al registrar el pago')
+        }
       }
 
       // 3. Successfully issued & paid -> Redirect to invoice detail view
@@ -309,21 +350,156 @@ export function TableCheckoutForm({
             />
           </div>
 
-          <div className="pt-2 border-t border-zinc-800">
-            <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
-              Método de Pago *
-            </label>
-            <select
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-amber-500"
-            >
-              <option value="CASH">Efectivo 💵</option>
-              <option value="CREDIT_CARD">Tarjeta de Crédito 💳</option>
-              <option value="DEBIT_CARD">Tarjeta de Débito 💳</option>
-              <option value="TRANSFER">Transferencia (Nequi / Daviplata) 📱</option>
-              <option value="QR_CODE">Código QR 📲</option>
-            </select>
+          <div className="pt-3 border-t border-zinc-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                Modalidad de Cobro
+              </label>
+              <div className="flex bg-zinc-950 p-1 rounded-lg border border-zinc-800 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => setIsSplitPayment(false)}
+                  className={`px-2.5 py-1 rounded-md font-semibold transition cursor-pointer ${
+                    !isSplitPayment ? 'bg-amber-500 text-zinc-950 shadow-sm' : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  Pago Único
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSplitPayment(true)
+                    if (splitRows.length === 0 || splitRows.every((r) => r.amount === 0)) {
+                      const half = Math.round(grandTotal / 2)
+                      setSplitRows([
+                        { id: '1', method: 'CASH', amount: half },
+                        { id: '2', method: 'CREDIT_CARD', amount: grandTotal - half },
+                      ])
+                    }
+                  }}
+                  className={`px-2.5 py-1 rounded-md font-semibold transition cursor-pointer ${
+                    isSplitPayment ? 'bg-amber-500 text-zinc-950 shadow-sm' : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  Dividir Cuenta
+                </button>
+              </div>
+            </div>
+
+            {!isSplitPayment ? (
+              <div>
+                <label className="block text-xs font-semibold text-zinc-400 mb-1">
+                  Método de Pago *
+                </label>
+                <select
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-amber-500"
+                >
+                  <option value="CASH">Efectivo 💵</option>
+                  <option value="CREDIT_CARD">Tarjeta de Crédito 💳</option>
+                  <option value="DEBIT_CARD">Tarjeta de Débito 💳</option>
+                  <option value="TRANSFER">Transferencia (Nequi / Daviplata) 📱</option>
+                  <option value="QR_CODE">Código QR 📲</option>
+                </select>
+              </div>
+            ) : (
+              <div className="space-y-2.5 p-3 rounded-xl bg-zinc-950/80 border border-zinc-800">
+                <div className="flex justify-between items-center text-[11px]">
+                  <span className="text-zinc-400">Distribución de pagos:</span>
+                  <span
+                    className={`font-mono font-bold ${
+                      Math.abs(splitRemaining) <= 1 ? 'text-emerald-400' : 'text-amber-400'
+                    }`}
+                  >
+                    {Math.abs(splitRemaining) <= 1
+                      ? '✓ Cubierto 100%'
+                      : `Restante: $${splitRemaining.toLocaleString('es-CO')}`}
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  {splitRows.map((row, idx) => (
+                    <div key={row.id} className="flex gap-2 items-center">
+                      <select
+                        value={row.method}
+                        onChange={(e) => {
+                          const val = e.target.value as typeof row.method
+                          setSplitRows((prev) =>
+                            prev.map((r, i) => (i === idx ? { ...r, method: val } : r))
+                          )
+                        }}
+                        className="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 text-white text-xs w-36 focus:outline-none focus:border-amber-500"
+                      >
+                        <option value="CASH">Efectivo 💵</option>
+                        <option value="CREDIT_CARD">Crédito 💳</option>
+                        <option value="DEBIT_CARD">Débito 💳</option>
+                        <option value="TRANSFER">Transferencia 📱</option>
+                        <option value="QR_CODE">QR 📲</option>
+                      </select>
+
+                      <input
+                        type="number"
+                        min="0"
+                        step="1000"
+                        value={row.amount || ''}
+                        onChange={(e) => {
+                          const val = Math.max(0, parseFloat(e.target.value) || 0)
+                          setSplitRows((prev) =>
+                            prev.map((r, i) => (i === idx ? { ...r, amount: val } : r))
+                          )
+                        }}
+                        placeholder="$0"
+                        className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs focus:outline-none focus:border-amber-500"
+                      />
+
+                      {splitRows.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setSplitRows((prev) => prev.filter((_, i) => i !== idx))}
+                          className="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-red-950/60 hover:text-red-400 text-zinc-500 flex items-center justify-center text-xs transition-colors cursor-pointer"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSplitRows((prev) => [
+                        ...prev,
+                        {
+                          id: String(Date.now()),
+                          method: 'CASH',
+                          amount: Math.max(0, splitRemaining),
+                        },
+                      ])
+                    }
+                    className="flex-1 py-1.5 px-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 rounded-lg border border-zinc-800 text-[11px] font-semibold transition cursor-pointer"
+                  >
+                    + Agregar Método
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const half = Math.round(grandTotal / 2)
+                      setSplitRows([
+                        { id: '1', method: 'CASH', amount: half },
+                        { id: '2', method: 'CREDIT_CARD', amount: grandTotal - half },
+                      ])
+                    }}
+                    className="py-1.5 px-2.5 bg-zinc-900 hover:bg-zinc-800 text-amber-400 rounded-lg border border-zinc-800 text-[11px] font-semibold transition cursor-pointer"
+                  >
+                    50 / 50
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

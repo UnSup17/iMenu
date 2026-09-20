@@ -9,11 +9,12 @@ const splitPaymentSchema = z.object({
   payerName: z.string().min(2, 'Nombre del pagador requerido'),
   payerPhone: z.string().optional().nullable(),
   payerEmail: z.string().email().optional().nullable().or(z.literal('')),
-  splitType: z.enum(['INDIVIDUAL', 'EQUAL', 'CUSTOM', 'FULL']),
+  splitType: z.enum(['INDIVIDUAL', 'EQUAL', 'BY_PERSON', 'CUSTOM', 'FULL']),
   amount: z.number().positive('El monto base debe ser mayor a cero'),
   tipAmount: z.number().min(0).default(0),
   totalPaid: z.number().positive('El total pagado debe ser mayor a cero'),
   paymentMethod: z.enum(['WOMPI', 'MERCADOPAGO', 'STRIPE', 'NEQUI', 'CARD']),
+  coveredAliases: z.array(z.string()).optional().default([]),
   itemsPaid: z.array(z.any()).optional().default([]),
 })
 
@@ -72,12 +73,20 @@ export async function POST(req: NextRequest) {
       tipAmount,
       totalPaid,
       paymentMethod,
+      coveredAliases,
       itemsPaid,
     } = parsed.data
 
     const crypto = await import('crypto')
     const paymentId = crypto.randomUUID()
     const paymentReference = `PAY-${Date.now().toString().slice(-6)}-${Math.floor(1000 + Math.random() * 9000)}`
+
+    // Payload de ítems y metadatos (incluye coveredAliases si aplica)
+    const storedPayload = {
+      items: itemsPaid || [],
+      coveredAliases: coveredAliases || [],
+      splitType,
+    }
 
     // Persistir el pago dividido en la base de datos
     await prisma.$executeRawUnsafe(
@@ -99,7 +108,7 @@ export async function POST(req: NextRequest) {
       totalPaid,
       paymentMethod,
       paymentReference,
-      JSON.stringify(itemsPaid || [])
+      JSON.stringify(storedPayload)
     )
 
     // Consultar el total acumulado pagado por la mesa
@@ -113,6 +122,16 @@ export async function POST(req: NextRequest) {
     const totalTablePaid = paidRecords[0] ? Number(paidRecords[0].totalAmountPaid) : amount
     const paymentsCount = paidRecords[0] ? Number(paidRecords[0].paymentsCount) : 1
 
+    // Enlace dinámico a pasarela digital (Wompi, MercadoPago, Nequi o Stripe)
+    const gatewayPaymentUrl =
+      paymentMethod === 'WOMPI'
+        ? `https://checkout.wompi.co/p/?public-key=pub_test_imenu&currency=COP&amount-in-cents=${totalPaid * 100}&reference=${paymentReference}`
+        : paymentMethod === 'MERCADOPAGO'
+        ? `https://www.mercadopago.com.co/checkout/v1/redirect?pref_id=pref_${paymentReference}`
+        : paymentMethod === 'NEQUI'
+        ? `https://recarga.nequi.com.co/billetera/qr?code=${paymentReference}&val=${totalPaid}`
+        : `https://pay.imenu.app/checkout/${paymentReference}`
+
     return NextResponse.json({
       success: true,
       voucher: {
@@ -121,9 +140,11 @@ export async function POST(req: NextRequest) {
         payerName: payerName.trim(),
         paymentMethod,
         splitType,
+        coveredAliases: coveredAliases || [],
         amount,
         tipAmount,
         totalPaid,
+        gatewayPaymentUrl,
         status: 'APPROVED',
         statusLabel: 'Pago Aprobado con Éxito',
         timestamp: new Date().toISOString(),

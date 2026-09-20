@@ -52,14 +52,31 @@ export default async function InvoicesListPage({
             Registro de comprobantes generados, estado de pagos e impuestos aplicados.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <a
+            href="/api/billing/proforma?format=html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3.5 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white font-medium text-xs rounded-xl border border-zinc-800 hover:border-zinc-700 transition-colors flex items-center gap-1.5 shadow-sm"
+          >
+            <span>📄</span>
+            <span>Generar Proforma ↗</span>
+          </a>
+          <a
+            href={statusFilter ? `/api/export/invoices/zip?status=${statusFilter}` : '/api/export/invoices/zip'}
+            download
+            className="px-3.5 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 font-medium text-xs rounded-xl border border-amber-500/30 transition-colors flex items-center gap-1.5 shadow-sm"
+          >
+            <span>📦</span>
+            <span>Comprobantes (ZIP)</span>
+          </a>
           <a
             href={statusFilter ? `/api/export/invoices?status=${statusFilter}` : '/api/export/invoices'}
             download
-            className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-medium text-xs rounded-xl border border-zinc-700/80 transition-colors flex items-center gap-2 shadow-sm"
+            className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-medium text-xs rounded-xl border border-zinc-700/80 transition-colors flex items-center gap-1.5 shadow-sm"
           >
             <span>📥</span>
-            <span>Exportar Excel / CSV</span>
+            <span>Excel / CSV</span>
           </a>
         </div>
       </div>

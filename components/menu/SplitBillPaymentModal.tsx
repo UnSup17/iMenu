@@ -18,7 +18,7 @@ interface SplitBillPaymentModalProps {
   onPaymentSuccess?: (paidAmount: number, reference: string) => void
 }
 
-type SplitMode = 'INDIVIDUAL' | 'EQUAL' | 'CUSTOM' | 'FULL'
+type SplitMode = 'INDIVIDUAL' | 'EQUAL' | 'BY_PERSON' | 'CUSTOM' | 'FULL'
 type GatewayMethod = 'WOMPI' | 'MERCADOPAGO' | 'STRIPE' | 'NEQUI' | 'CARD'
 
 export function SplitBillPaymentModal({
@@ -56,6 +56,8 @@ export function SplitBillPaymentModal({
     amount: number
     tipAmount: number
     totalPaid: number
+    coveredAliases?: string[]
+    gatewayPaymentUrl?: string
     date: string
   } | null>(null)
 
@@ -125,6 +127,41 @@ export function SplitBillPaymentModal({
     return Math.round(totalTableConfirmed / Math.max(numPeople, 1))
   }, [myIndividualItems, totalTableConfirmed, numPeople])
 
+  // Lista de comensales / aliases detectados en los pedidos de la mesa
+  const allAvailableAliases = useMemo(() => {
+    const set = new Set<string>()
+    allOrderItems.forEach((item) => {
+      if (item.orderedByNames && Array.isArray(item.orderedByNames)) {
+        item.orderedByNames.forEach((name) => {
+          if (name && name.trim()) set.add(name.trim())
+        })
+      }
+    })
+    if (userAlias && userAlias.trim()) set.add(userAlias.trim())
+    return Array.from(set)
+  }, [allOrderItems, userAlias])
+
+  const [selectedAliases, setSelectedAliases] = useState<string[]>(userAlias ? [userAlias] : [])
+
+  const toggleAlias = (alias: string) => {
+    setSelectedAliases((prev) =>
+      prev.includes(alias) ? prev.filter((a) => a !== alias) : [...prev, alias]
+    )
+  }
+
+  // Ítems y monto correspondiente a "Pagar por Personas Seleccionadas"
+  const byPersonItems = useMemo(() => {
+    if (selectedAliases.length === 0) return []
+    const lowerSelected = selectedAliases.map((a) => a.toLowerCase().trim())
+    return allOrderItems.filter((item) =>
+      item.orderedByNames?.some((name) => lowerSelected.includes(name.toLowerCase().trim()))
+    )
+  }, [allOrderItems, selectedAliases])
+
+  const byPersonSubtotal = useMemo(() => {
+    return byPersonItems.reduce((sum, item) => sum + item.totalPrice, 0)
+  }, [byPersonItems])
+
   // Cálculo del monto base según la modalidad elegida
   const baseAmount = useMemo(() => {
     switch (splitMode) {
@@ -132,6 +169,10 @@ export function SplitBillPaymentModal({
         return myIndividualSubtotal
       case 'EQUAL':
         return Math.round(totalTableConfirmed / Math.max(numPeople, 1))
+      case 'BY_PERSON':
+        return byPersonSubtotal > 0
+          ? byPersonSubtotal
+          : Math.round(totalTableConfirmed / Math.max(numPeople, 1))
       case 'CUSTOM': {
         const selected = allOrderItems.filter((i) => selectedCustomItemKeys.includes(i.key))
         return selected.reduce((sum, i) => sum + i.totalPrice, 0)
@@ -139,7 +180,15 @@ export function SplitBillPaymentModal({
       case 'FULL':
         return totalTableConfirmed
     }
-  }, [splitMode, myIndividualSubtotal, totalTableConfirmed, numPeople, allOrderItems, selectedCustomItemKeys])
+  }, [
+    splitMode,
+    myIndividualSubtotal,
+    totalTableConfirmed,
+    numPeople,
+    byPersonSubtotal,
+    allOrderItems,
+    selectedCustomItemKeys,
+  ])
 
   const tipAmount = Math.round((baseAmount * tipPercent) / 100)
   const grandTotal = baseAmount + tipAmount
@@ -180,6 +229,7 @@ export function SplitBillPaymentModal({
           payerPhone: payerPhone.trim() || null,
           payerEmail: payerEmail.trim() || null,
           splitType: splitMode,
+          coveredAliases: splitMode === 'BY_PERSON' ? selectedAliases : undefined,
           amount: baseAmount,
           tipAmount,
           totalPaid: grandTotal,
@@ -187,6 +237,8 @@ export function SplitBillPaymentModal({
           itemsPaid:
             splitMode === 'INDIVIDUAL'
               ? myIndividualItems
+              : splitMode === 'BY_PERSON'
+              ? byPersonItems
               : splitMode === 'CUSTOM'
               ? allOrderItems.filter((i) => selectedCustomItemKeys.includes(i.key))
               : [{ description: `División ${splitMode}`, amount: baseAmount }],
@@ -205,6 +257,8 @@ export function SplitBillPaymentModal({
         amount: baseAmount,
         tipAmount,
         totalPaid: grandTotal,
+        coveredAliases: data.voucher.coveredAliases,
+        gatewayPaymentUrl: data.voucher.gatewayPaymentUrl,
         date: new Date().toLocaleDateString(locale === 'en' ? 'en-US' : 'es-CO', {
           year: 'numeric',
           month: 'short',
@@ -287,12 +341,20 @@ export function SplitBillPaymentModal({
                     {splitMode === 'INDIVIDUAL'
                       ? 'Mi Consumo Personal'
                       : splitMode === 'EQUAL'
-                      ? 'Parte Igualitaria'
+                      ? `Partes Iguales (1/${numPeople})`
+                      : splitMode === 'BY_PERSON'
+                      ? 'Por Personas Seleccionadas'
                       : splitMode === 'CUSTOM'
                       ? 'Platos Seleccionados'
                       : 'Cuenta Completa'}
                   </span>
                 </div>
+                {approvedVoucher.coveredAliases && approvedVoucher.coveredAliases.length > 0 && (
+                  <div className="flex justify-between text-amber-400 text-[11px]">
+                    <span>Personas cubiertas:</span>
+                    <span className="font-bold">{approvedVoucher.coveredAliases.join(', ')}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-zinc-400">Subtotal:</span>
                   <span className="text-white">{formatPrice(approvedVoucher.amount)}</span>
@@ -340,7 +402,7 @@ export function SplitBillPaymentModal({
                 <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
                   1. ¿Cómo deseas pagar?
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                   <button
                     type="button"
                     onClick={() => setSplitMode('INDIVIDUAL')}
@@ -351,7 +413,7 @@ export function SplitBillPaymentModal({
                     }`}
                   >
                     <span className="text-base">👤</span>
-                    <span className="truncate w-full">Mi Consumo</span>
+                    <span className="truncate w-full text-[11px]">Lo que Pedí</span>
                   </button>
 
                   <button
@@ -364,7 +426,20 @@ export function SplitBillPaymentModal({
                     }`}
                   >
                     <span className="text-base">⚖️</span>
-                    <span className="truncate w-full">Partes Iguales</span>
+                    <span className="truncate w-full text-[11px]">Partes Iguales</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSplitMode('BY_PERSON')}
+                    className={`p-2.5 rounded-xl border text-xs font-bold transition-all text-center flex flex-col items-center gap-1 cursor-pointer ${
+                      splitMode === 'BY_PERSON'
+                        ? 'bg-amber-500/20 border-amber-500 text-amber-400 shadow-md scale-[1.02]'
+                        : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-white'
+                    }`}
+                  >
+                    <span className="text-base">👥</span>
+                    <span className="truncate w-full text-[11px]">Por Personas</span>
                   </button>
 
                   <button
@@ -377,7 +452,7 @@ export function SplitBillPaymentModal({
                     }`}
                   >
                     <span className="text-base">📋</span>
-                    <span className="truncate w-full">Elegir Platos</span>
+                    <span className="truncate w-full text-[11px]">Elegir Platos</span>
                   </button>
 
                   <button
@@ -390,7 +465,7 @@ export function SplitBillPaymentModal({
                     }`}
                   >
                     <span className="text-base">👑</span>
-                    <span className="truncate w-full">Toda la Mesa</span>
+                    <span className="truncate w-full text-[11px]">Toda la Mesa</span>
                   </button>
                 </div>
               </div>
@@ -422,28 +497,106 @@ export function SplitBillPaymentModal({
               )}
 
               {splitMode === 'EQUAL' && (
-                <div className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800/80 flex items-center justify-between text-xs">
-                  <div>
-                    <span className="text-zinc-400 block">¿Entre cuántas personas dividir?</span>
-                    <span className="text-white font-bold text-sm">{numPeople} comensales</span>
+                <div className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800/80 text-xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-zinc-400 block">¿Entre cuántas personas dividir la cuenta?</span>
+                      <span className="text-white font-bold text-sm">
+                        {numPeople} comensales ({formatPrice(baseAmount)} c/u)
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setNumPeople((prev) => Math.max(2, prev - 1))}
+                        className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm cursor-pointer transition-colors"
+                      >
+                        -
+                      </button>
+                      <span className="w-8 text-center font-mono font-bold text-amber-400 text-sm">{numPeople}</span>
+                      <button
+                        type="button"
+                        onClick={() => setNumPeople((prev) => Math.min(20, prev + 1))}
+                        className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm cursor-pointer transition-colors"
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setNumPeople((prev) => Math.max(2, prev - 1))}
-                      className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm cursor-pointer"
-                    >
-                      -
-                    </button>
-                    <span className="w-8 text-center font-mono font-bold text-amber-400 text-sm">{numPeople}</span>
-                    <button
-                      type="button"
-                      onClick={() => setNumPeople((prev) => Math.min(12, prev + 1))}
-                      className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm cursor-pointer"
-                    >
-                      +
-                    </button>
+                  <div className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800/80 text-[11px] text-zinc-300 flex justify-between items-center">
+                    <span>Cuota exacta por persona (1/{numPeople}):</span>
+                    <span className="font-mono font-bold text-amber-400 text-xs">{formatPrice(baseAmount)}</span>
                   </div>
+                </div>
+              )}
+
+              {splitMode === 'BY_PERSON' && (
+                <div className="p-3.5 rounded-2xl bg-zinc-950/70 border border-zinc-800/80 space-y-3 text-xs">
+                  <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                    <div>
+                      <span className="font-bold text-zinc-200 block">¿Por quiénes deseas pagar?</span>
+                      <span className="text-[11px] text-zinc-400">
+                        Selecciona a las personas de la mesa que deseas cubrir (ej. tú + tu pareja + tu hermana)
+                      </span>
+                    </div>
+                    <span className="text-amber-400 font-mono font-bold text-xs">{formatPrice(byPersonSubtotal)}</span>
+                  </div>
+
+                  {allAvailableAliases.length > 0 ? (
+                    <div className="space-y-2">
+                      <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">
+                        Comensales registrados en la mesa:
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        {allAvailableAliases.map((alias) => {
+                          const isSelected = selectedAliases.includes(alias)
+                          const isSelf = userAlias && alias.toLowerCase() === userAlias.toLowerCase()
+                          return (
+                            <button
+                              key={alias}
+                              type="button"
+                              onClick={() => toggleAlias(alias)}
+                              className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                                isSelected
+                                  ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-sm scale-[1.02]'
+                                  : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+                              }`}
+                            >
+                              <span className="text-sm">{isSelected ? '☑' : '☐'}</span>
+                              <span>{alias}</span>
+                              {isSelf && <span className="text-[10px] text-amber-400/80 font-normal">(Tú)</span>}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-zinc-400 italic bg-zinc-900 p-2.5 rounded-xl border border-zinc-800">
+                      💡 No hay nombres asignados a los pedidos de esta mesa. Puedes usar la modalidad &quot;Partes Iguales&quot; o &quot;Elegir Platos&quot;.
+                    </p>
+                  )}
+
+                  {byPersonItems.length > 0 && (
+                    <div className="pt-2 border-t border-zinc-800/60 space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                      <div className="flex justify-between items-center text-[10px] text-zinc-500 uppercase tracking-wider font-bold">
+                        <span>Platos de los comensales seleccionados ({selectedAliases.join(', ')}):</span>
+                        <span className="text-zinc-400">{byPersonItems.length} ítems</span>
+                      </div>
+                      {byPersonItems.map((item) => (
+                        <div key={item.key} className="flex justify-between text-zinc-300 text-[11px] bg-zinc-900/40 p-1.5 rounded-lg">
+                          <span className="truncate">
+                            {item.quantity}× {item.name}
+                            {item.orderedByNames && (
+                              <span className="text-[10px] text-amber-500/80 ml-1.5 font-medium">
+                                [{item.orderedByNames.join(', ')}]
+                              </span>
+                            )}
+                          </span>
+                          <span className="font-mono text-zinc-300 shrink-0 ml-2">{formatPrice(item.totalPrice)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 

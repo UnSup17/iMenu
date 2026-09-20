@@ -50,13 +50,24 @@ export default async function CloseTablePage({ params }: { params: Promise<{ tab
 
   return (
     <div className="p-8 max-w-4xl mx-auto space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-white mb-1">
-          💳 Cierre y Facturación — Mesa {table.tableNumber}
-        </h1>
-        <p className="text-sm text-zinc-400">
-          Revisa el consumo total de la mesa, datos del cliente y registra el pago para emitir la factura.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white mb-1">
+            💳 Cierre y Facturación — Mesa {table.tableNumber}
+          </h1>
+          <p className="text-sm text-zinc-400">
+            Revisa el consumo total de la mesa, datos del cliente y registra el pago para emitir la factura.
+          </p>
+        </div>
+        <a
+          href={`/api/billing/proforma?tableId=${table.id}&format=html`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="shrink-0 px-3.5 py-2 bg-zinc-900 hover:bg-zinc-800 text-amber-400 font-semibold text-xs rounded-xl border border-zinc-800 hover:border-amber-500/30 transition flex items-center gap-2 shadow-sm"
+        >
+          <span>📄</span>
+          <span>Ver Factura Proforma ↗</span>
+        </a>
       </div>
 
       <TableCheckoutForm
