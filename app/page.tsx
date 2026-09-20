@@ -17,8 +17,9 @@ const features = [
   {
     icon: '🍳',
     label: 'Cocina',
-    title: 'Vista de Cocina en Vivo',
-    desc: 'Pantalla exclusiva para cocina con estados de cada orden (pendiente → en preparación → listo). Sin imprimir comandas.',
+    title: 'KDS Multi-Estación en Vivo',
+    desc: 'Pantalla para cocina con ruteo automático por partida (Caliente, Fría, Bar, Parrilla, Postres, Empaque) y cálculo de ETA predictivo en tiempo real.',
+    specsLink: '/specs#kds',
   },
   {
     icon: '🔔',
@@ -29,14 +30,16 @@ const features = [
   {
     icon: '🧾',
     label: 'Facturación',
-    title: 'Facturación Completa',
-    desc: 'Cierre de mesa → factura con IVA, descuentos y cargo por servicio. Múltiples métodos de pago: efectivo, tarjeta, Nequi, QR.',
+    title: 'Facturación & Split Bill',
+    desc: 'Cierre de mesa y división en 4 modalidades (1/N, por consumo individual, por acompañante o total) con factura IVA y propina.',
+    specsLink: '/specs#payments',
   },
   {
     icon: '🖨️',
     label: 'Impresión',
     title: 'Tickets Térmicos ESC/POS',
-    desc: 'Impresión directa desde el navegador vía WebUSB o red. Tickets configurables: logo, 58mm/80mm, IVA desglosado.',
+    desc: 'Buffer ESC/POS generado en TypeScript → enviado por TCP al puerto 9100 de la impresora. Compatible con Epson TM-T20/T88, Bixolon SRP-350, RONGTA y WebUSB.',
+    specsLink: '/specs#hardware',
   },
   {
     icon: '📦',
@@ -54,7 +57,8 @@ const features = [
     icon: '⚡',
     label: 'DIAN',
     title: 'Factura Electrónica DIAN',
-    desc: 'Integración SOAP directa con la DIAN. Genera XML UBL 2.1 firmado, calcula CUFE SHA-384 y envía sin PTH externo.',
+    desc: 'Integración SOAP directa con la DIAN (UBL 2.1). Genera XML firmado, calcula CUFE SHA-384 y código QR oficial sin PTH intermediario.',
+    specsLink: '/specs#dian',
   },
   {
     icon: '🏢',
@@ -177,7 +181,24 @@ export default function LandingPage() {
             <a href="#phases" className="hover:text-white transition-colors">Fases</a>
             <a href="#roles" className="hover:text-white transition-colors">Roles</a>
             <Link href="/pricing" className="hover:text-white transition-colors">Precios</Link>
-            {/* <Link href="/docs" className="hover:text-amber-400 transition-colors text-amber-500/80 font-medium">Docs →</Link> */}
+            <Link
+              href="/specs"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-amber-400 hover:text-amber-300 font-semibold transition-colors flex items-center gap-1"
+            >
+              <span>Specs Técnicas</span>
+              <span className="text-xs">↗</span>
+            </Link>
+            <Link
+              href="/docs"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-white transition-colors flex items-center gap-1"
+            >
+              <span>Docs</span>
+              <span className="text-xs">↗</span>
+            </Link>
           </nav>
           <div className="flex items-center gap-3">
             <Link
@@ -206,10 +227,22 @@ export default function LandingPage() {
         </div>
 
         <div className="relative max-w-5xl mx-auto text-center">
-          <span className="inline-flex items-center gap-2 text-xs font-semibold text-amber-400
-                           bg-amber-500/10 border border-amber-500/20 rounded-full px-4 py-1.5 mb-8">
-            🎉 Roadmap Empresarial de 4 Fases — Completado al 100%
-          </span>
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-8">
+            <span className="inline-flex items-center gap-2 text-xs font-semibold text-amber-400
+                             bg-amber-500/10 border border-amber-500/20 rounded-full px-4 py-1.5">
+              🎉 Roadmap Empresarial de 4 Fases — Completado al 100%
+            </span>
+            <Link
+              href="/specs"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs font-bold text-emerald-400 hover:text-emerald-300
+                         bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-full px-4 py-1.5 transition-all shadow-sm"
+            >
+              <span>⚡ Hardware ESC/POS (TCP 9100) &amp; KDS → Ver Specs</span>
+              <span className="text-xs font-bold">↗</span>
+            </Link>
+          </div>
 
           <h1 className="text-5xl sm:text-7xl font-extrabold tracking-tight leading-[1.05] mb-6">
             El sistema más completo<br />
@@ -234,15 +267,28 @@ export default function LandingPage() {
             >
               Empieza gratis — 14 días de prueba
             </Link>
-            {/* <Link
+            <Link
+              href="/specs"
+              id="hero-cta-specs"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2
+                         border border-amber-500/40 hover:border-amber-400 bg-amber-500/10 hover:bg-amber-500/20
+                         text-amber-400 px-7 py-4 rounded-xl transition-all text-base font-semibold shadow-lg shadow-amber-500/10"
+            >
+              Especificaciones Técnicas ↗
+            </Link>
+            <Link
               href="/docs"
               id="hero-cta-docs"
+              target="_blank"
+              rel="noopener noreferrer"
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2
-                         border border-zinc-700 hover:border-amber-500/50 text-zinc-300
-                         hover:text-amber-400 px-8 py-4 rounded-xl transition-all text-base"
+                         border border-zinc-700 hover:border-zinc-500 text-zinc-300
+                         hover:text-white px-6 py-4 rounded-xl transition-all text-base"
             >
-              Ver documentación →
-            </Link> */}
+              Docs ↗
+            </Link>
           </div>
 
           {/* Stats strip */}
@@ -362,6 +408,17 @@ export default function LandingPage() {
                 <div className="text-3xl mb-4">{f.icon}</div>
                 <h3 className="font-bold text-white mb-2 text-sm leading-tight">{f.title}</h3>
                 <p className="text-zinc-500 text-xs leading-relaxed">{f.desc}</p>
+                {'specsLink' in f && f.specsLink && (
+                  <Link
+                    href={f.specsLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 mt-3 text-[11px] font-semibold text-amber-400 hover:text-amber-300 transition-colors"
+                  >
+                    <span>Ver especificaciones técnicas</span>
+                    <span>↗</span>
+                  </Link>
+                )}
               </div>
             ))}
           </div>
@@ -470,6 +527,29 @@ export default function LandingPage() {
               </span>
             ))}
           </div>
+
+          {/* Callout de Ficha Técnica */}
+          <div className="mt-12 p-6 rounded-2xl bg-zinc-900/80 border border-zinc-800 text-left flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-amber-500 font-bold text-xs uppercase font-mono tracking-wider">Ficha de Hardware &amp; Red</span>
+                <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 px-2 py-0.5 rounded-full font-bold">Verificado</span>
+              </div>
+              <h4 className="text-sm font-bold text-white">¿Necesitas conocer la compatibilidad con tus impresoras o KDS?</h4>
+              <p className="text-xs text-zinc-400 max-w-xl">
+                Revisa los comandos ESC/POS generados en TypeScript, puerto 9100 TCP, modelos Epson/Bixolon/RONGTA, endpoints KDS y especificación UBL 2.1 DIAN.
+              </p>
+            </div>
+            <Link
+              href="/specs"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-md shadow-amber-500/20 active:scale-95"
+            >
+              <span>Ver Especificaciones Técnicas</span>
+              <span className="text-xs">↗</span>
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -499,14 +579,16 @@ export default function LandingPage() {
                 >
                   Comenzar gratis →
                 </Link>
-                {/* <Link
-                  href="/docs"
-                  id="cta-docs"
-                  className="inline-flex items-center gap-2 border border-zinc-700 hover:border-zinc-500
-                             text-zinc-300 hover:text-white px-8 py-4 rounded-xl transition-all text-base"
+                <Link
+                  href="/specs"
+                  id="cta-specs"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 border border-zinc-700 hover:border-amber-500/50
+                             text-zinc-300 hover:text-amber-400 px-7 py-4 rounded-xl transition-all text-base font-semibold"
                 >
-                  Ver documentación
-                </Link> */}
+                  Especificaciones Técnicas ↗
+                </Link>
               </div>
             </div>
           </div>
@@ -519,10 +601,15 @@ export default function LandingPage() {
           <span className="font-bold text-white text-lg">
             i<span className="text-amber-500">Menu</span>
           </span>
-          <div className="flex items-center gap-6 text-sm text-zinc-500">
-            {/* <Link href="/docs" className="hover:text-zinc-300 transition-colors">Documentación</Link> */}
-            <Link href="/pricing" className="hover:text-zinc-300 transition-colors">Precios</Link>
-            <Link href="/login" className="hover:text-zinc-300 transition-colors">Iniciar sesión</Link>
+          <div className="flex flex-wrap items-center gap-6 text-sm text-zinc-400">
+            <Link href="/specs" target="_blank" rel="noopener noreferrer" className="hover:text-amber-400 transition-colors font-medium">
+              Especificaciones Técnicas ↗
+            </Link>
+            <Link href="/docs" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
+              Documentación ↗
+            </Link>
+            <Link href="/pricing" className="hover:text-white transition-colors">Precios</Link>
+            <Link href="/login" className="hover:text-white transition-colors">Iniciar sesión</Link>
           </div>
           <p className="text-zinc-600 text-xs">© 2026 iMenu. Sistema de menú digital para restaurantes.</p>
         </div>
