@@ -5,6 +5,21 @@ import Link from 'next/link'
 
 export const metadata = { title: 'Inventario — iMenu' }
 
+async function getDailyConsumption(restaurantId: string, inventoryItemId: string): Promise<number> {
+  const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
+  const movements = await prisma.inventoryMovement.findMany({
+    where: {
+      restaurantId,
+      inventoryItemId,
+      type: 'SALE',
+      createdAt: { gte: since },
+    },
+    select: { quantity: true },
+  })
+  const totalOut = movements.reduce((s, m) => s + Math.abs(m.quantity.toNumber()), 0)
+  return totalOut / 14 // Average daily consumption
+}
+
 export default async function InventoryPage() {
   const session = await auth()
   if (!session?.user) redirect('/login')
@@ -39,13 +54,23 @@ export default async function InventoryPage() {
     orderBy: { name: 'asc' },
   })
 
+  // Compute daily consumption for each item (14-day window)
+  const itemsWithPrediction = await Promise.all(
+    items.map(async (item) => {
+      const dailyConsumption = await getDailyConsumption(restaurantId, item.id)
+      const daysUntilEmpty =
+        dailyConsumption > 0 ? Math.floor(item.currentStock.toNumber() / dailyConsumption) : null
+      return { ...item, dailyConsumption, daysUntilEmpty }
+    })
+  )
+
   const stats = {
-    total: items.length,
-    empty: items.filter((i) => i.currentStock.toNumber() <= 0).length,
-    low: items.filter(
+    total: itemsWithPrediction.length,
+    empty: itemsWithPrediction.filter((i) => i.currentStock.toNumber() <= 0).length,
+    low: itemsWithPrediction.filter(
       (i) => i.currentStock.toNumber() > 0 && i.currentStock.toNumber() <= i.minStock.toNumber(),
     ).length,
-    ok: items.filter((i) => i.currentStock.toNumber() > i.minStock.toNumber()).length,
+    ok: itemsWithPrediction.filter((i) => i.currentStock.toNumber() > i.minStock.toNumber()).length,
   }
 
   return (
@@ -56,7 +81,7 @@ export default async function InventoryPage() {
           <h1 className="text-2xl font-bold text-white">📦 Inventario</h1>
           <p className="text-sm text-zinc-500 mt-1">Materias primas e ingredientes de tu restaurante</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap">
           <a
             href="/api/export/inventory"
             download
@@ -65,6 +90,30 @@ export default async function InventoryPage() {
             <span>📥</span>
             <span>Exportar Excel</span>
           </a>
+          <Link
+            href="/dashboard/inventory/suppliers"
+            className="px-4 py-2 rounded-lg border border-zinc-700 text-zinc-300 text-sm hover:bg-zinc-800 transition-colors"
+          >
+            🏡 Proveedores
+          </Link>
+          <Link
+            href="/dashboard/inventory/purchases"
+            className="px-4 py-2 rounded-lg border border-zinc-700 text-zinc-300 text-sm hover:bg-zinc-800 transition-colors"
+          >
+            📦 Órdenes de Compra
+          </Link>
+          <Link
+            href="/dashboard/inventory/physical-count"
+            className="px-4 py-2 rounded-lg border border-zinc-700 text-zinc-300 text-sm hover:bg-zinc-800 transition-colors"
+          >
+            📋 Conteo Físico
+          </Link>
+          <Link
+            href="/dashboard/inventory/transfers"
+            className="px-4 py-2 rounded-lg border border-zinc-700 text-zinc-300 text-sm hover:bg-zinc-800 transition-colors"
+          >
+            🔄 Transferencias
+          </Link>
           <Link
             href="/dashboard/inventory/movements"
             className="px-4 py-2 rounded-lg border border-zinc-700 text-zinc-300 text-sm hover:bg-zinc-800 transition-colors"
@@ -113,7 +162,7 @@ export default async function InventoryPage() {
           <table className="w-full text-sm">
             <thead className="bg-zinc-900 border-b border-zinc-800">
               <tr>
-                {['Ingrediente', 'SKU', 'Unidad', 'Stock actual', 'Mín.', 'Estado', 'Recetas', 'Acciones'].map(
+                {['Ingrediente', 'SKU', 'Unidad', 'Stock actual', 'Mín.', 'Estado', 'Predicción', 'Recetas', 'Acciones'].map(
                   (h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">
                       {h}
@@ -123,13 +172,29 @@ export default async function InventoryPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/60">
-              {items.map((item) => {
+              {itemsWithPrediction.map((item) => {
                 const stock = item.currentStock.toNumber()
                 const min = item.minStock.toNumber()
                 const isEmpty = stock <= 0
                 const isLow = stock > 0 && stock <= min
                 const statusColor = isEmpty ? 'text-red-400 bg-red-950/40' : isLow ? 'text-amber-400 bg-amber-950/40' : 'text-emerald-400 bg-emerald-950/40'
                 const statusLabel = isEmpty ? 'Sin stock' : isLow ? 'Stock bajo' : 'OK'
+
+                // Prediction display
+                let predictionLabel = '—'
+                let predictionColor = 'text-zinc-600'
+                if (item.daysUntilEmpty !== null) {
+                  if (item.daysUntilEmpty <= 2) {
+                    predictionLabel = `⚠️ ${item.daysUntilEmpty}d`
+                    predictionColor = 'text-red-400'
+                  } else if (item.daysUntilEmpty <= 7) {
+                    predictionLabel = `🟡 ${item.daysUntilEmpty}d`
+                    predictionColor = 'text-amber-400'
+                  } else {
+                    predictionLabel = `✅ ${item.daysUntilEmpty}d`
+                    predictionColor = 'text-emerald-400'
+                  }
+                }
 
                 return (
                   <tr key={item.id} className="hover:bg-zinc-900/50 transition-colors">
@@ -147,9 +212,14 @@ export default async function InventoryPage() {
                         {statusLabel}
                       </span>
                     </td>
+                    <td className="px-4 py-3">
+                      <span className={`font-mono text-xs font-semibold ${predictionColor}`} title={item.dailyConsumption > 0 ? `Consumo diario: ${item.dailyConsumption.toFixed(3)} ${item.unit}/día` : 'Sin datos de consumo'}>
+                        {predictionLabel}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 text-zinc-400">{item._count.productRecipes} prod.</td>
                     <td className="px-4 py-3">
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap">
                         <Link
                           href={`/dashboard/inventory/${item.id}`}
                           className="text-xs text-amber-500 hover:text-amber-400 font-medium"
@@ -162,12 +232,17 @@ export default async function InventoryPage() {
                         >
                           + Compra
                         </Link>
-                        <Link
-                          href={`/dashboard/additions?createFromIngredient=${item.id}`}
-                          className="text-xs text-amber-300 hover:text-amber-200 font-medium"
-                        >
-                          + Adición
-                        </Link>
+                        {(isEmpty || isLow) && item.supplier && (
+                          <a
+                            href={`https://wa.me/${item.supplier.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola, necesitamos reponer ${item.name}. Stock actual: ${stock.toFixed(3)} ${item.unit}. ¿Pueden enviar cotización?`)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-emerald-400 hover:text-emerald-300 font-medium"
+                            title="Alertar al proveedor por WhatsApp"
+                          >
+                            💬 WhatsApp
+                          </a>
+                        )}
                       </div>
                     </td>
                   </tr>

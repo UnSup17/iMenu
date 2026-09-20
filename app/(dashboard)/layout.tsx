@@ -25,6 +25,10 @@ const NAV_SECTIONS = [
     roles: ['SUPERADMIN', 'ORG_ADMIN', 'RESTAURANT_ADMIN', 'MANAGER'],
     items: [
       { href: '/dashboard/inventory', label: 'Existencias', icon: '📦' },
+      { href: '/dashboard/inventory/purchases', label: 'Órdenes de Compra', icon: '🛒' },
+      { href: '/dashboard/inventory/suppliers', label: 'Proveedores', icon: '🏭' },
+      { href: '/dashboard/inventory/physical-count', label: 'Conteo Físico', icon: '📋' },
+      { href: '/dashboard/inventory/transfers', label: 'Transferencias', icon: '🔄' },
       { href: '/dashboard/inventory/recipes', label: 'Recetas', icon: '🍳' },
       { href: '/dashboard/inventory/movements', label: 'Movimientos', icon: '📊' },
     ],

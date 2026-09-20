@@ -82,6 +82,15 @@ enum MovementType {
   ADJUSTMENT  // Ajuste manual (merma, inventario físico)
   WASTE       // Desperdicio registrado
   TRANSFER    // Transferencia entre sucursales (Fase 3)
+  PHYSICAL_COUNT // Conteo físico periódico
+}
+
+enum PurchaseOrderStatus {
+  DRAFT      // Borrador
+  SENT       // Enviada al proveedor
+  RECEIVED   // Recibida y mercancía ingresada
+  PARTIAL    // Recepción parcial
+  CANCELLED  // Cancelada
 }
 
 // ============================================================
@@ -219,6 +228,8 @@ model Restaurant {
   additions               Addition[]
   feedbacks               TableSessionFeedback[]
   reservations            Reservation[]
+  suppliers               Supplier[]               // Proveedores (Fase 3)
+  purchaseOrders          PurchaseOrder[]          // Órdenes de compra (Fase 3)
 
   @@map("restaurants")
 }
@@ -303,6 +314,7 @@ model User {
   expensesCreated         Expense[]           @relation("ExpenseCreator")
   cashRegisterCloses      CashRegisterClose[] @relation("CashRegisterCloser")
   accountingPeriodsClosed AccountingPeriod[]  @relation("PeriodCloser")
+  purchaseOrdersCreated   PurchaseOrder[]     @relation("PurchaseOrderCreator")
 
   @@map("users")
 }
@@ -695,10 +707,11 @@ model InventoryItem {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
-  productRecipes ProductRecipeItem[]
-  movements      InventoryMovement[]
-  stockIssues    ProductStockIssue[]
-  additions      Addition[]
+  productRecipes   ProductRecipeItem[]
+  movements        InventoryMovement[]
+  stockIssues      ProductStockIssue[]
+  additions        Addition[]
+  purchaseItems    PurchaseOrderItem[]
 
   @@map("inventory_items")
 }
@@ -752,6 +765,74 @@ model ProductStockIssue {
 
   @@unique([productId, inventoryItemId])
   @@map("product_stock_issues")
+}
+
+// ============================================================
+// Proveedores y Órdenes de Compra (Fase 3)
+// ============================================================
+
+// Proveedor de insumos / materia prima
+model Supplier {
+  id           String       @id @default(uuid())
+  restaurantId String
+  restaurant   Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  name         String       // Razón social
+  taxId        String?      // NIT / Cédula
+  contactName  String?      // Nombre del contacto
+  phone        String?      // Teléfono WhatsApp
+  email        String?
+  address      String?
+  notes        String?      @db.Text
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  purchaseOrders PurchaseOrder[]
+
+  @@index([restaurantId])
+  @@map("suppliers")
+}
+
+// Orden de compra al proveedor
+model PurchaseOrder {
+  id           String              @id @default(uuid())
+  restaurantId String
+  restaurant   Restaurant          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  supplierId   String
+  supplier     Supplier            @relation(fields: [supplierId], references: [id])
+  status       PurchaseOrderStatus @default(DRAFT)
+  orderNumber  String              // PO-0001 auto-generado
+  notes        String?             @db.Text
+  expectedAt   DateTime?           // Fecha esperada de entrega
+  receivedAt   DateTime?           // Fecha real de recepción
+  subtotal     Decimal             @db.Decimal(12, 2) @default(0)
+  taxAmount    Decimal             @db.Decimal(12, 2) @default(0)
+  total        Decimal             @db.Decimal(12, 2) @default(0)
+  createdById  String
+  createdBy    User                @relation("PurchaseOrderCreator", fields: [createdById], references: [id])
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  items PurchaseOrderItem[]
+
+  @@index([restaurantId, status])
+  @@index([restaurantId, createdAt])
+  @@map("purchase_orders")
+}
+
+// Línea de ítem en una orden de compra
+model PurchaseOrderItem {
+  id              String        @id @default(uuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  quantity        Decimal       @db.Decimal(10, 3) // Cantidad pedida
+  receivedQty     Decimal       @db.Decimal(10, 3) @default(0) // Cantidad recibida
+  unitCost        Decimal       @db.Decimal(10, 4) // Costo unitario pactado
+  subtotal        Decimal       @db.Decimal(12, 2)
+
+  @@map("purchase_order_items")
 }
 
 // ============================================================

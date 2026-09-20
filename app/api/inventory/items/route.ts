@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     const restaurantId = user.restaurantId
     if (!restaurantId) return NextResponse.json({ error: 'Sin restaurante asignado' }, { status: 403 })
 
-    const allowedRoles = ['SUPERADMIN', 'RESTAURANT_ADMIN', 'MANAGER', 'ACCOUNTANT']
+    const allowedRoles = ['SUPERADMIN', 'ORG_ADMIN', 'RESTAURANT_ADMIN', 'MANAGER', 'ACCOUNTANT']
     if (!allowedRoles.includes(user.role)) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
