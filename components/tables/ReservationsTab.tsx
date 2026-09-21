@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { type EnrichedTable } from './FloorPlanVisualizer'
+import { extractPreOrder, type PreOrderData } from '@/lib/reservations/preorder'
+import { generateWhatsAppUrl, normalizePhoneNumber } from '@/lib/notifications/messaging'
 
 export interface ReservationItem {
   id: string
@@ -43,6 +45,10 @@ export function ReservationsTab({
     const today = new Date()
     return today.toISOString().split('T')[0]
   })
+  const [expandedPreOrders, setExpandedPreOrders] = useState<Record<string, boolean>>({})
+  const [notifyingMap, setNotifyingMap] = useState<Record<string, boolean>>({})
+  const [notificationFeedback, setNotificationFeedback] = useState<string | null>(null)
+  const [seatedAlert, setSeatedAlert] = useState<string | null>(null)
   const [filterStatus, setFilterStatus] = useState<string>('ALL')
   const [isModalOpen, setIsModalOpen] = useState(false)
 
@@ -113,11 +119,45 @@ export function ReservationsTab({
       const updated = await res.json()
       setReservations((prev) => prev.map((r) => (r.id === id ? updated : r)))
 
-      if (newStatus === 'SEATED' && tableId) {
-        onReservationSeated?.(tableId)
+      if (newStatus === 'SEATED') {
+        if (updated.orderDispatched) {
+          setSeatedAlert(
+            `✅ Comensal sentado. ¡Se despachó automáticamente la pre-orden a cocina (KDS)!`
+          )
+        } else {
+          setSeatedAlert(`✅ Comensal sentado en mesa #${updated.table?.tableNumber || ''}.`)
+        }
+        setTimeout(() => setSeatedAlert(null), 7000)
+
+        if (tableId) {
+          onReservationSeated?.(tableId)
+        }
       }
     } catch (e: any) {
       alert(e.message)
+    }
+  }
+
+  const handleSendNotification = async (id: string, type: 'CONFIRMATION' | 'REMINDER') => {
+    setNotifyingMap((prev) => ({ ...prev, [id]: true }))
+    try {
+      const res = await fetch('/api/reservations/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reservationId: id, type }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error al enviar notificación')
+      setNotificationFeedback(
+        type === 'REMINDER'
+          ? '🔔 Recordatorio enviado correctamente al comensal vía WhatsApp / SMS.'
+          : '📱 Confirmación enviada exitosamente al comensal.'
+      )
+      setTimeout(() => setNotificationFeedback(null), 5000)
+    } catch (err: any) {
+      alert(err.message)
+    } finally {
+      setNotifyingMap((prev) => ({ ...prev, [id]: false }))
     }
   }
 
@@ -182,11 +222,43 @@ export function ReservationsTab({
   const totalGuests = reservations.reduce((sum, r) => sum + r.partySize, 0)
   const confirmedCount = reservations.filter((r) => r.status === 'CONFIRMED').length
   const seatedCount = reservations.filter((r) => r.status === 'SEATED').length
+  const preOrderCount = reservations.filter((r) => extractPreOrder(r.notes).preOrder !== null).length
 
   return (
     <div className="space-y-6">
+      {/* Alertas dinámicas de acción */}
+      {seatedAlert && (
+        <div className="bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 p-4 rounded-2xl flex items-center justify-between text-sm animate-in fade-in shadow-lg">
+          <div className="flex items-center gap-2.5">
+            <span className="text-xl">🍽️</span>
+            <span className="font-bold">{seatedAlert}</span>
+          </div>
+          <button
+            onClick={() => setSeatedAlert(null)}
+            className="text-xs text-emerald-400 hover:text-white px-2 py-1 cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {notificationFeedback && (
+        <div className="bg-blue-500/15 border border-blue-500/30 text-blue-300 p-4 rounded-2xl flex items-center justify-between text-sm animate-in fade-in shadow-lg">
+          <div className="flex items-center gap-2.5">
+            <span className="text-xl">🔔</span>
+            <span className="font-bold">{notificationFeedback}</span>
+          </div>
+          <button
+            onClick={() => setNotificationFeedback(null)}
+            className="text-xs text-blue-400 hover:text-white px-2 py-1 cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* KPI Cards de Reservas */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-base">📅</span>
@@ -206,15 +278,23 @@ export function ReservationsTab({
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
           <div className="flex items-center gap-2 mb-1">
             <span className="w-2.5 h-2.5 rounded-full bg-blue-400" />
-            <span className="text-xs text-zinc-400 font-semibold">Sentadas / En Mesa</span>
+            <span className="text-xs text-zinc-400 font-semibold">Sentadas</span>
           </div>
           <p className="text-2xl font-bold text-blue-400">{seatedCount}</p>
         </div>
 
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
           <div className="flex items-center gap-2 mb-1">
+            <span className="text-base">🍽️</span>
+            <span className="text-xs text-zinc-400 font-semibold">Con Pre-orden</span>
+          </div>
+          <p className="text-2xl font-bold text-amber-400">{preOrderCount}</p>
+        </div>
+
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 col-span-2 sm:col-span-1">
+          <div className="flex items-center gap-2 mb-1">
             <span className="text-base">👥</span>
-            <span className="text-xs text-zinc-400 font-semibold">Comensales Esperados</span>
+            <span className="text-xs text-zinc-400 font-semibold">Comensales</span>
           </div>
           <p className="text-2xl font-bold text-amber-400">{totalGuests}</p>
         </div>
@@ -330,6 +410,11 @@ export function ReservationsTab({
               NO_SHOW: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
             }[res.status] || 'bg-zinc-800 text-zinc-400 border-zinc-700'
 
+            const { preOrder, cleanNotes } = extractPreOrder(res.notes)
+            const isPreOrderExpanded = !!expandedPreOrders[res.id]
+            const whatsappDefaultMsg = `Hola *${res.customerName}*, te escribimos de *${res.table ? `Mesa ${res.table.tableNumber}` : 'nuestro restaurante'}* para confirmar los detalles de tu reservación para hoy a las ${timeStr}.`
+            const waUrl = generateWhatsAppUrl(res.customerPhone, whatsappDefaultMsg)
+
             return (
               <div
                 key={res.id}
@@ -344,9 +429,16 @@ export function ReservationsTab({
                       📞 {res.customerPhone} {res.customerEmail && `• ${res.customerEmail}`}
                     </p>
                   </div>
-                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold border ${statusColors}`}>
-                    {res.status}
-                  </span>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold border ${statusColors}`}>
+                      {res.status}
+                    </span>
+                    {preOrder && (
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                        🍽️ Pre-orden
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 text-xs bg-zinc-950/60 border border-zinc-800/80 p-3 rounded-xl">
@@ -374,13 +466,103 @@ export function ReservationsTab({
                   </div>
                 </div>
 
-                {res.notes && (
+                {/* Bloque de Pre-orden de alimentos */}
+                {preOrder && (
+                  <div className="bg-amber-500/10 border border-amber-500/25 rounded-xl p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-base">🍽️</span>
+                        <span className="text-xs font-bold text-white">
+                          Pre-orden ({preOrder.items.reduce((s, i) => s + i.quantity, 0)} platos)
+                        </span>
+                      </div>
+                      <span className="text-xs font-black text-amber-400">
+                        ${preOrder.totalAmount.toLocaleString('es-CO')}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-amber-500/15">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                          preOrder.paymentStatus === 'PREPAID'
+                            ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                            : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                        }`}
+                      >
+                        {preOrder.paymentStatus === 'PREPAID'
+                          ? `💳 Pre-pagado (${preOrder.paymentMethod || 'Online'})`
+                          : '⏳ Pago pendiente en mesa'}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedPreOrders((prev) => ({ ...prev, [res.id]: !prev[res.id] }))
+                        }
+                        className="text-[11px] text-amber-400 hover:text-amber-300 font-semibold cursor-pointer underline"
+                      >
+                        {isPreOrderExpanded ? 'Ocultar platos ▲' : 'Ver platos ▼'}
+                      </button>
+                    </div>
+
+                    {isPreOrderExpanded && (
+                      <div className="mt-2 pt-2 border-t border-amber-500/20 space-y-1.5 text-xs text-zinc-300">
+                        {preOrder.items.map((item, idx) => (
+                          <div key={idx} className="flex justify-between items-start gap-2">
+                            <div>
+                              <span className="font-bold text-white">{item.quantity}x</span> {item.name}
+                              {item.notes && (
+                                <p className="text-[10px] text-zinc-400 italic">Nota: {item.notes}</p>
+                              )}
+                            </div>
+                            <span className="text-zinc-400 font-medium shrink-0">
+                              ${(item.subtotal || item.quantity * item.unitPrice).toLocaleString('es-CO')}
+                            </span>
+                          </div>
+                        ))}
+                        {preOrder.customerNote && (
+                          <p className="text-[11px] text-zinc-400 italic pt-1 border-t border-zinc-800/80">
+                            Nota comensal: &quot;{preOrder.customerNote}&quot;
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Notas generales limpias */}
+                {cleanNotes && (
                   <p className="text-xs text-zinc-400 bg-zinc-800/40 p-2.5 rounded-xl border border-zinc-800 italic">
-                    &quot;{res.notes}&quot;
+                    &quot;{cleanNotes}&quot;
                   </p>
                 )}
 
-                {/* Acciones */}
+                {/* Acciones de Contacto / Mensajería WhatsApp & SMS */}
+                <div className="flex items-center gap-2 pt-2 border-t border-zinc-800/70">
+                  <a
+                    href={waUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 flex items-center justify-center gap-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                    title="Abrir conversación en WhatsApp"
+                  >
+                    <span>💬</span>
+                    <span>WhatsApp</span>
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSendNotification(res.id, 'REMINDER')}
+                    disabled={notifyingMap[res.id]}
+                    className="flex-1 flex items-center justify-center gap-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+                    title="Enviar recordatorio de reserva"
+                  >
+                    <span>🔔</span>
+                    <span>{notifyingMap[res.id] ? 'Enviando...' : 'Recordar'}</span>
+                  </button>
+                </div>
+
+                {/* Acciones de Estado de Reserva */}
                 <div className="flex items-center gap-2 pt-1">
                   {res.status === 'PENDING' && (
                     <button

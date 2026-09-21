@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import type { TableTurnoverPrediction } from '@/lib/tables/turnover-predictor'
 
 export interface EnrichedTable {
   id: string
@@ -22,6 +23,7 @@ export interface EnrichedTable {
     status: string
   } | null
   elapsedMinutes?: number | null
+  turnoverPrediction?: TableTurnoverPrediction | null
   nextReservation?: {
     id: string
     customerName: string
@@ -397,6 +399,18 @@ export function FloorPlanVisualizer({
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-2 text-amber-300 font-medium flex items-center justify-between">
                 <span>Tiempo ocupada:</span>
                 <span className="font-bold">⏱️ {hoveredTable.elapsedMinutes} min</span>
+              </div>
+            )}
+
+            {hoveredTable.turnoverPrediction && (
+              <div className={`rounded-xl p-2 border text-[11px] space-y-1 ${hoveredTable.turnoverPrediction.badgeColor}`}>
+                <div className="flex items-center justify-between font-bold">
+                  <span>{hoveredTable.turnoverPrediction.stageIcon} {hoveredTable.turnoverPrediction.stageLabel}</span>
+                  <span className="text-[10px] font-mono opacity-80">{hoveredTable.turnoverPrediction.confidence}% conf.</span>
+                </div>
+                <p className="text-[10px] opacity-90 leading-tight">
+                  {hoveredTable.turnoverPrediction.details}
+                </p>
               </div>
             )}
 

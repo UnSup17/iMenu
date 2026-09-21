@@ -301,15 +301,18 @@ graph TD
 
 ---
 
-### Fase 11: Mesas, Reservas & Experiencia del Comensal
+### Fase 11: Mesas, Reservas & Experiencia del Comensal ✅ (Completada)
 **Objetivo**: Optimizar la rotación física del salón y la experiencia de reserva.
 
 1. **Notificaciones SMS / WhatsApp para reservas**:
    - Enviar confirmación y recordatorio automático (2 horas antes) al teléfono del comensal (`customerPhone`) vía WhatsApp / SMS al registrar una reserva.
+   - Implementado en `lib/notifications/messaging.ts`, `app/api/reservations/notify/route.ts` y worker en `app/api/reservations/reminders/route.ts`.
 2. **Predicción de desocupación de mesas**:
    - Calcular en el tablero de mesas el tiempo estimado para que una mesa quede libre, evaluando el tiempo transcurrido desde la última orden servida y la duración promedio de sobremesa.
+   - Implementado con motor heurístico de 7 etapas en `lib/tables/turnover-predictor.ts`, integrado en `components/tables/FloorPlanVisualizer.tsx` y `app/(dashboard)/dashboard/tables/TablesGrid.tsx`.
 3. **Pre-orden y pre-pago en reservas**:
    - Permitir al cliente seleccionar platos y anticipar el pago al confirmar su reserva para tener la comida lista al llegar.
+   - Implementado con almacenamiento tipo-seguro en `lib/reservations/preorder.ts`, portal público en `/menu/[restaurantSlug]/reservar`, y **despacho automático a cocina (KDS)** en `app/api/reservations/[id]/route.ts` al sentar al comensal (`SEATED`). Visualización detallada y acciones de WhatsApp en `components/tables/ReservationsTab.tsx`.
 
 ---
 

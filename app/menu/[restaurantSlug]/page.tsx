@@ -221,6 +221,7 @@ export default async function MenuViewOnlyPage({ params }: PageProps) {
       <MenuPage
         restaurantId={restaurant.id}
         restaurantName={restaurant.name}
+        restaurantSlug={restaurant.slug}
         tableId=""
         tableNumber={0}
         sessionToken=""

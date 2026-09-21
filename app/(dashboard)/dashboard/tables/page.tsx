@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { TablesGrid } from './TablesGrid'
 import { type EnrichedTable } from '@/components/tables/FloorPlanVisualizer'
+import { predictTableTurnover } from '@/lib/tables/turnover-predictor'
 
 export const metadata: Metadata = {
   title: 'Mesas y Plano — iMenu Dashboard',
@@ -65,6 +66,20 @@ export default async function TablesPage() {
           status: true,
         },
       },
+      orders: {
+        where: {
+          createdAt: { gte: new Date(Date.now() - 6 * 3600000) },
+          status: { not: 'CANCELLED' },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+          deliveredAt: true,
+        },
+      },
     },
   })
 
@@ -80,6 +95,13 @@ export default async function TablesPage() {
           reservationDate: t.reservations[0].reservationDate.toISOString(),
         }
       : null
+
+    const turnoverPrediction = predictTableTurnover({
+      status: t.status,
+      capacity: t.capacity,
+      activeSession,
+      recentOrders: t.orders,
+    })
 
     return {
       id: t.id,
@@ -100,6 +122,7 @@ export default async function TablesPage() {
           }
         : null,
       elapsedMinutes,
+      turnoverPrediction,
       nextReservation,
     }
   })

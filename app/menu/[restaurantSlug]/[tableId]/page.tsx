@@ -265,6 +265,7 @@ export default async function MenuGuestPage({ params, searchParams }: PageProps)
         brandLogoUrl={brandTheme.logoUrl}
         brandCoverBannerUrl={brandTheme.coverBannerUrl}
         whiteLabelEnabled={brandTheme.whiteLabelEnabled}
+        restaurantSlug={restaurant.slug}
       />
     </>
   )

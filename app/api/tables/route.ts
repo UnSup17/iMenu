@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { predictTableTurnover } from '@/lib/tables/turnover-predictor'
 
 const CreateTableSchema = z
   .object({
@@ -66,6 +67,20 @@ export async function GET(request: NextRequest) {
             status: true,
           },
         },
+        orders: {
+          where: {
+            createdAt: { gte: new Date(Date.now() - 6 * 3600000) },
+            status: { not: 'CANCELLED' },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          select: {
+            id: true,
+            status: true,
+            createdAt: true,
+            deliveredAt: true,
+          },
+        },
       },
       orderBy: { tableNumber: 'asc' },
     })
@@ -76,6 +91,13 @@ export async function GET(request: NextRequest) {
         ? Math.floor((Date.now() - new Date(activeSession.createdAt).getTime()) / 60000)
         : null
       const nextReservation = t.reservations[0] || null
+
+      const turnoverPrediction = predictTableTurnover({
+        status: t.status,
+        capacity: t.capacity,
+        activeSession,
+        recentOrders: t.orders,
+      })
 
       return {
         id: t.id,
@@ -92,6 +114,7 @@ export async function GET(request: NextRequest) {
         shape: t.shape,
         activeSession,
         elapsedMinutes,
+        turnoverPrediction,
         nextReservation,
       }
     })

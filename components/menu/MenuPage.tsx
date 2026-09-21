@@ -81,6 +81,7 @@ interface MenuPageProps {
   whiteLabelEnabled?: boolean
   // Modo sólo lectura (web)
   isViewOnly?: boolean
+  restaurantSlug?: string
 }
 
 type ViewMode = 'list' | 'pdf'
@@ -127,6 +128,7 @@ export function MenuPage({
   brandCoverBannerUrl,
   whiteLabelEnabled = false,
   isViewOnly = false,
+  restaurantSlug,
 }: MenuPageProps) {
   const hasPdf = Boolean(pdfUrl || (pageImages && pageImages.length > 0))
 
@@ -693,6 +695,18 @@ export function MenuPage({
 
           {/* Acciones en header */}
           <div className="flex items-center gap-2 shrink-0">
+            {/* Botón Reservar Mesa (si está disponible el slug) */}
+            {restaurantSlug && (
+              <a
+                href={`/menu/${restaurantSlug}/reservar`}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all active:scale-95 bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20 shadow-sm"
+                title="Reservar mesa y pre-ordenar"
+              >
+                <span>📅</span>
+                <span className="hidden sm:inline">Reservar</span>
+              </a>
+            )}
+
             {/* Selector de idioma */}
             <LanguageSelector currentLocale={locale} onLocaleChange={setLocale} />
 
@@ -747,6 +761,31 @@ export function MenuPage({
             )}
           </div>
         </div>
+
+        {/* Banner destacado de reservaciones para visitantes del menú web */}
+        {isViewOnly && restaurantSlug && (
+          <div className="max-w-2xl mx-auto px-4 pt-1 pb-3">
+            <div className="bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/5 border border-amber-500/30 rounded-2xl p-3 flex items-center justify-between gap-3 shadow-md shadow-amber-500/5">
+              <div className="flex items-center gap-2.5">
+                <span className="text-xl">📅</span>
+                <div>
+                  <p className="text-xs font-bold text-white leading-tight">
+                    ¿Planeas visitarnos pronto?
+                  </p>
+                  <p className="text-[11px] text-zinc-400">
+                    Asegura tu mesa en línea y pre-ordena tus platos favoritos.
+                  </p>
+                </div>
+              </div>
+              <a
+                href={`/menu/${restaurantSlug}/reservar`}
+                className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black text-xs px-3 py-1.5 rounded-xl transition-all shadow-md shadow-amber-500/20 shrink-0"
+              >
+                Reservar Mesa
+              </a>
+            </div>
+          </div>
+        )}
 
         {/* Segmented Control PDF / Lista */}
         {hasPdf && (

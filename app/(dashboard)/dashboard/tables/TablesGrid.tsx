@@ -363,6 +363,23 @@ export function TablesGrid({
                         </div>
                       )}
 
+                      {/* Predicción de desocupación */}
+                      {isOccupied && table.turnoverPrediction && (
+                        <div
+                          className={`flex items-center justify-between text-xs px-3 py-1.5 rounded-xl border ${table.turnoverPrediction.badgeColor}`}
+                        >
+                          <span className="font-semibold flex items-center gap-1.5">
+                            <span>{table.turnoverPrediction.stageIcon}</span>
+                            <span>{table.turnoverPrediction.stageLabel}</span>
+                          </span>
+                          {table.turnoverPrediction.predictedFreeAt && (
+                            <span className="text-[10px] font-mono opacity-80">
+                              Libre ~{new Date(table.turnoverPrediction.predictedFreeAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
                       {/* Próxima reserva si existe */}
                       {table.nextReservation && (
                         <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl px-3 py-1.5 text-[11px] text-purple-300 font-medium flex items-center justify-between">
