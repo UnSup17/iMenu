@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 
 import { serializeProductSizes } from '@/lib/menu/sizes'
+import { purgeMenuCdnCache } from '@/lib/storage'
 
 const ProductSchema = z.object({
   categoryId: z.string().uuid(),
@@ -128,6 +129,11 @@ export async function POST(req: NextRequest) {
         translations: translationsStr,
       },
     })
+
+    // Invalida caché perimetral del menú
+    prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { slug: true } })
+      .then(r => { if (r?.slug) purgeMenuCdnCache(r.slug).catch(console.warn) })
+      .catch(console.warn)
 
     return NextResponse.json({
       product: {

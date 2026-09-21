@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 
 import { serializeProductSizes } from '@/lib/menu/sizes'
+import { purgeMenuCdnCache } from '@/lib/storage'
 
 const UpdateProductSchema = z.object({
   categoryId: z.string().uuid().optional(),
@@ -133,6 +134,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       },
     })
 
+    // Invalida caché perimetral del menú
+    prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { slug: true } })
+      .then(r => { if (r?.slug) purgeMenuCdnCache(r.slug).catch(console.warn) })
+      .catch(console.warn)
+
     return NextResponse.json({
       product: {
         ...product,
@@ -169,6 +175,12 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     if (!existing) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
 
     await prisma.product.delete({ where: { id } })
+
+    // Invalida caché perimetral del menú
+    prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { slug: true } })
+      .then(r => { if (r?.slug) purgeMenuCdnCache(r.slug).catch(console.warn) })
+      .catch(console.warn)
+
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('[DELETE /api/menu/products/[id]]', err)

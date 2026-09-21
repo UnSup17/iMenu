@@ -42,7 +42,7 @@ export default async function MenuPdfPage() {
   const [restaurant, products, hotspots] = await Promise.all([
     prisma.restaurant.findUnique({
       where: { id: restaurantId },
-      select: { id: true, pdfUrl: true },
+      select: { id: true, pdfUrl: true, pdfPageImages: true },
     }),
     prisma.product.findMany({
       where: { restaurantId, isAvailable: true },
@@ -78,6 +78,7 @@ export default async function MenuPdfPage() {
       <PdfMenuEditor
         restaurantId={restaurant.id}
         initialPdfUrl={restaurant.pdfUrl ?? null}
+        initialPageImages={Array.isArray(restaurant.pdfPageImages) ? (restaurant.pdfPageImages as string[]) : []}
         initialHotspots={hotspots}
         products={products}
       />

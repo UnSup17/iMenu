@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { purgeMenuCdnCache } from '@/lib/storage'
 
 const UpdateCategorySchema = z.object({
   name: z.string().min(1).max(120).optional(),
@@ -90,6 +91,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       },
     })
 
+    // Invalida caché perimetral del menú
+    prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { slug: true } })
+      .then(r => { if (r?.slug) purgeMenuCdnCache(r.slug).catch(console.warn) })
+      .catch(console.warn)
+
     return NextResponse.json({ category })
   } catch (err) {
     if (err instanceof z.ZodError)
@@ -120,6 +126,12 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     if (!existing) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
 
     await prisma.category.delete({ where: { id } })
+
+    // Invalida caché perimetral del menú
+    prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { slug: true } })
+      .then(r => { if (r?.slug) purgeMenuCdnCache(r.slug).catch(console.warn) })
+      .catch(console.warn)
+
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('[DELETE /api/menu/categories/[id]]', err)
