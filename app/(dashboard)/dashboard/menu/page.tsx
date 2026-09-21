@@ -58,6 +58,8 @@ export default async function MenuManagerPage() {
           scheduledPriceStart: true,
           scheduledPriceEnd: true,
           scheduledPriceLabel: true,
+          sizes: true,
+          translations: true,
         },
       },
     },

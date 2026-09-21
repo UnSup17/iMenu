@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { ALLERGENS } from '@/lib/constants/allergens'
 import { ImageCropperModal } from './ImageCropperModal'
+import { ProductSizeVariant, parseProductSizes, serializeProductSizes } from '@/lib/menu/sizes'
 
 export interface ProductFormData {
   id?: string
@@ -19,6 +20,8 @@ export interface ProductFormData {
   scheduledPriceStart?: string | null
   scheduledPriceEnd?: string | null
   scheduledPriceLabel?: string | null
+  sizes?: ProductSizeVariant[] | string | null
+  translations?: string | Record<string, any> | null
 }
 
 interface Props {
@@ -107,6 +110,60 @@ export function ProductForm({ initial, categoryId, categoryName = '', onSave, on
   const [showScheduleSection, setShowScheduleSection] = useState(
     Boolean(initial?.scheduledPrice || initial?.scheduledPriceLabel || initial?.scheduledPriceDays?.length)
   )
+
+  // Variantes de Tamaño con Precios Escalonados Directos
+  const initialSizes: ProductSizeVariant[] = (() => {
+    if (!initial?.sizes) return []
+    if (Array.isArray(initial.sizes)) return initial.sizes as ProductSizeVariant[]
+    return parseProductSizes(initial.sizes)
+  })()
+
+  const [sizesEnabled, setSizesEnabled] = useState(initialSizes.length > 0)
+  const [sizes, setSizes] = useState<ProductSizeVariant[]>(
+    initialSizes.length > 0
+      ? initialSizes
+      : [
+          { id: 'size_1', name: 'Pequeño', price: initial?.basePrice || 0, isDefault: true },
+          { id: 'size_2', name: 'Mediano', price: Math.round((initial?.basePrice || 0) * 1.3), isDefault: false },
+          { id: 'size_3', name: 'Grande', price: Math.round((initial?.basePrice || 0) * 1.6), isDefault: false },
+        ]
+  )
+
+  const handleAddSize = () => {
+    setSizes((prev) => [
+      ...prev,
+      {
+        id: `size_${Date.now()}`,
+        name: '',
+        price: 0,
+        isDefault: prev.length === 0,
+      },
+    ])
+  }
+
+  const handleRemoveSize = (index: number) => {
+    setSizes((prev) => {
+      const next = prev.filter((_, i) => i !== index)
+      if (next.length > 0 && !next.some((s) => s.isDefault)) {
+        next[0].isDefault = true
+      }
+      return next
+    })
+  }
+
+  const handleSizeChange = (index: number, field: keyof ProductSizeVariant, value: any) => {
+    setSizes((prev) =>
+      prev.map((s, i) => {
+        if (i === index) {
+          return { ...s, [field]: value }
+        }
+        if (field === 'isDefault' && value === true) {
+          return { ...s, isDefault: false }
+        }
+        return s
+      })
+    )
+  }
 
   // ── Manejadores de Imagen ──────────────────────────────────────────────────
 
@@ -223,10 +280,25 @@ export function ProductForm({ initial, categoryId, categoryName = '', onSave, on
       return
     }
 
+    if (sizesEnabled) {
+      const validSizes = sizes.filter((s) => s.name.trim().length > 0)
+      if (validSizes.length === 0) {
+        setError('Debes configurar al menos un tamaño válido con nombre y precio')
+        return
+      }
+    }
+
     setSaving(true)
     setError(null)
     try {
-      await onSave(form)
+      const defaultSize = sizesEnabled ? sizes.find((s) => s.isDefault) || sizes[0] : null
+      const basePrice = defaultSize ? defaultSize.price : form.basePrice
+
+      await onSave({
+        ...form,
+        basePrice,
+        sizes: sizesEnabled ? sizes.filter((s) => s.name.trim().length > 0) : null,
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al guardar')
     } finally {
@@ -240,7 +312,7 @@ export function ProductForm({ initial, categoryId, categoryName = '', onSave, on
         {/* Nombre */}
         <div>
           <label className="block text-xs text-zinc-400 mb-1.5 font-medium uppercase tracking-wider">
-            Nombre del producto *
+            Nombre del plato / producto *
           </label>
           <input
             id="product-name"
@@ -286,7 +358,7 @@ export function ProductForm({ initial, categoryId, categoryName = '', onSave, on
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-xs text-zinc-400 mb-1.5 font-medium uppercase tracking-wider">
-              Precio base ($) *
+              {sizesEnabled ? 'Precio base (Calculado de tamaño por defecto) *' : 'Precio base ($) *'}
             </label>
             <input
               id="product-price"
@@ -294,9 +366,12 @@ export function ProductForm({ initial, categoryId, categoryName = '', onSave, on
               min={0}
               step={50}
               required
-              value={form.basePrice}
+              disabled={sizesEnabled}
+              value={sizesEnabled ? (sizes.find((s) => s.isDefault)?.price ?? form.basePrice) : form.basePrice}
               onChange={(e) => setForm({ ...form, basePrice: parseFloat(e.target.value) || 0 })}
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2.5 text-white text-sm font-mono focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30"
+              className={`w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2.5 text-white text-sm font-mono focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 ${
+                sizesEnabled ? 'opacity-75 cursor-not-allowed bg-zinc-800/60' : ''
+              }`}
             />
           </div>
           <div className="flex flex-col justify-end">
@@ -316,6 +391,114 @@ export function ProductForm({ initial, categoryId, categoryName = '', onSave, on
               <span className="text-sm font-medium text-zinc-300">Disponible para pedidos</span>
             </label>
           </div>
+        </div>
+
+        {/* Variantes de Tamaño con Precios Escalonados Directos (Fase 8) */}
+        <div className="p-4 rounded-xl border border-zinc-800 bg-zinc-950/60 space-y-3.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-base">📏</span>
+              <div>
+                <span className="text-xs text-zinc-300 font-semibold uppercase tracking-wider block">
+                  Variantes de Tamaño & Precios Directos
+                </span>
+                <span className="text-[11px] text-zinc-500 block">
+                  Permite elegir Pequeño, Mediano, Grande, etc. con precios directos
+                </span>
+              </div>
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sizesEnabled}
+                onChange={(e) => setSizesEnabled(e.target.checked)}
+                className="sr-only"
+              />
+              <div
+                className={`w-9 h-5 rounded-full transition-colors relative ${
+                  sizesEnabled ? 'bg-amber-500' : 'bg-zinc-800'
+                }`}
+              >
+                <div
+                  className={`w-3.5 h-3.5 rounded-full bg-white absolute top-0.5 left-0.5 transition-transform ${
+                    sizesEnabled ? 'translate-x-4' : ''
+                  }`}
+                />
+              </div>
+              <span className="text-xs font-medium text-zinc-300">
+                {sizesEnabled ? 'Activado' : 'Desactivado'}
+              </span>
+            </label>
+          </div>
+
+          {sizesEnabled && (
+            <div className="space-y-2.5 pt-2 border-t border-zinc-800/80">
+              <div className="grid grid-cols-12 gap-2 text-[11px] font-medium text-zinc-400 uppercase tracking-wider px-1">
+                <span className="col-span-5">Nombre del Tamaño</span>
+                <span className="col-span-4">Precio ($)</span>
+                <span className="col-span-2 text-center">Por Defecto</span>
+                <span className="col-span-1 text-right"></span>
+              </div>
+
+              {sizes.map((s, idx) => (
+                <div key={s.id || idx} className="grid grid-cols-12 gap-2 items-center bg-zinc-900/80 p-2 rounded-lg border border-zinc-800">
+                  <div className="col-span-5">
+                    <input
+                      type="text"
+                      placeholder="ej. Pequeño, 250g, 12 Oz…"
+                      value={s.name}
+                      onChange={(e) => handleSizeChange(idx, 'name', e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-700/80 rounded-md px-2.5 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <div className="col-span-4">
+                    <input
+                      type="number"
+                      min={0}
+                      step={50}
+                      placeholder="Precio"
+                      value={s.price}
+                      onChange={(e) => handleSizeChange(idx, 'price', parseFloat(e.target.value) || 0)}
+                      className="w-full bg-zinc-950 border border-zinc-700/80 rounded-md px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <div className="col-span-2 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => handleSizeChange(idx, 'isDefault', true)}
+                      title="Marcar como tamaño predeterminado"
+                      className={`px-2 py-1 rounded text-[11px] font-semibold transition-all ${
+                        s.isDefault
+                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                          : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
+                      }`}
+                    >
+                      {s.isDefault ? '★ Default' : 'Hacer default'}
+                    </button>
+                  </div>
+                  <div className="col-span-1 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveSize(idx)}
+                      disabled={sizes.length <= 1}
+                      className="text-zinc-500 hover:text-red-400 p-1 disabled:opacity-30 transition-colors"
+                      title="Eliminar tamaño"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={handleAddSize}
+                className="w-full py-2 border border-dashed border-zinc-700 hover:border-amber-500/60 rounded-lg text-xs text-zinc-400 hover:text-amber-400 transition-colors flex items-center justify-center gap-1.5"
+              >
+                <span>+</span> Agregar otra variante de tamaño
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Imagen del Producto: Subida Directa + Recorte */}

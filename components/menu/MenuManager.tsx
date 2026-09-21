@@ -5,6 +5,7 @@ import { CategoryForm, type CategoryFormData } from './CategoryForm'
 import { ProductForm, type ProductFormData } from './ProductForm'
 import { BulkImportExportModal } from './BulkImportExportModal'
 import { getAllergenById } from '@/lib/constants/allergens'
+import { parseProductSizes } from '@/lib/menu/sizes'
 
 interface Product {
   id: string
@@ -20,6 +21,8 @@ interface Product {
   scheduledPriceStart?: string | null
   scheduledPriceEnd?: string | null
   scheduledPriceLabel?: string | null
+  sizes?: string | any[] | null
+  translations?: string | Record<string, any> | null
 }
 
 interface Category {
@@ -28,6 +31,7 @@ interface Category {
   orderIndex: number
   isActive: boolean
   isSpecialOffer: boolean
+  translations?: string | Record<string, any> | null
   offerLabel: string | null
   offerStartDate: string | null
   offerEndDate: string | null
@@ -93,9 +97,31 @@ export function MenuManager({ initialCategories }: Props) {
   // Drag & drop state para productos
   const [draggedProduct, setDraggedProduct] = useState<{ catId: string; index: number } | null>(null)
 
+  const [isTranslating, setIsTranslating] = useState(false)
+
   function showMessage(type: 'success' | 'error', text: string) {
     setMessage({ type, text })
     setTimeout(() => setMessage(null), 4000)
+  }
+
+  async function handleTranslateMenu() {
+    if (!confirm('¿Deseas traducir automáticamente todos los platos y categorías a Inglés y Portugués usando IA?')) return
+    setIsTranslating(true)
+    try {
+      const res = await fetch('/api/menu/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope: 'menu', languages: ['en', 'pt'] }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Error traduciendo')
+      showMessage('success', json.message || 'Menú traducido con éxito a Inglés y Portugués')
+      window.location.reload()
+    } catch (err: any) {
+      showMessage('error', err.message || 'Error al traducir menú')
+    } finally {
+      setIsTranslating(false)
+    }
   }
 
   // ── Sincronizar reorden en Backend ──────────────────────────────────────────
@@ -347,7 +373,17 @@ export function MenuManager({ initialCategories }: Props) {
             Administra categorías, arrastra para reordenar, configura alérgenos y precios dinámicos
           </p>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            id="ai-translate-menu-btn"
+            onClick={handleTranslateMenu}
+            disabled={isTranslating}
+            className="px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-amber-400 border border-amber-500/30 font-semibold text-sm transition-colors flex items-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
+            title="Traducir automáticamente platos y categorías a Inglés y Portugués con IA"
+          >
+            <span>{isTranslating ? '⏳' : '🌐'}</span>
+            <span>{isTranslating ? 'Traduciendo…' : 'Traducir Menú (IA)'}</span>
+          </button>
           <button
             id="bulk-import-export-btn"
             onClick={() => setShowBulkModal(true)}
@@ -812,13 +848,40 @@ function CategoryCard({
                         })}
                       </div>
                     )}
+
+                    {/* Variantes de Tamaño Badges (Fase 8) */}
+                    {(() => {
+                      const parsedSizes = parseProductSizes(p.sizes)
+                      if (parsedSizes.length === 0) return null
+                      return (
+                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                          <span className="text-[10px] bg-amber-500/10 border border-amber-500/30 text-amber-300 px-1.5 py-0.5 rounded font-medium">
+                            📏 {parsedSizes.length} tamaños ({parsedSizes.map((s) => s.name).join(' / ')})
+                          </span>
+                        </div>
+                      )
+                    })()}
                   </div>
 
                   {/* Precio */}
                   <div className="text-right shrink-0">
-                    <span className="text-sm font-mono font-bold text-emerald-400 block">
-                      ${p.basePrice.toLocaleString('es-CO')}
-                    </span>
+                    {(() => {
+                      const parsedSizes = parseProductSizes(p.sizes)
+                      const hasSizes = parsedSizes.length > 0
+                      const minPrice = hasSizes ? Math.min(...parsedSizes.map((s) => s.price)) : p.basePrice
+                      return (
+                        <>
+                          <span className="text-sm font-mono font-bold text-emerald-400 block">
+                            {hasSizes ? `Desde $${minPrice.toLocaleString('es-CO')}` : `$${p.basePrice.toLocaleString('es-CO')}`}
+                          </span>
+                          {hasSizes && (
+                            <span className="text-[10px] text-zinc-500 font-mono block">
+                              {parsedSizes.length} opciones
+                            </span>
+                          )}
+                        </>
+                      )
+                    })()}
                     {p.scheduledPrice && (
                       <span className="text-[11px] font-mono text-zinc-500 line-through block">
                         ${p.basePrice.toLocaleString('es-CO')}

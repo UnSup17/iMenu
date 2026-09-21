@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useCartStore } from '@/store/cart-store'
 import type { CartModifierOption } from '@/store/cart-store'
+import { parseProductSizes, getDefaultSize, type ProductSizeVariant } from '@/lib/menu/sizes'
 
 // ============================================================
 // Types (derivados de lo que retorna Prisma en la page)
@@ -50,6 +51,8 @@ export interface ProductModalData {
   modifierGroups: ModifierGroup[]
   ingredients: Ingredient[]
   additions?: ProductAdditionOption[]
+  sizes?: ProductSizeVariant[] | string | null
+  translations?: string | Record<string, any> | null
 }
 
 interface ProductModalProps {
@@ -79,6 +82,12 @@ export function ProductModal({
   const isOutOfStock = Boolean(stockIssue)
 
   // Estado local de selecciones
+  // Variantes de Tamaño (Fase 8)
+  const parsedSizes = parseProductSizes(product.sizes)
+  const defaultSize = getDefaultSize(parsedSizes)
+  const [selectedSizeId, setSelectedSizeId] = useState<string>(defaultSize?.id || (parsedSizes[0]?.id ?? ''))
+  const activeSize = parsedSizes.find((s) => s.id === selectedSizeId) || defaultSize || null
+
   const [singleSelects, setSingleSelects] = useState<Record<string, string>>({}) // groupId → optionId
   const [addons, setAddons] = useState<Set<string>>(new Set()) // Set de optionId
   const [selectedAdditions, setSelectedAdditions] = useState<Record<string, number>>({}) // additionId → quantity
@@ -151,7 +160,7 @@ export function ProductModal({
 
   // Calcular precio dinámico
   const calculatedUnitPrice = (() => {
-    let price = product.basePrice
+    let price = activeSize ? activeSize.price : product.basePrice
     for (const group of product.modifierGroups) {
       if (group.type === 'SINGLE_SELECT') {
         const selectedId = singleSelects[group.id]
@@ -275,12 +284,15 @@ export function ProductModal({
         }
       })
 
+    const finalItemName = activeSize ? `${product.name} (${activeSize.name})` : product.name
+    const finalBasePrice = activeSize ? activeSize.price : product.basePrice
+
     addItem({
       productId: product.id,
-      name: product.name,
+      name: finalItemName,
       restaurantId: restaurantId || product.restaurantId,
       restaurantName: restaurantName || product.restaurantName,
-      basePrice: product.basePrice,
+      basePrice: finalBasePrice,
       quantity,
       selectedModifiers,
       selectedAdditions: additionsList,
@@ -436,7 +448,7 @@ export function ProductModal({
           {/* Precio y botón de recomendar */}
           <div className="mt-3.5 flex items-center justify-between gap-3">
             <span className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              {formatPrice(product.basePrice)}
+              {formatPrice(activeSize ? activeSize.price : product.basePrice)}
             </span>
 
             {onOpenRecommend && (
@@ -461,6 +473,79 @@ export function ProductModal({
 
         {/* Body scrollable */}
         <div className="flex-1 overflow-y-auto px-5 py-3 space-y-6">
+
+          {/* Selector de Variantes de Tamaño (Fase 8) */}
+          {parsedSizes.length > 0 && (
+            <fieldset className="border-0 p-0 m-0">
+              <legend className="flex items-center gap-2 mb-2.5 w-full">
+                <span
+                  className="text-base font-semibold"
+                  style={{
+                    color: 'var(--brand-text)',
+                    fontFamily: 'var(--brand-font-heading)',
+                  }}
+                >
+                  📏 Selecciona el Tamaño
+                </span>
+                <span
+                  className="text-xs font-bold px-2 py-0.5 rounded-full border"
+                  style={{
+                    backgroundColor: 'color-mix(in srgb, var(--brand-primary) 18%, transparent)',
+                    color: 'var(--brand-primary)',
+                    borderColor: 'color-mix(in srgb, var(--brand-primary) 40%, transparent)',
+                  }}
+                >
+                  Requerido
+                </span>
+              </legend>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5" role="radiogroup" aria-label="Variantes de tamaño">
+                {parsedSizes.map((sz) => {
+                  const isSelected = selectedSizeId === sz.id
+                  return (
+                    <button
+                      key={sz.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={isSelected}
+                      onClick={() => setSelectedSizeId(sz.id)}
+                      className="flex flex-col justify-between p-3 rounded-xl border-2 text-left transition-all cursor-pointer focus-visible:outline-none"
+                      style={
+                        isSelected
+                          ? {
+                              backgroundColor: 'color-mix(in srgb, var(--brand-primary) 15%, transparent)',
+                              borderColor: 'var(--brand-primary)',
+                            }
+                          : {
+                              backgroundColor: 'var(--brand-surface, #18181b)',
+                              borderColor: 'rgba(255,255,255,0.08)',
+                            }
+                      }
+                    >
+                      <div className="flex items-center justify-between gap-1 w-full">
+                        <span
+                          className="text-xs font-bold tracking-tight"
+                          style={{
+                            color: isSelected ? 'var(--brand-primary)' : 'var(--brand-text, #ffffff)',
+                          }}
+                        >
+                          {sz.name}
+                        </span>
+                        {sz.isDefault && !isSelected && (
+                          <span className="text-[9px] uppercase px-1 py-0.2 rounded bg-zinc-800 text-zinc-400">
+                            Base
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs font-mono font-bold text-emerald-400 mt-2">
+                        {formatPrice(sz.price)}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </fieldset>
+          )}
 
           {/* Grupos de modificadores */}
           {product.modifierGroups.map((group) => (

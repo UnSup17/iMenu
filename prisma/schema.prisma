@@ -433,6 +433,9 @@ model Category {
   offerStartTime   String?   // "HH:MM" hora inicio (zona del restaurante). null = sin restricción
   offerEndTime     String?   // "HH:MM" hora fin   (zona del restaurante). null = sin restricción
 
+  // Traducciones multilingües (EN, PT, etc. en formato JSON)
+  translations     String?   @db.Text
+
   products Product[]
   additionCategories AdditionCategory[]
 
@@ -477,6 +480,12 @@ model Product {
   // Ruteo a estación de cocina (KDS)
   kitchenStation        KitchenStation @default(GENERAL)  // HOT, COLD, GRILL, PASTRY, BAR
   prepTimeMinutes       Int?           // Tiempo estimado de preparación del plato en minutos
+
+  // Variantes de tamaño con precios escalonados directos (JSON string array)
+  sizes                 String?        @db.Text
+
+  // Traducciones multilingües (EN, PT, etc. en formato JSON)
+  translations          String?        @db.Text
 
   @@map("products")
 }
@@ -1210,6 +1219,10 @@ model BrandTheme {
   whiteLabelEnabled    Boolean @default(false) // Suprime marcas "Powered by iMenu"
   glassmorphismEnabled Boolean @default(true)  // Efecto acrílico / traslúcido
   buttonStyle          String  @default("rounded") // "pill", "rounded", "sharp"
+
+  // Activos PWA e Iconos Generados
+  pwaIcons             Json?
+  extractedPalette     Json?
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

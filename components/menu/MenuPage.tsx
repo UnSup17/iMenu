@@ -17,6 +17,7 @@ import { FeedbackModal } from './FeedbackModal'
 import { SplitBillPaymentModal } from './SplitBillPaymentModal'
 import { PushNotificationSubscriber } from './PushNotificationSubscriber'
 import { type Locale, translations, translateCategoryName } from '@/lib/i18n/menu-translations'
+import { parseProductSizes } from '@/lib/menu/sizes'
 import { soundNotifier, requestNotificationPermission, sendBrowserNotification } from '@/lib/audio/chime'
 import {
   WsClientEvent,
@@ -922,6 +923,7 @@ export function MenuPage({
                         key={product.id}
                         product={product}
                         currency={currency}
+                        locale={locale}
                         orderedBy={getOrderedByForProduct(product.id)}
                         stockIssue={issue}
                         recommendation={recommendationsMap.get(product.id)}
@@ -1278,6 +1280,7 @@ export function MenuPage({
 function ProductCard({
   product,
   currency,
+  locale = 'es',
   orderedBy = [],
   stockIssue,
   recommendation,
@@ -1285,6 +1288,7 @@ function ProductCard({
 }: {
   product: ProductModalData
   currency: string
+  locale?: Locale
   orderedBy?: string[]
   stockIssue?: StockIssueItem
   recommendation?: { fromUserName: string; note?: string }
@@ -1292,6 +1296,26 @@ function ProductCard({
 }) {
   const formatPrice = (amount: number) =>
     new Intl.NumberFormat('es-MX', { style: 'currency', currency }).format(amount)
+
+  // i18n dynamic product translation
+  const transObj = (() => {
+    if (!product.translations) return null
+    if (typeof product.translations === 'string') {
+      try {
+        return JSON.parse(product.translations)
+      } catch {
+        return null
+      }
+    }
+    return product.translations
+  })()
+  const displayName = transObj?.[locale]?.name || product.name
+  const displayDescription = transObj?.[locale]?.description || product.description
+
+  // Precios escalonados por tamaño (Fase 8)
+  const parsedSizes = parseProductSizes(product.sizes)
+  const hasSizes = parsedSizes.length > 0
+  const minPrice = hasSizes ? Math.min(...parsedSizes.map((s) => s.price)) : product.basePrice
 
   const hasModifiers =
     product.modifierGroups.length > 0 || product.ingredients.some((i) => i.isRemovable)
@@ -1302,12 +1326,12 @@ function ProductCard({
 
   // Descripción completa para lectores de pantalla
   const srDescription = [
-    product.description,
+    displayDescription,
     isRecommended ? `Recomendado por: ${recommendation?.fromUserName}` : null,
     hasOrders ? `Pedida por: ${orderedBy.join(', ')}` : null,
     isOutOfStock ? `Agotado — sin stock de ${stockIssue?.ingredientName}` : null,
     hasModifiers && !isOutOfStock ? 'Personalizable' : null,
-    `Precio: ${formatPrice(product.basePrice)}`,
+    `Precio: ${hasSizes ? `Desde ${formatPrice(minPrice)}` : formatPrice(product.basePrice)}`,
     !isOutOfStock ? 'Toca para agregar al pedido' : null,
   ]
     .filter(Boolean)
@@ -1318,7 +1342,7 @@ function ProductCard({
       id={`product-${product.id}`}
       onClick={isOutOfStock ? undefined : onSelect}
       disabled={isOutOfStock}
-      aria-label={`${product.name}. ${srDescription}`}
+      aria-label={`${displayName}. ${srDescription}`}
       aria-disabled={isOutOfStock}
       className="w-full text-left overflow-hidden transition-all duration-300 p-4 relative border focus-visible:outline-none hover:shadow-md hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
       style={isOutOfStock ? {
@@ -1374,7 +1398,6 @@ function ProductCard({
         </div>
       )}
 
-
       {/* Badge de Sin Stock */}
       {isOutOfStock && (
         <div
@@ -1399,29 +1422,36 @@ function ProductCard({
                 textDecoration: isOutOfStock ? 'line-through' : 'none',
               }}
             >
-              {product.name}
+              {displayName}
             </h3>
-            {product.description && (
+            {displayDescription && (
               <p
                 className="text-sm mt-1 leading-relaxed line-clamp-2"
                 style={{ color: 'var(--brand-muted)' }}
               >
-                {product.description}
+                {displayDescription}
               </p>
             )}
           </div>
 
           <div className="flex items-center justify-between mt-3.5">
             {/* Precio — grande y en el color de marca primario */}
-            <span
-              className="font-extrabold text-base sm:text-lg"
-              style={{
-                color: isOutOfStock ? 'var(--brand-muted)' : 'var(--brand-primary)',
-              }}
-              aria-hidden="true"
-            >
-              {formatPrice(product.basePrice)}
-            </span>
+            <div className="flex flex-col">
+              {hasSizes && (
+                <span className="text-[10px] uppercase font-bold text-zinc-400">
+                  Desde
+                </span>
+              )}
+              <span
+                className="font-extrabold text-base sm:text-lg"
+                style={{
+                  color: isOutOfStock ? 'var(--brand-muted)' : 'var(--brand-primary)',
+                }}
+                aria-hidden="true"
+              >
+                {formatPrice(minPrice)}
+              </span>
+            </div>
 
             <div className="flex items-center gap-2">
               {hasModifiers && !isOutOfStock && (

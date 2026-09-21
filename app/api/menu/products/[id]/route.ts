@@ -3,6 +3,8 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 
+import { serializeProductSizes } from '@/lib/menu/sizes'
+
 const UpdateProductSchema = z.object({
   categoryId: z.string().uuid().optional(),
   name: z.string().min(1).max(200).optional(),
@@ -17,6 +19,18 @@ const UpdateProductSchema = z.object({
   scheduledPriceStart: z.string().nullable().optional(),
   scheduledPriceEnd: z.string().nullable().optional(),
   scheduledPriceLabel: z.string().nullable().optional(),
+  sizes: z.union([
+    z.string(),
+    z.array(
+      z.object({
+        id: z.string().optional(),
+        name: z.string().min(1),
+        price: z.number().min(0),
+        isDefault: z.boolean().optional(),
+      })
+    ),
+  ]).nullable().optional(),
+  translations: z.union([z.string(), z.record(z.string(), z.any())]).nullable().optional(),
 })
 
 const ADMIN_ROLES = ['SUPERADMIN', 'ORG_ADMIN', 'RESTAURANT_ADMIN', 'MANAGER']
@@ -84,6 +98,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           : data.scheduledPriceDays
         : undefined
 
+    const sizesStr =
+      data.sizes !== undefined
+        ? Array.isArray(data.sizes)
+          ? serializeProductSizes(data.sizes)
+          : data.sizes
+        : undefined
+
+    const translationsStr =
+      data.translations !== undefined
+        ? data.translations && typeof data.translations === 'object'
+          ? JSON.stringify(data.translations)
+          : (data.translations as string)
+        : undefined
+
     const product = await prisma.product.update({
       where: { id },
       data: {
@@ -100,6 +128,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         ...(data.scheduledPriceStart !== undefined && { scheduledPriceStart: data.scheduledPriceStart }),
         ...(data.scheduledPriceEnd !== undefined && { scheduledPriceEnd: data.scheduledPriceEnd }),
         ...(data.scheduledPriceLabel !== undefined && { scheduledPriceLabel: data.scheduledPriceLabel }),
+        ...(sizesStr !== undefined && { sizes: sizesStr }),
+        ...(translationsStr !== undefined && { translations: translationsStr }),
       },
     })
 

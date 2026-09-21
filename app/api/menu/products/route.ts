@@ -3,6 +3,8 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 
+import { serializeProductSizes } from '@/lib/menu/sizes'
+
 const ProductSchema = z.object({
   categoryId: z.string().uuid(),
   name: z.string().min(1).max(200),
@@ -17,6 +19,18 @@ const ProductSchema = z.object({
   scheduledPriceStart: z.string().nullable().optional(),
   scheduledPriceEnd: z.string().nullable().optional(),
   scheduledPriceLabel: z.string().nullable().optional(),
+  sizes: z.union([
+    z.string(),
+    z.array(
+      z.object({
+        id: z.string().optional(),
+        name: z.string().min(1),
+        price: z.number().min(0),
+        isDefault: z.boolean().optional(),
+      })
+    ),
+  ]).nullable().optional(),
+  translations: z.union([z.string(), z.record(z.string(), z.any())]).nullable().optional(),
 })
 
 const ADMIN_ROLES = ['SUPERADMIN', 'ORG_ADMIN', 'RESTAURANT_ADMIN', 'MANAGER']
@@ -85,6 +99,15 @@ export async function POST(req: NextRequest) {
       orderIndex = count
     }
 
+    const sizesStr = Array.isArray(data.sizes)
+      ? serializeProductSizes(data.sizes)
+      : data.sizes ?? null
+
+    const translationsStr =
+      data.translations && typeof data.translations === 'object'
+        ? JSON.stringify(data.translations)
+        : (data.translations as string) ?? null
+
     const product = await prisma.product.create({
       data: {
         restaurantId,
@@ -101,6 +124,8 @@ export async function POST(req: NextRequest) {
         scheduledPriceStart: data.scheduledPriceStart ?? null,
         scheduledPriceEnd: data.scheduledPriceEnd ?? null,
         scheduledPriceLabel: data.scheduledPriceLabel ?? null,
+        sizes: sizesStr,
+        translations: translationsStr,
       },
     })
 

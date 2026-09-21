@@ -1,6 +1,8 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import QRCode from 'qrcode'
+import JSZip from 'jszip'
 import {
   BrandThemeData,
   DEFAULT_BRAND_THEME,
@@ -10,6 +12,10 @@ import {
   FONT_PAIRINGS,
 } from '@/lib/branding/types'
 import { BrandThemeInjector } from './BrandThemeInjector'
+import {
+  extractPaletteFromClientImage,
+  type ExtractedPaletteResult,
+} from '@/lib/branding/palette-extractor'
 
 interface BrandStudioClientProps {
   initialTheme: BrandThemeData
@@ -117,9 +123,224 @@ export function BrandStudioClient({
   const [isCheckingDomain, setIsCheckingDomain] = useState(false)
   const [domainMessage, setDomainMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null)
 
+  // Modal de Previsualización QR en Vivo (Fase 8)
+  const [showQrModal, setShowQrModal] = useState(false)
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null)
+
+  // Extractor de Paleta por Foto del Local (Fase 8)
+  const [isExtractingPalette, setIsExtractingPalette] = useState(false)
+  const [extractedPaletteData, setExtractedPaletteData] = useState<ExtractedPaletteResult | null>(null)
+  const [uploadedPhotoUrl, setUploadedPhotoUrl] = useState<string | null>(null)
+
+  // Iconos PWA & Favicon (Fase 8)
+  const [pwaBgColor, setPwaBgColor] = useState<string>(theme.backgroundColor || '#09090b')
+  const [pwaPadding, setPwaPadding] = useState<number>(15)
+  const [isGeneratingZip, setIsGeneratingZip] = useState<boolean>(false)
+  const [pwaStatusMsg, setPwaStatusMsg] = useState<string | null>(null)
+
   const isOrgAdmin = ['SUPERADMIN', 'ORG_ADMIN'].includes(role)
   const isBranchOfOrg = targetType === 'RESTAURANT' && !!orgTheme
   const canDirectlySave = !isBranchOfOrg || allowBranchOverrides || isOrgAdmin
+
+  const handleOpenQrPreview = async () => {
+    try {
+      setShowQrModal(true)
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
+      const previewUrl = `${origin}/preview/brand?theme=${encodeURIComponent(
+        JSON.stringify(theme)
+      )}&name=${encodeURIComponent(restaurantName || 'Mi Restaurante')}`
+      const url = await QRCode.toDataURL(previewUrl, {
+        width: 320,
+        margin: 2,
+        color: { dark: '#09090b', light: '#ffffff' },
+      })
+      setQrCodeDataUrl(url)
+    } catch (err) {
+      console.error('Error generando QR:', err)
+    }
+  }
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setIsExtractingPalette(true)
+    try {
+      setUploadedPhotoUrl(URL.createObjectURL(file))
+      const result = await extractPaletteFromClientImage(file)
+      setExtractedPaletteData(result)
+      setSaveSuccess('¡Paleta extraída de tu foto exitosamente!')
+      setTimeout(() => setSaveSuccess(null), 3500)
+    } catch (err) {
+      console.error('Error extrayendo paleta:', err)
+      setErrorMsg('Error analizando la imagen. Intenta con otra foto.')
+    } finally {
+      setIsExtractingPalette(false)
+    }
+  }
+
+  const handleApplyExtractedPalette = () => {
+    if (!extractedPaletteData) return
+    setTheme((prev) => ({
+      ...prev,
+      ...extractedPaletteData.suggestedTheme,
+    }))
+    setSaveSuccess('¡Paleta cromática institucional aplicada a tu tema!')
+    setTimeout(() => setSaveSuccess(null), 3500)
+  }
+
+  const handleDownloadPwaZip = async () => {
+    if (!theme.logoUrl) {
+      setErrorMsg('Debes configurar primero la URL de tu logotipo en la pestaña de Recursos.')
+      return
+    }
+    setIsGeneratingZip(true)
+    setPwaStatusMsg('Generando iconos PWA en alta resolución...')
+    try {
+      const zip = new JSZip()
+      const sizes = [
+        { name: 'favicon-32x32.png', size: 32 },
+        { name: 'apple-touch-icon.png', size: 180 },
+        { name: 'icon-192x192.png', size: 192 },
+        { name: 'icon-512x512.png', size: 512 },
+      ]
+
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.src = theme.logoUrl
+
+      await new Promise((resolve) => {
+        img.onload = resolve
+        img.onerror = () => resolve(null)
+      })
+
+      for (const item of sizes) {
+        const canvas = document.createElement('canvas')
+        canvas.width = item.size
+        canvas.height = item.size
+        const ctx = canvas.getContext('2d')
+        if (ctx) {
+          ctx.fillStyle = pwaBgColor
+          ctx.fillRect(0, 0, item.size, item.size)
+
+          const pad = (item.size * pwaPadding) / 100
+          const drawW = item.size - pad * 2
+          const drawH = item.size - pad * 2
+          if (img.complete && img.naturalWidth > 0) {
+            ctx.drawImage(img, pad, pad, drawW, drawH)
+          } else {
+            ctx.fillStyle = theme.primaryColor
+            ctx.font = `bold ${Math.round(item.size * 0.4)}px sans-serif`
+            ctx.textAlign = 'center'
+            ctx.textBaseline = 'middle'
+            ctx.fillText(restaurantName?.charAt(0) || 'M', item.size / 2, item.size / 2)
+          }
+
+          const base64 = canvas.toDataURL('image/png').split(',')[1]
+          zip.file(item.name, base64, { base64: true })
+        }
+      }
+
+      const manifest = {
+        name: restaurantName || 'Mi Restaurante',
+        short_name: restaurantName || 'Restaurante',
+        start_url: '/',
+        display: 'standalone',
+        background_color: theme.backgroundColor,
+        theme_color: theme.primaryColor,
+        icons: [
+          { src: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png' },
+        ],
+      }
+      zip.file('manifest.json', JSON.stringify(manifest, null, 2))
+
+      const blob = await zip.generateAsync({ type: 'blob' })
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(blob)
+      link.download = `pwa-icons-${(restaurantName || 'imenu').toLowerCase().replace(/\s+/g, '-')}.zip`
+      link.click()
+
+      setPwaStatusMsg('¡Paquete PWA descargado con éxito!')
+      setTimeout(() => setPwaStatusMsg(null), 3000)
+    } catch (err: any) {
+      console.error('Error generando zip PWA:', err)
+      setErrorMsg('Error al empaquetar iconos PWA')
+    } finally {
+      setIsGeneratingZip(false)
+    }
+  }
+
+  const handleSavePwaIcons = async () => {
+    if (!theme.logoUrl) {
+      setErrorMsg('Debes configurar primero la URL de tu logotipo en la pestaña de Recursos.')
+      return
+    }
+    setIsGeneratingZip(true)
+    setPwaStatusMsg('Generando y sincronizando iconos PWA en el servidor...')
+    try {
+      const sizes = [
+        { key: 'favicon', size: 32 },
+        { key: 'appleTouchIcon', size: 180 },
+        { key: 'icon192', size: 192 },
+        { key: 'icon512', size: 512 },
+      ]
+
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.src = theme.logoUrl
+
+      await new Promise((resolve) => {
+        img.onload = resolve
+        img.onerror = () => resolve(null)
+      })
+
+      const iconsPayload: Record<string, string> = {}
+
+      for (const item of sizes) {
+        const canvas = document.createElement('canvas')
+        canvas.width = item.size
+        canvas.height = item.size
+        const ctx = canvas.getContext('2d')
+        if (ctx) {
+          ctx.fillStyle = pwaBgColor
+          ctx.fillRect(0, 0, item.size, item.size)
+
+          const pad = (item.size * pwaPadding) / 100
+          const drawW = item.size - pad * 2
+          const drawH = item.size - pad * 2
+          if (img.complete && img.naturalWidth > 0) {
+            ctx.drawImage(img, pad, pad, drawW, drawH)
+          } else {
+            ctx.fillStyle = theme.primaryColor
+            ctx.font = `bold ${Math.round(item.size * 0.4)}px sans-serif`
+            ctx.textAlign = 'center'
+            ctx.textBaseline = 'middle'
+            ctx.fillText(restaurantName?.charAt(0) || 'M', item.size / 2, item.size / 2)
+          }
+          iconsPayload[item.key] = canvas.toDataURL('image/png')
+        }
+      }
+
+      const res = await fetch('/api/brand/icons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(iconsPayload),
+      })
+
+      if (!res.ok) throw new Error('Error al guardar iconos')
+      setPwaStatusMsg('¡Iconos PWA guardados exitosamente!')
+      setSaveSuccess('¡Favicons e iconos de app móvil actualizados!')
+      setTimeout(() => {
+        setPwaStatusMsg(null)
+        setSaveSuccess(null)
+      }, 3500)
+    } catch (err: any) {
+      console.error('Error guardando iconos PWA:', err)
+      setErrorMsg('Error al guardar los iconos en el servidor.')
+    } finally {
+      setIsGeneratingZip(false)
+    }
+  }
 
   const handleApplyPreset = (presetTheme: Partial<BrandThemeData>) => {
     setTheme((prev) => ({
@@ -287,11 +508,30 @@ export function BrandStudioClient({
           </p>
         </div>
 
-        <div className="flex items-center gap-3 w-full sm:w-auto">
+        <div className="flex items-center gap-2.5 w-full sm:w-auto flex-wrap justify-end">
+          <button
+            type="button"
+            onClick={handleOpenQrPreview}
+            className="px-4 py-2.5 rounded-2xl bg-zinc-800/90 hover:bg-zinc-700 text-amber-400 border border-amber-500/30 font-bold text-xs transition-all shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95"
+            title="Genera un código QR para previsualizar este tema en tu celular"
+          >
+            <span>📱</span> Probar en Celular (QR)
+          </button>
+
+          <a
+            href="/api/brand/brand-kit"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-4 py-2.5 rounded-2xl bg-zinc-800/90 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 font-bold text-xs transition-all shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95"
+            title="Descargar Brand Kit oficial con paleta, fuentes y especificaciones"
+          >
+            <span>📄</span> Brand Kit (PDF)
+          </a>
+
           <button
             onClick={() => handleSave(false)}
             disabled={isSaving || !canDirectlySave}
-            className="flex-1 sm:flex-none px-6 py-2.5 rounded-2xl bg-amber-500 text-black font-extrabold text-xs tracking-wide hover:bg-amber-400 active:scale-95 disabled:opacity-50 transition-all shadow-lg shadow-amber-500/20 cursor-pointer flex items-center justify-center gap-2"
+            className="px-6 py-2.5 rounded-2xl bg-amber-500 text-black font-extrabold text-xs tracking-wide hover:bg-amber-400 active:scale-95 disabled:opacity-50 transition-all shadow-lg shadow-amber-500/20 cursor-pointer flex items-center justify-center gap-2"
           >
             {isSaving ? (
               <span className="animate-spin text-sm">⏳</span>
@@ -446,6 +686,67 @@ export function BrandStudioClient({
                   <span>⚡</span>
                   <span>Generar Armonía HSL</span>
                 </button>
+              </div>
+
+              {/* Fase 8: Extractor de Paleta desde Foto */}
+              <div className="p-4 rounded-2xl bg-zinc-950/90 border border-zinc-800 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">📸</span>
+                    <div>
+                      <h4 className="text-xs font-bold text-white">Extraer Paleta desde Foto de tu Local</h4>
+                      <p className="text-[11px] text-zinc-400">Sube una foto de la fachada, barra o salón para generar tu paleta institucional con IA/visión.</p>
+                    </div>
+                  </div>
+                  <label className="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 shrink-0">
+                    <span>{isExtractingPalette ? '⏳ Analizando...' : '📤 Subir Foto'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePhotoUpload}
+                      disabled={isExtractingPalette}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+                {uploadedPhotoUrl && (
+                  <div className="flex items-center gap-3 pt-2 border-t border-zinc-800/80">
+                    <img
+                      src={uploadedPhotoUrl}
+                      alt="Foto del local"
+                      className="w-16 h-16 rounded-xl object-cover border border-zinc-700"
+                    />
+                    <div className="flex-1 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-zinc-300">Colores Dominantes Detectados:</span>
+                        {extractedPaletteData && (
+                          <button
+                            type="button"
+                            onClick={handleApplyExtractedPalette}
+                            className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-[10px] font-extrabold cursor-pointer transition-all flex items-center gap-1"
+                          >
+                            <span>✨ Aplicar a mi Marca</span>
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {extractedPaletteData?.dominantColors.map((color, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-zinc-900 border border-zinc-800 text-[10px] font-mono text-zinc-300"
+                          >
+                            <span
+                              className="w-3 h-3 rounded-full border border-white/20"
+                              style={{ backgroundColor: color }}
+                            />
+                            <span>{color}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -809,6 +1110,110 @@ export function BrandStudioClient({
                   />
                   <p className="text-[10px] text-zinc-500">Banner fotográfico superior en la parte superior del menú móvil.</p>
                 </div>
+
+                {/* Fase 8: Generador de Iconos PWA y Favicons */}
+                <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">📱</span>
+                      <div>
+                        <h4 className="text-xs font-bold text-white">Iconos PWA, Favicon y Accesos Directos Móviles</h4>
+                        <p className="text-[11px] text-zinc-400">Genera automáticamente iconos en 32x32, 180x180 (Apple), 192x192 y 512x512 para instalación en smartphones.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {pwaStatusMsg && (
+                    <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold">
+                      {pwaStatusMsg}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold text-zinc-300 block">Color de Fondo del Icono</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={pwaBgColor}
+                          onChange={(e) => setPwaBgColor(e.target.value)}
+                          className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0"
+                        />
+                        <input
+                          type="text"
+                          value={pwaBgColor}
+                          onChange={(e) => setPwaBgColor(e.target.value)}
+                          className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-2.5 py-1 text-xs text-white font-mono uppercase"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[11px] font-bold text-zinc-300">Margen del Logo: {pwaPadding}%</label>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="35"
+                        step="5"
+                        value={pwaPadding}
+                        onChange={(e) => setPwaPadding(Number(e.target.value))}
+                        className="w-full accent-amber-500 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4 pt-2 border-t border-zinc-800/80">
+                    <div
+                      className="w-14 h-14 rounded-2xl flex items-center justify-center border border-white/20 shadow-md shrink-0 overflow-hidden"
+                      style={{ backgroundColor: pwaBgColor }}
+                    >
+                      {theme.logoUrl ? (
+                        <img
+                          src={theme.logoUrl}
+                          alt="Icon preview"
+                          style={{
+                            width: `${100 - pwaPadding * 2}%`,
+                            height: `${100 - pwaPadding * 2}%`,
+                            objectFit: 'contain',
+                          }}
+                        />
+                      ) : (
+                        <span className="font-black text-lg" style={{ color: theme.primaryColor }}>
+                          {restaurantName?.charAt(0) || 'M'}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <span className="text-[11px] font-bold text-zinc-200 block">Previsualización del Icono de App</span>
+                      <p className="text-[10px] text-zinc-500">
+                        Así se verá la aplicación de tu restaurante en la pantalla de inicio del comensal.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={handleDownloadPwaZip}
+                      disabled={isGeneratingZip || !theme.logoUrl}
+                      className="flex-1 py-2 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-bold transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <span>📦</span>
+                      <span>Descargar Paquete (.ZIP)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSavePwaIcons}
+                      disabled={isGeneratingZip || !theme.logoUrl}
+                      className="flex-1 py-2 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-extrabold transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/10"
+                    >
+                      <span>💾</span>
+                      <span>Guardar en Servidor</span>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -903,6 +1308,31 @@ export function BrandStudioClient({
                     <div><strong>Nombre / Host:</strong> menu (o subdominio elegido)</div>
                     <div><strong>Destino / Valor:</strong> {domainCname || 'cname.imenu.app'}</div>
                     <div><strong>TTL:</strong> Automático o 300 segundos</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Fase 8: Gestión de Certificados SSL On-Demand (Caddy / Cloudflare) */}
+              <div className="p-4 rounded-2xl bg-zinc-950/80 border border-zinc-800/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <span>🔒</span> Emisión Automatizada SSL On-Demand (Caddy TLS Delegado)
+                  </h4>
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-mono text-[10px] font-bold">
+                    HTTP-01 / TLS-ALPN
+                  </span>
+                </div>
+                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                  iMenu cuenta con un endpoint integrado de autorización TLS (<code className="text-amber-400">/api/brand/domain/check-tls</code>) para proxies inversos <strong>Caddy</strong> y <strong>Cloudflare for SaaS</strong>. Cuando un comensal visita tu subdominio por primera vez, el certificado Let&apos;s Encrypt / ZeroSSL se emite en caliente en menos de 2 segundos sin intervención manual ni reinicio de servidores.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] text-zinc-400 pt-1">
+                  <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-zinc-800">
+                    <span className="text-zinc-200 font-bold block mb-0.5">Renovación Continua</span>
+                    <span>Caddy gestiona la renovación automática 30 días antes de la caducidad.</span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-zinc-800">
+                    <span className="text-zinc-200 font-bold block mb-0.5">Protección Anti-DDoS</span>
+                    <span>Endpoint ask valida exclusivamente dominios registrados y activos en la base de datos.</span>
                   </div>
                 </div>
               </div>
@@ -1306,6 +1736,63 @@ export function BrandStudioClient({
           </div>
         </div>
       </div>
+
+      {/* Modal QR Preview en Celular en Vivo (Fase 8) */}
+      {showQrModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-3xl p-6 max-w-sm w-full space-y-5 shadow-2xl relative">
+            <button
+              onClick={() => setShowQrModal(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white flex items-center justify-center text-sm font-bold cursor-pointer"
+            >
+              ✕
+            </button>
+
+            <div className="text-center space-y-1">
+              <span className="text-3xl">📱</span>
+              <h3 className="text-base font-black text-white">Previsualización Móvil en Vivo</h3>
+              <p className="text-xs text-zinc-400">
+                Escanea este código con la cámara de tu smartphone para navegar tu menú con este tema en tiempo real.
+              </p>
+            </div>
+
+            <div className="flex justify-center p-4 bg-white rounded-2xl shadow-inner">
+              {qrCodeDataUrl ? (
+                <img
+                  src={qrCodeDataUrl}
+                  alt="QR Code de Previsualización"
+                  className="w-56 h-56 object-contain"
+                />
+              ) : (
+                <div className="w-56 h-56 flex items-center justify-center text-zinc-400 text-xs">
+                  Generando QR...
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <a
+                href={`/preview/brand?theme=${encodeURIComponent(
+                  JSON.stringify(theme)
+                )}&name=${encodeURIComponent(restaurantName || 'Mi Restaurante')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-amber-500/20"
+              >
+                <span>🔗</span>
+                <span>Abrir en Nueva Pestaña</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => setShowQrModal(false)}
+                className="w-full py-2 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold cursor-pointer"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

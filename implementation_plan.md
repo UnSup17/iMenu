@@ -237,23 +237,23 @@ graph TD
 
 ---
 
-### Fase 8: Catálogo, Variantes de Tamaño, IA Gastronómica & Branding
+### Fase 8: Catálogo, Variantes de Tamaño, IA Gastronómica & Branding ✅ (Completada)
 **Objetivo**: Flexibilidad en la configuración de la carta y herramientas visuales para el restaurante.
 
-1. **Variantes de tamaño con precios escalonados directos**:
-   - Añadir soporte para que un plato pueda tener precios directos por tamaño (ej: Pequeño $15k, Mediano $22k, Grande $28k) sin forzar configuraciones complejas de modificadores.
-2. **Traducción automática multilingüe del menú con IA**:
-   - Endpoint `/api/menu/translate`: traduce en 1 clic títulos y descripciones a inglés y portugués usando IA (OpenAI / Gemini) y los persiste en base de datos.
-3. **Generador de temas y paletas a partir de foto del local**:
-   - En el Studio de Marca ([dashboard/brand/page.tsx](file:///c:/Users/colla/Documents/git/projects/happyfox/iMenu/app/%28dashboard%29/dashboard/brand/page.tsx)), permitir subir una foto del restaurante y extraer mediante análisis de imagen los colores dominantes y acentos para configurar el `BrandTheme`.
-4. **Modo de previsualización con código QR en vivo**:
-   - Modal en el Studio de Marca que genere un código QR de prueba apuntando a un entorno de preview para que el dueño escanee con su móvil y vea los cambios en tiempo real antes de guardar.
-5. **Exportación del Brand Kit en PDF**:
-   - Generar un documento PDF descargable con la paleta de colores (HEX/RGB), tipografías, guía de aplicación de logo y estilos de botones.
-6. **Editor visual de favicons y generación de iconos PWA**:
-   - A partir del logo del restaurante, generar automáticamente `favicon.ico`, `icon-192.png`, `icon-512.png` y `apple-touch-icon.png` para instalación en pantalla de inicio móvil.
-7. **Gestión de certificados SSL delegados (Caddy / Let's Encrypt)**:
-   - Documentar e integrar el webhook de aprovisionamiento TLS bajo demanda con Caddy / Cloudflare for SaaS en `/api/brand/domain`.
+1. **Variantes de tamaño con precios escalonados directos** ✅:
+   - Soporte en modelo `Product.sizes` y utilidades en `lib/menu/sizes.ts`. Editor dinámico en `ProductForm.tsx`, selección interactiva en `ProductModal.tsx` con badges "Desde $X" en `MenuManager.tsx` y `MenuPage.tsx`.
+2. **Traducción automática multilingüe del menú con IA** ✅:
+   - Endpoint `/api/menu/translate` con motor OpenAI + diccionario culinario lingüístico de alta fidelidad en `lib/menu/translator.ts` (español a inglés `en` y portugués `pt`). Botón de acción con 1 clic en `MenuManager.tsx` y visualización multilingüe en `MenuPage.tsx`.
+3. **Generador de temas y paletas a partir de foto del local** ✅:
+   - Módulo de cuantización cromática, median-cut sampling y armonías HSL en `lib/branding/palette-extractor.ts`. Zona de subida fotográfica con detección de colores dominantes y aplicación de tema en `BrandStudioClient.tsx`.
+4. **Modo de previsualización con código QR en vivo** ✅:
+   - Ruta `/preview/brand` con renderizado reactivo según query params del draft theme. Modal en `BrandStudioClient.tsx` con código QR generado en vivo para escaneo y navegación en smartphones.
+5. **Exportación del Brand Kit en PDF** ✅:
+   - Endpoint `/api/brand/brand-kit` que compila especificaciones tipográficas, paleta cromática con contraste WCAG y morfología de botones con soporte de impresión y exportación a PDF.
+6. **Editor visual de favicons y generación de iconos PWA** ✅:
+   - Generación de iconos PWA (32x32, 180x180, 192x192, 512x512 y `manifest.json`), descarga en paquete `.zip` vía JSZip y sincronización en servidor vía `/api/brand/icons`.
+7. **Gestión de certificados SSL delegados (Caddy / Let's Encrypt)** ✅:
+   - Endpoint `/api/brand/domain/check-tls` que valida dominios autorizados para proxies Caddy On-Demand TLS y Cloudflare for SaaS, con panel explicativo en `BrandStudioClient.tsx`.
 
 ---
 
