@@ -316,25 +316,55 @@ graph TD
 
 ---
 
-### Fase 12: Actualización de la Documentación en `/docs` (Paso Final Solicitado)
-**Objetivo**: Reflejar el estado real y sincronizado de la plataforma en la documentación oficial accesible en [/docs](file:///c:/Users/colla/Documents/git/projects/happyfox/iMenu/app/docs/page.tsx).
+### Fase 12: Actualización de la Documentación en `/docs` ✅ (Completada)
+**Objetivo**: Reflejar el estado real y sincronizado de la plataforma en la documentación técnica oficial accesible en [/docs](file:///c:/Users/colla/Documents/git/projects/happyfox/iMenu/app/docs/page.tsx).
 
-1. **Actualizar estado de rutas**:
-   - Cambiar de `partial` o `missing` a `done` todas las rutas creadas o completadas:
-     - `/dashboard/accounting/reports` (de `partial` a `done`)
-     - `/dashboard/accounting/reports/cashflow` (`done`)
-     - `/dashboard/inventory/suppliers` (`done`)
-     - `/dashboard/inventory/physical-count` (`done`)
-     - `/dashboard/inventory/transfers` (`done`)
-     - `/dashboard/analytics/live-tv` (`done`)
-     - `/dashboard/settings/billing/success` (`done`)
-     - `/dashboard/settings/billing/cancel` (`done`)
-2. **Actualizar métricas globales**:
-   - Actualizar contadores de `totalRoutes`, `doneRoutes` y módulos.
-3. **Sincronizar listas de Gaps y Oportunidades**:
-   - Retirar los ítems resueltos de las listas `missing` y `opportunities` de cada módulo en `app/docs/page.tsx`.
-   - Incorporar nuevas observaciones técnicas derivadas de las implementaciones.
-   - Mantener claramente documentados los gaps futuros de largo plazo para la siguiente iteración.
+1. **Actualización Integral del Inventario de Rutas (154/154 - 100% Implementadas)**:
+   - Se incorporaron todas las rutas construidas en las Fases 6–11 y se elevaron de `partial`/`missing` a `done`:
+     - `/dashboard/accounting/reports` (de `partial` a `done` - Hub oficial de reportes contables)
+     - `/dashboard/accounting/reports/cashflow` (`done` - Estado de Flujo de Caja)
+     - `/dashboard/accounting/fixed-assets` (`done` - Activos fijos y depreciación)
+     - `/dashboard/inventory/suppliers` (`done` - Gestión de proveedores)
+     - `/dashboard/inventory/purchase-orders` (`done` - Órdenes de compra)
+     - `/dashboard/inventory/physical-count` (`done` - Auditoría de inventario físico)
+     - `/dashboard/inventory/transfers` (`done` - Transferencias entre sucursales)
+     - `/dashboard/analytics/live-tv` (`done` - Monitor Live TV Fullscreen)
+     - `/dashboard/settings/printers` (`done` - Gestor de impresoras ESC/POS de red)
+     - `/dashboard/settings/billing/success` (`done` - Éxito de checkout Stripe)
+     - `/dashboard/settings/billing/cancel` (`done` - Cancelación/abandono de checkout)
+     - `/api/hardware/printers` y `/api/hardware/print-escpos` (`done` - Driver ESC/POS TCP 9100)
+     - `/api/billing/electronic-invoicing/test-set`, `/status`, `/credit-note`, `/cancel`, `/events` (`done` - SOAP UBL 2.1 DIAN)
+     - `/api/pdf/jobs` (`done` - Worker asíncrono para PDFs pesados)
+     - `/api/storage/purge-cache` (`done` - Purga perimetral de CDN)
+     - `/api/referrals` (`done` - Sistema de códigos de referidos)
+     - `/api/reservations/notify` y `/api/reservations/reminders` (`done` - WhatsApp/SMS & Cron)
+2. **Reevaluación y Sincronización de Gaps y Oportunidades**:
+   - Se depuraron de las listas `missing` todos los requerimientos ya culminados (Set de pruebas DIAN, notas crédito, cashflow, compras a proveedores, conteo físico, transferencias entre sedes, configuración de impresoras, cancel/success de Stripe, recordatorios de reservas).
+   - Se establecieron los verdaderos gaps críticos y oportunidades para las próximas iteraciones:
+     - **Gaps Críticos de Producción**:
+       - Certificados SSL delegados automatizados (Let’s Encrypt / Caddy) para dominios personalizados.
+       - Pasarelas de pago digitales (Wompi, Bold, MercadoPago, Stripe Elements) con cobro por QR directo en mesa.
+       - Nómina Electrónica DIAN y Documento Soporte para adquisiciones a no obligados a facturar.
+       - Spooler de impresión local offline con tolerancia a desconexión de red local.
+       - Webhooks bidireccionales con agregadores de delivery (Rappi, Uber Eats, Didi Food).
+     - **Quick Wins para la Próxima Ola (1-2 días)**:
+       - División de cuenta (split bill) entre varios comensales en el wizard de cierre de mesa.
+       - Buscador de insumos y platos con lectura de código de barras / QR desde la cámara del móvil.
+       - Lista de espera digital (Waitlist) en recepción con notificación SMS al comensal.
+       - Exportación de liquidaciones de Food Courts y reportes contables en PDF con membrete.
+       - Filtros visuales de alérgenos y dietas (Vegano, Sin Gluten, Keto) en el menú QR.
+     - **Oportunidades Estratégicas**:
+       - Auto-pago comensal en mesa sin esperar al mesero.
+       - Inyección directa de pedidos de delivery al KDS de cocina.
+       - Motor de recomendaciones y maridaje culinario con IA según comanda.
+       - App nativa para camareros (React Native / Expo) con soporte offline y comanderos Bluetooth.
+       - Expansión regional a México (CFDI 4.0 SAT) y Chile (DTE SII).
+3. **Métricas Consolidadas de la Plataforma**:
+   - **Rutas Totales**: 154
+   - **Rutas Implementadas**: 154 (100%)
+   - **Rutas Parciales**: 0
+   - **Módulos Documentados**: 13
+   - **Endpoints API REST**: 56
 
 ---
 

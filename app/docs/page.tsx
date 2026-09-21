@@ -37,8 +37,8 @@ const modules: ModuleSection[] = [
     phase: 'Base',
     phaseColor: '#6b7280',
     icon: '🔐',
-    title: 'Autenticación & Roles',
-    description: 'Sistema de autenticación basado en NextAuth v5 con soporte multi-rol. Cada usuario tiene un único rol que determina su vista y permisos.',
+    title: 'Autenticación, Seguridad & Auditoría',
+    description: 'Sistema de autenticación NextAuth v5 multi-rol, verificación 2FA TOTP, lista blanca de IPs y registro exhaustivo de auditoría de seguridad para cumplimiento corporativo.',
     routes: [
       { route: '/login', view: 'Login con email/contraseña, verificación 2FA (TOTP) y Google OAuth', status: 'done', roles: 'Público' },
       { route: '/register', view: 'Registro público: creación de Organización, Restaurante, Admin y Trial SaaS 14 días', status: 'done', roles: 'Público' },
@@ -50,6 +50,9 @@ const modules: ModuleSection[] = [
       { route: '/dashboard/settings/team', view: 'Gestión de equipo, invitaciones por rol y revocación', status: 'done', roles: 'ADMIN, ORG_ADMIN' },
       { route: '/accept-invite', view: 'Aceptación de invitación de staff y configuración de perfil', status: 'done', roles: 'Público (invitados)' },
       { route: '/dashboard/settings/security', view: 'Activación/desactivación de 2FA TOTP con código QR y Authenticator', status: 'done', roles: 'Todos los usuarios' },
+      { route: '/dashboard/settings/security/audit', view: 'Visor de auditoría de seguridad y accesos con IP, User-Agent, eventos y filtros', status: 'done', roles: 'ADMIN, ORG_ADMIN, SUPERADMIN' },
+      { route: '/api/settings/ip-restriction', view: 'GET/PUT configuración de lista blanca de IPs para terminales de caja y KDS', status: 'done', roles: 'ADMIN' },
+      { route: '/api/audit-logs', view: 'GET registro de eventos de seguridad (login, 2FA, plan changes, ip checks)', status: 'done', roles: 'ADMIN, SUPERADMIN' },
       { route: '/api/superadmin/impersonate', view: 'Sesión de impersonación temporal para SUPERADMIN con barra fija de advertencia', status: 'done', roles: 'SUPERADMIN' },
       { route: '/api/auth/[...nextauth]', view: 'Handler central de NextAuth v5 con JWT y adapters', status: 'done', roles: 'Sistema' },
     ],
@@ -60,14 +63,16 @@ const modules: ModuleSection[] = [
       '2FA estándar TOTP compatible con Google Authenticator, Authy y 1Password.',
       'Invitaciones de staff con tokens temporales de 72 horas y roles granulares (WAITER, KITCHEN, MANAGER, ACCOUNTANT).',
       'Mecanismo de impersonación seguro para SUPERADMIN con banner de estado y salida instantánea.',
+      'Auditoría de seguridad y accesos (Fase 9) persistida en AuditLog registrando IP, User-Agent, eventos de autenticación, cambios de plan y 2FA.',
+      'Restricción de acceso por IP (Fase 9) configurable para proteger terminales operativas de caja y KDS en red local.',
     ],
     missing: [
       'Soporte para llaves de seguridad físicas (WebAuthn / Passkeys / FIDO2).',
-      'Registro de auditoría de accesos (IP y User-Agent en logs de inicio de sesión).',
+      'Detección de anomalías en inicios de sesión por geolocalización o viajes imposibles.',
     ],
     opportunities: [
-      'Login unificado con SSO empresarial (SAML / Okta) para grandes cadenas y franquicias.',
-      'Restricción de acceso por IP para terminales de caja y KDS en cocina.',
+      'Login unificado con SSO empresarial (SAML 2.0 / Okta / Azure AD) para grandes cadenas hoteleras y franquicias.',
+      'Políticas de contraseñas configurables por organización (longitud mínima, rotación forzada cada 90 días).',
     ],
   },
   {
@@ -76,10 +81,11 @@ const modules: ModuleSection[] = [
     phaseColor: '#6b7280',
     icon: '📱',
     title: 'Menú QR (Vista del Cliente)',
-    description: 'La interfaz que ven los clientes del restaurante al escanear el código QR de su mesa. Permite navegar el menú, agregar ítems al carrito y realizar pedidos en tiempo real.',
+    description: 'La interfaz que ven los clientes del restaurante al escanear el código QR de su mesa o navegar la carta pública. Incluye carrito colaborativo, pedidos en tiempo real, división de cuenta y portal de reservaciones con pre-orden.',
     routes: [
       { route: '/menu/[slug]/[tableSlug]', view: 'Menú digital del restaurante con carrito, pedidos en vivo, tracker y soporte dual (cuadrícula y PDF interactivo pre-renderizado en WebP <1.8s)', status: 'done', roles: 'Público (clientes)' },
       { route: '/menu/[slug]', view: 'Modo solo visualización web de la carta (sin sesión de mesa) con páginas WebP servidas desde Vercel Blob CDN', status: 'done', roles: 'Público' },
+      { route: '/menu/[slug]/reservar', view: 'Portal público del comensal para reservar mesa con selección de fecha, hora, personas, pre-orden gastronómica opcional y ticket digital', status: 'done', roles: 'Público' },
       { route: '/api/menu/[slug]', view: 'GET productos, categorías, modificadores y páginas WebP pre-renderizadas del restaurante', status: 'done', roles: 'Público' },
       { route: '/api/orders', view: 'POST pedido a cocina y GET órdenes confirmadas de la mesa actual', status: 'done', roles: 'Público (sesión de mesa)' },
       { route: '/api/kitchen/load', view: 'GET cálculo de carga de cocina y tiempo estimado de preparación en minutos', status: 'done', roles: 'Público / Sistema' },
@@ -92,6 +98,7 @@ const modules: ModuleSection[] = [
     observations: [
       'Pre-renderizado WebP en Servidor & Vercel Blob CDN: las cartas en PDF se transforman a páginas WebP (~41 KB por página) servidas desde la red perimetral de Vercel Blob, reduciendo el tiempo de carga móvil de más de 30 segundos con PDF.js a menos de 1.8 segundos.',
       'Hotspots Táctiles & Modal de Platillo Interactiva: cada producto en el menú visual cuenta con coordenadas relativas (X, Y, W, H) que abren una modal interactiva estilo Menüpp con fotografía en alta resolución servida desde CDN, modificadores, ingredientes removibles y botón para compartir platillo.',
+      'Portal de reservaciones públicas (/menu/[slug]/reservar) que permite al comensal reservar y armar un carrito de pre-orden de comida para despacho directo al llegar al restaurante.',
       'Persistencia 100% Serverless: las URLs de las páginas se almacenan como JSON en Restaurant.pdfPageImages, desacoplando completamente el frontend del sistema de archivos local y garantizando compatibilidad con el entorno de solo lectura de Vercel.',
       'Las sesiones de mesa son colaborativas y sincronizadas en tiempo real vía Socket.IO entre comensales.',
       'Historial de rondas de pedidos accesible desde el menú con stepper de estado (RECEIVED ➔ PREPARING ➔ READY ➔ DELIVERED).',
@@ -107,9 +114,11 @@ const modules: ModuleSection[] = [
     ],
     missing: [
       'Sugerencias de maridaje o upselling inteligente impulsado por IA según los ítems del carrito.',
+      'Recomendaciones hiper-personalizadas basadas en restricciones dietarias guardadas en perfil del cliente.',
     ],
     opportunities: [
-      'Traducción automática y enriquecimiento de descripciones de platillos usando LLMs.',
+      'Lector de cartas sonoro con síntesis de voz (Text-to-Speech) para accesibilidad universal y comensales con discapacidad visual.',
+      'Calculador nutricional interactivo (calorías y macronutrientes) en tiempo real al agregar platos al carrito.',
     ],
   },
   {
@@ -117,34 +126,36 @@ const modules: ModuleSection[] = [
     phase: 'Base',
     phaseColor: '#6b7280',
     icon: '🪑',
-    title: 'Mesas & QR',
-    description: 'Gestión integral del salón: plano SVG interactivo, editor gráfico drag-and-drop, rotación de mesas con alertas de tiempo y módulo propio de reservaciones.',
+    title: 'Mesas, Plano & Reservaciones',
+    description: 'Gestión integral del salón: plano SVG interactivo, editor gráfico drag-and-drop, predictor inteligente de rotación/desocupación de mesas (7 etapas), mensajería WhatsApp/SMS y pre-orden con despacho automático a cocina (KDS).',
     routes: [
-      { route: '/dashboard/tables', view: 'Tablero 4-en-1: Plano SVG interactivo, Editor Drag & Drop, Vista Cuadrícula y Agenda de Reservaciones', status: 'done', roles: 'ADMIN, MANAGER, WAITER' },
+      { route: '/dashboard/tables', view: 'Tablero 4-en-1: Plano SVG interactivo, Editor Drag & Drop, Vista Cuadrícula y Agenda de Reservaciones con Pre-orden', status: 'done', roles: 'ADMIN, MANAGER, WAITER' },
       { route: '/api/tables', view: 'CRUD de mesas con capacidad, morfología (redonda/cuadrada/rectangular), coordenadas y generación de QR', status: 'done', roles: 'ADMIN' },
       { route: '/api/tables/layout', view: 'PUT guardado en batch de coordenadas (X, Y) y dimensiones del plano drag-and-drop', status: 'done', roles: 'ADMIN, MANAGER' },
       { route: '/api/tables/[tableId]', view: 'PATCH/DELETE edición de zona, capacidad, morfología y eliminación de mesa', status: 'done', roles: 'ADMIN' },
       { route: '/api/tables/[id]/session', view: 'GET/DELETE sesión activa de una mesa y cálculo de tiempo transcurrido', status: 'done', roles: 'ADMIN, MANAGER' },
-      { route: '/api/reservations', view: 'GET/POST gestión y creación de reservaciones con validación de capacidad y fecha', status: 'done', roles: 'ADMIN, MANAGER, WAITER' },
-      { route: '/api/reservations/[id]', view: 'PATCH/DELETE transición de estados (CONFIRMED, SEATED, COMPLETED, CANCELLED, NO_SHOW)', status: 'done', roles: 'ADMIN, MANAGER' },
+      { route: '/api/reservations', view: 'GET/POST gestión y creación de reservaciones públicas y de staff con pre-orden serializada', status: 'done', roles: 'ADMIN, MANAGER, WAITER, Público' },
+      { route: '/api/reservations/[id]', view: 'PATCH/DELETE transición de estados con inyección automática de orden en KDS al sentar al comensal (SEATED)', status: 'done', roles: 'ADMIN, MANAGER' },
+      { route: '/api/reservations/notify', view: 'POST envío de confirmación y recordatorios de reserva vía WhatsApp / SMS', status: 'done', roles: 'ADMIN, MANAGER' },
+      { route: '/api/reservations/reminders', view: 'GET/POST worker cron de escaneo y envío de recordatorios 2h antes con idempotencia', status: 'done', roles: 'Sistema' },
       { route: '/plaza/[slug]', view: 'Vista pública del plano de mesas del restaurante', status: 'done', roles: 'Público' },
     ],
     observations: [
       'Plano del salón interactivo renderizado en SVG vectorial con sillas posicionadas según capacidad y morfología (redonda, cuadrada, rectangular).',
+      'Table Turnover Predictor (lib/tables/turnover-predictor.ts): motor heurístico que evalúa 7 etapas operativas (FREE, ORDERING, WAITING_FOOD, DINING, SOBREMESA, BILL_PENDING, OVERDUE) calculando minutos remanentes y hora proyectada de liberación de mesas.',
+      'Mensajería WhatsApp & SMS integrada (lib/notifications/messaging.ts) para confirmación inmediata de reservas y recordatorio automático 2 horas antes.',
+      'Despacho automático a cocina (KDS): al sentar al comensal (SEATED), si la reserva tiene pre-orden, se genera instantáneamente una comanda urgente en prisma.order.',
       'Editor gráfico Drag-and-Drop integrado con cuadrícula magnética (grid snap), panel de propiedades y guardado en batch vía API.',
-      'Métricas de rotación y aforo en tiempo real: porcentaje de ocupación, comensales sentados, mesas libres y alertas de sobretiempo (>90m).',
-      'Módulo de reservaciones completo con filtrado por fecha, asignación de mesa, estados de comensal (Confirmada, Sentada, etc.) y modal de creación.',
-      'Monitoreo de tiempo transcurrido por mesa desde el inicio de la sesión QR con badges de advertencia si excede el umbral de servicio.',
+      'Métricas de rotación y aforo en tiempo real: porcentaje de ocupación, comensales sentados, mesas libres y alertas de sobretiempo.',
       'Los QR se generan con un slug único por restaurante+mesa.',
     ],
     missing: [
       'Integración bidireccional externa con agregadores comerciales de reservas (OpenTable, Resy, TheFork).',
-      'Plano 3D interactivo con Three.js para recorridos virtuales del restaurante.',
+      'Lista de espera digital (Waitlist) en recepción para comensales que llegan sin reservación en horas pico.',
     ],
     opportunities: [
-      'Notificaciones SMS/WhatsApp automáticas de confirmación y recordatorio de reserva para comensales.',
-      'Predicción de tiempo de desocupación estimada de mesas basada en órdenes activas y ritmo de cocina.',
-      'Pre-orden y pre-pago opcional de platos al confirmar la reservación.',
+      'Asignación algorítmica óptima de mesas basada en patrones históricos de consumo y duración de grupo.',
+      'Plano 3D interactivo con Three.js para recorridos virtuales del restaurante.',
     ],
   },
   {
@@ -153,11 +164,15 @@ const modules: ModuleSection[] = [
     phaseColor: '#6b7280',
     icon: '🛒',
     title: 'Pedidos & Panel de Cocina',
-    description: 'Sistema integral de gestión de comandas en tiempo real: panel del mesero/administrador con filtros avanzados, historial del día, métricas de rendimiento y pantalla de cocina dedicada (KDS Tablet Fullscreen).',
+    description: 'Sistema integral de gestión de comandas en tiempo real: panel del mesero/administrador con filtros avanzados, historial del día, métricas de rendimiento, pantalla de cocina dedicada (KDS Tablet Fullscreen) e integración con datáfonos físicos.',
     routes: [
       { route: '/dashboard/orders', view: 'Panel de comandas: 3 tabs (En Vivo, Historial con búsqueda y Métricas de cocina)', status: 'done', roles: 'ADMIN, MANAGER, WAITER, KITCHEN' },
       { route: '/dashboard/kds', view: 'Pantalla de cocina dedicada (KDS) para tablets a pantalla completa con cronómetros y checklist táctil', status: 'done', roles: 'ADMIN, MANAGER, KITCHEN' },
       { route: '/kds', view: 'KDS Fullscreen Tablet: Vista independiente sin barra de administración ni sidebar para fijación en pared', status: 'done', roles: 'ADMIN, MANAGER, KITCHEN' },
+      { route: '/dashboard/settings/printers', view: 'Gestor de impresoras térmicas ESC/POS por estación (cocina, barra, caja) y test print de red TCP', status: 'done', roles: 'ADMIN, MANAGER' },
+      { route: '/api/hardware/printers', view: 'GET/POST/PUT/DELETE configuración de impresoras de red por estación con IP y puerto 9100', status: 'done', roles: 'ADMIN, MANAGER' },
+      { route: '/api/hardware/print-escpos', view: 'POST envío de tickets y comandas en buffer binario ESC/POS por socket TCP directo', status: 'done', roles: 'ADMIN, WAITER, KITCHEN, Sistema' },
+      { route: '/api/hardware/pos-terminal', view: 'POST procesamiento y simulación de cobro con datáfonos físicos (Ingenico, Verifone, Pax, Redeban, Credibanco)', status: 'done', roles: 'ADMIN, WAITER, CAJA' },
       { route: '/api/orders', view: 'GET (lista de órdenes activas) + POST (crear comanda y emitir WebSocket)', status: 'done', roles: 'ADMIN, WAITER, Público' },
       { route: '/api/orders/[id]', view: 'GET detalle + PATCH transición de estados (RECEIVED→PREPARING→READY→DELIVERED) y prioridad', status: 'done', roles: 'ADMIN, MANAGER, WAITER, KITCHEN' },
       { route: '/api/orders/[id]/items/[itemId]', view: 'PATCH toggle de ítem completado en checklist táctil de cocina', status: 'done', roles: 'ADMIN, MANAGER, KITCHEN' },
@@ -177,14 +192,19 @@ const modules: ModuleSection[] = [
       'Historial diario completo con buscador predictivo y métricas consolidadas de facturación y despacho.',
       'Al cancelar una orden, el stock de inventario se restaura automáticamente.',
       'Soporte completo para impresión térmica ESC/POS de red en /api/hardware/print-escpos y lib/hardware/esc-pos-printer.ts: buffer binario en TypeScript enviado por TCP socket al puerto 9100 (Epson TM-T20/T88, Bixolon SRP-350, RONGTA).',
-      'Ruteo multi-estación de cocina (CALIENTE, FRIA, BAR, POSTRES, PARRILLA, EMPAQUE) con filtrado y badges en KDS.',
+      'Gestor visual de impresoras por estación (/dashboard/settings/printers) con prueba de conexión instantánea y test print de comprobación.',
+      'Ruteo multi-estación de cocina (CALIENTE, FRIA, BAR, POSTRES, PARRILLA, EMPAQUE) con filtrado dinámico y badges en KDS.',
+      'Filtro dinámico de comandas por zona de mesas (ej. Terraza, Salón Principal, Barra) integrado directamente en KdsViewClient.',
+      'Integración con datáfonos y terminales POS físicas vía /api/hardware/pos-terminal con protocolos TCP/Serial y simulador.',
       'Algoritmo dinámico de predicción de tiempo (ETA) en /api/kitchen/load combinando historial real de 24h + prepTimeMinutes por producto + carga activa.',
     ],
     missing: [
-      'Configuración visual de IPs de impresoras por estación desde la UI de ajustes (Fase 9).',
+      'Spooler de impresión local offline con almacenamiento en búfer para contingencias de corte de red.',
+      'Integración con básculas comerciales RS-232 / USB para tarificación de platos por peso en vivo.',
     ],
     opportunities: [
-      'Filtro dinámico de comandas por zona de mesas (ej. terraza vs. salón principal) en el KDS.',
+      'Comandero por voz para estaciones calientes con manos ocupadas.',
+      'Enrutamiento predictivo y balanceo dinámico de carga entre estaciones culinarias según tiempo de cocción.',
     ],
   },
   {
@@ -193,9 +213,9 @@ const modules: ModuleSection[] = [
     phaseColor: '#6b7280',
     icon: '🍽️',
     title: 'Catálogo del Menú (Admin)',
-    description: 'Gestión del catálogo del restaurante: categorías, productos, modificadores, ingredientes removibles y menú PDF interactivo.',
+    description: 'Gestión integral del catálogo del restaurante: categorías, productos, variantes de tamaño escalonadas, modificadores, ingredientes removibles, traducción automática con IA y menú PDF interactivo.',
     routes: [
-      { route: '/dashboard/menu', view: 'Gestor integral: Drag & Drop, Carga masiva CSV, alérgenos y precios dinámicos', status: 'done', roles: 'ADMIN, MANAGER' },
+      { route: '/dashboard/menu', view: 'Gestor integral: Drag & Drop, Carga masiva CSV, variantes de tamaño, alérgenos y precios dinámicos', status: 'done', roles: 'ADMIN, MANAGER' },
       { route: '/dashboard/menu-pdf', view: 'Configuración y previsualización del menú en PDF con hotspots interactivos', status: 'done', roles: 'ADMIN' },
       { route: '/dashboard/additions', view: 'Gestión de adicionales/extras reutilizables con costo y recetas', status: 'done', roles: 'ADMIN' },
       { route: '/dashboard/special-offers', view: 'Ofertas especiales con vigencia, calendario y descuento', status: 'done', roles: 'ADMIN' },
@@ -204,9 +224,11 @@ const modules: ModuleSection[] = [
       { route: '/api/menu/import', view: 'POST importación masiva CSV con detección y creación automática de categorías', status: 'done', roles: 'ADMIN, MANAGER' },
       { route: '/api/menu/export', view: 'GET descarga de plantilla oficial y exportación completa de menú a CSV', status: 'done', roles: 'ADMIN, MANAGER' },
       { route: '/api/menu/reorder', view: 'PUT persistencia transaccional de reorden Drag & Drop de categorías y platos', status: 'done', roles: 'ADMIN, MANAGER' },
+      { route: '/api/menu/translate', view: 'POST traducción multilingüe automatizada de platos y categorías a inglés y portugués con IA', status: 'done', roles: 'ADMIN, MANAGER' },
+      { route: '/api/menu/purge-cache', view: 'POST purga inmediata de la caché del menú en memoria y CDN ante cambios de carta', status: 'done', roles: 'ADMIN, MANAGER' },
       { route: '/api/menu/generate-description', view: 'POST generador de redacciones culinarias atractivas con ChatGPT / IA Culinaria', status: 'done', roles: 'ADMIN, MANAGER' },
       { route: '/api/menu/categories', view: 'CRUD de categorías regulares y ofertas especiales', status: 'done', roles: 'ADMIN' },
-      { route: '/api/menu/products', view: 'CRUD de productos con alérgenos, precios programados y orden', status: 'done', roles: 'ADMIN' },
+      { route: '/api/menu/products', view: 'CRUD de productos con alérgenos, variantes de tamaño, precios programados y orden', status: 'done', roles: 'ADMIN' },
       { route: '/api/additions', view: 'CRUD de adicionales y adiciones por producto/categoría', status: 'done', roles: 'ADMIN' },
       { route: '/api/special-offers', view: 'CRUD de ofertas especiales y menús temporales', status: 'done', roles: 'ADMIN' },
     ],
@@ -214,6 +236,9 @@ const modules: ModuleSection[] = [
       'Servicio unificado de almacenamiento (lib/storage.ts): gestión centralizada de subidas a Vercel Blob Storage con CDN global y fallback en public/uploads/ para desarrollo local.',
       'Estructura canónica multitenant de almacenamiento: restaurants/{restaurantId}/menu/ para el PDF y páginas pre-renderizadas, restaurants/{restaurantId}/products/ para fotos de platillos y restaurants/{restaurantId}/branding/ para logotipos.',
       'Herramientas CLI de migración y pre-renderizado: scripts automatizados (scripts/migrate_assets_to_vercel_blob.js y scripts/prerender_menu_pdf.js) para transformar PDFs a WebP y sembrar catálogos masivos.',
+      'Gestión de variantes de tamaño y porciones (pequeño/mediano/grande, media/entera) con precios escalonados directos en ProductForm (lib/menu/sizes.ts).',
+      'Traducción automática multilingüe con IA integrada en /api/menu/translate para internacionalizar el menú a inglés y portugués en 1 clic.',
+      'Purga instantánea de caché en /api/menu/purge-cache al actualizar platos o categorías.',
       'Carga masiva e importación/exportación de catálogo vía CSV con plantilla oficial descargable y auto-creación de categorías faltantes.',
       'Reordenamiento fluido con Drag-and-Drop nativo y botones de ajuste fino para categorías y platos persistidos en base de datos (orderIndex).',
       'Subida directa de imágenes de platos con editor de recorte integrado en Canvas (proporciones 1:1, 4:3 y 16:9) y compresión WebP.',
@@ -223,13 +248,12 @@ const modules: ModuleSection[] = [
       'El campo isAvailable se sincroniza automáticamente cuando se agotan materias primas del inventario.',
     ],
     missing: [
-      'Sincronización bidireccional de catálogo con sistemas POS externos (Toast, Micros, Square).',
-      'Gestión de variantes de tamaño (pequeño/mediano/grande) con precios escalonados directos.',
+      'Sincronización bidireccional de catálogo con sistemas POS legacy (Toast, Micros, Square).',
+      'Control de disponibilidad horaria por turnos (desayuno, almuerzo, cena) en platos específicos.',
     ],
     opportunities: [
-      'Traducción automática multilingüe de todo el menú a inglés y portugués en un clic con IA.',
-      'Sugerencias automáticas de maridaje de bebidas o postres para upselling inteligente en el menú.',
       'Análisis de rentabilidad y matriz Boston Consulting Group (BCG) de platos estrella vs. platos perro según ventas.',
+      'Generación de fotos publicitarias de alta resolución asistida por IA a partir de ingredientes y descripción.',
     ],
   },
   {
@@ -238,30 +262,36 @@ const modules: ModuleSection[] = [
     phaseColor: '#6b7280',
     icon: '🎨',
     title: 'Branding & Configuración del Restaurante',
-    description: 'Studio completo de identidad visual y marca: simulador interactivo multipantalla, 8 presets gastronómicos, generador de armonías HSL, Google Fonts pairings, White-Label y conexión de dominios personalizados con verificación DNS CNAME.',
+    description: 'Studio completo de identidad visual y marca: simulador interactivo multipantalla, 8 presets gastronómicos, generador de armonías HSL, Google Fonts pairings, White-Label, generador de Brand Kit, gestión de PWA icons y conexión de dominios personalizados con verificación DNS CNAME y Caddy On-Demand TLS.',
     routes: [
       { route: '/dashboard/brand', view: 'Studio de Marca v2.5 Live: 6 tabs (Presets, Armonía HSL, Tipografías, Estilos, Media y Dominio) con previsualización en vivo', status: 'done', roles: 'ADMIN, SUPERADMIN, ORG_ADMIN' },
+      { route: '/preview/brand', view: 'Previsualizador interactivo móvil en vivo con código QR de prueba para escanear en smartphone antes de publicar', status: 'done', roles: 'ADMIN, SUPERADMIN, ORG_ADMIN' },
       { route: '/api/brand', view: 'GET/PUT gestión de BrandTheme con herencia corporativa, propuestas de sede y White-Label', status: 'done', roles: 'ADMIN, SUPERADMIN, ORG_ADMIN' },
       { route: '/api/brand/domain', view: 'GET/POST/DELETE configuración, verificación CNAME y desvinculación de dominio personalizado', status: 'done', roles: 'ADMIN, SUPERADMIN, ORG_ADMIN' },
+      { route: '/api/brand/domain/check-tls', view: 'GET hook de validación Caddy On-Demand TLS para emisión y renovación automática de certificados SSL Let’s Encrypt', status: 'done', roles: 'Infraestructura / Caddy' },
+      { route: '/api/brand/icons', view: 'GET/POST editor y generador automatizado de favicons y paquetes de iconos PWA (192x192, 512x512, apple-touch-icon)', status: 'done', roles: 'ADMIN, SUPERADMIN, ORG_ADMIN' },
+      { route: '/api/brand/brand-kit', view: 'GET exportación y renderizado dinámico del Brand Kit oficial en HTML/PDF con paleta cromática HEX/RGB/HSL, tipografía y reglas de logo', status: 'done', roles: 'ADMIN, SUPERADMIN, ORG_ADMIN' },
     ],
     observations: [
       'Previsualizador interactivo en tiempo real con alternancia de dispositivos (📱 Smartphone 360px vs. 💻 Tablet 520px) y 3 pantallas simuladas: Menú general, Modal de plato con modificadores y Carrito de checkout.',
+      'Ruta dedicada /preview/brand con código QR dinámico para escanear con la cámara del celular y probar la experiencia de marca en tiempo real antes de guardar.',
       'Colección de 8 plantillas gastronómicas de autor (Fine Dining, Burger Craft, Trattoria Napolitana, Sushi Nikkei, Specialty Coffee, Taquería, Organic Greens y Chocolatería).',
       'Generador algorítmico inteligente de armonía cromática HSL basado en el color primario con contrastes accesibles y fondos con tinte premium.',
       'Catálogo de maridajes tipográficos (Font Pairings) sugeridos e integración con Google Fonts (Inter, Playfair Display, Montserrat, Poppins, Outfit, Cinzel, Syne, etc.).',
       'Estilos de botón configurables (Píldora / Cápsula, Suave Redondeado, Sharp Minimalista) y control de desenfoque Glassmorphism.',
       'Modo White-Label Corporativo: elimina referencias a iMenu del menú comensal y de las tirillas impresas de facturación térmica.',
       'Gestor de dominios propios con verificación en vivo de registros DNS CNAME y guía paso a paso para Cloudflare, GoDaddy y Namecheap.',
+      'Integración nativa con Caddy On-Demand TLS (/api/brand/domain/check-tls) para provisión automática e instantánea de certificados SSL sin intervención manual.',
+      'Generador de Brand Kit (/api/brand/brand-kit) exportable con códigos de color, directrices tipográficas y especificaciones para imprenta.',
       'Gobernanza corporativa jerárquica con soporte para franquicias y plazas gastronómicas.',
     ],
     missing: [
-      'Emisión y renovación automática de certificados SSL delegados vía Let’s Encrypt / Caddy para subdominios autogestionados.',
-      'Editor visual avanzado de favicons y generación automática de iconos PWA para pantalla de inicio.',
+      'Generador de paletas y estilos a partir del análisis por visión computacional de una fotografía del restaurante.',
+      'Soporte para múltiples temas estacionales programados (Halloween, Navidad, San Valentín) con activación automática por calendario.',
     ],
     opportunities: [
-      'Generador de temas y paletas completas a partir de una foto del local subida por el restaurante usando visión por computadora.',
-      'Modo de previsualización con código QR de prueba para escanear en vivo en el celular del dueño antes de publicar cambios.',
-      'Exportación del Brand Kit en PDF con especificaciones técnicas de colores HEX/RGB y reglas de aplicación del logo.',
+      'Generación de material promocional impreso (afiches de mesa, banners de bienvenida, tent cards) listo para imprenta en CMYK.',
+      'Integración con Figma API para sincronización bidireccional de tokens de diseño gastronómicos.',
     ],
   },
   {
@@ -270,7 +300,7 @@ const modules: ModuleSection[] = [
     phaseColor: '#f59e0b',
     icon: '🏪',
     title: 'Food Courts / Plazas',
-    description: 'Soporte completo para plazas gastronómicas donde múltiples restaurantes comparten el mismo espacio físico. El cliente puede ordenar de varios locales en una sola transacción unificada, y el operador de la plaza dispone de un dashboard consolidado con métricas, comisiones y liquidaciones por restaurante.',
+    description: 'Soporte completo para plazas gastronómicas donde múltiples restaurantes comparten el mismo espacio físico. El cliente puede ordenar de varios locales en una sola transacción unificada, y el operador de la plaza dispone de un dashboard consolidado con métricas, comisiones y liquidaciones exportables por restaurante.',
     routes: [
       { route: '/dashboard/food-courts', view: 'Lista de plazas de la organización con acceso rápido', status: 'done', roles: 'ORG_ADMIN, FOOD_COURT_ADMIN' },
       { route: '/dashboard/food-courts/[id]', view: 'Panel de gestión de plaza: 5 pestañas (Mesas en Vivo, Dashboard Consolidado, Comisiones & Liquidación, Locales, Configuración)', status: 'done', roles: 'ORG_ADMIN, FOOD_COURT_ADMIN' },
@@ -281,28 +311,28 @@ const modules: ModuleSection[] = [
       { route: '/api/food-courts/[id]/memberships', view: 'POST (agregar restaurante) + PATCH (reordenar / actualizar comisiones) + DELETE', status: 'done', roles: 'ORG_ADMIN, FOOD_COURT_ADMIN' },
       { route: '/api/food-courts/[id]/reports', view: 'GET: métricas consolidadas de plaza, ranking de locales, comisiones y órdenes recientes', status: 'done', roles: 'ORG_ADMIN, FOOD_COURT_ADMIN' },
       { route: '/api/food-courts/[id]/payments', view: 'GET/POST pagos por restaurante dentro de una sesión de mesa', status: 'done', roles: 'ADMIN' },
+      { route: '/api/food-courts/[id]/settlements/export', view: 'GET exportación de liquidaciones y comisiones a CSV con BOM UTF-8 y desglose de cuotas fijas y porcentuales', status: 'done', roles: 'ORG_ADMIN, FOOD_COURT_ADMIN' },
       { route: '/api/orders (POST multi-restaurante)', view: 'Detecta ítems de múltiples restaurantes y crea órdenes atómicas por cocina en una sola llamada', status: 'done', roles: 'Público' },
     ],
     observations: [
       'El carrito del comensal puede contener ítems de múltiples restaurantes simultáneamente. Al confirmar, el sistema agrupa por restaurantId y crea una Order separada por cocina de forma atómica.',
-      'Cada restaurante recibe su comanda en KDS/cocina vía WebSocket de forma independiente (event: new:order). El comensal recibe confirmación unificada.',
+      'Cada restaurante recibe su comanda en KDS/cocina vía WebSocket de forma independiente (event: new:order). El comensal recibe confirmación unificada y seguimiento Web Push individual.',
       'Las comisiones se configuran en FoodCourtMembership: commissionPercentage (% sobre ventas brutas) y commissionFixedFee (cuota fija por orden). Ambas son aditivas.',
       'El cálculo de liquidación: Neto Restaurante = Ventas Brutas - (Ventas × %comisión) - (Órdenes × cuotaFija).',
+      'Exportación directa de liquidaciones en CSV con BOM UTF-8 desde la pestaña de Comisiones y Liquidaciones (/api/food-courts/[id]/settlements/export).',
       'El Dashboard Consolidado soporta filtros de período: Hoy, 7 Días, 30 Días e Histórico.',
       'La vista del comensal muestra un banner informativo "Pedido Unificado Multi-Restaurante" y pills de restaurante en cada ítem del carrito.',
       'FoodCourtMembership tiene orderIndex para controlar el orden del mosaico de restaurantes en la vista pública.',
+      'El editor de mapa de piso cuenta con soporte para coordenadas x/y, formas y rotación para diagramación física.',
     ],
     missing: [
-      'Reservaciones de mesas en la plaza con integración a sistemas externos (OpenTable, Resy).',
-      'Notificaciones push al comensal cuando el pedido de cualquiera de los restaurantes esté listo.',
-      'Exportación de liquidaciones en CSV/PDF directamente desde la pestaña de Comisiones.',
-      'Mapa visual SVG del salón de la plaza con posición real de las mesas.',
+      'Reservaciones de mesas unificadas en la plaza con integración a sistemas externos (OpenTable, Resy).',
+      'Dispersión y liquidación bancaria automatizada (Split Payout / Escrow) hacia las cuentas de cada restaurante miembro.',
     ],
     opportunities: [
-      'Pago unificado al final de la sesión: el comensal paga el total consolidado de todos los locales en una transacción de facturación.',
-      'Módulo de reservaciones propio para plazas con gestor de turnos y listas de espera digitales.',
-      'Analytics comparativos entre plazas de la misma organización (benchmarking de locales).',
-      'Integración de notificaciones push (Web Push API) cuando el pedido de cada restaurante cambie de estado.',
+      'Pago unificado al final de la sesión: el comensal paga el total consolidado de todos los locales en una sola transacción agregada.',
+      'Portal de autoservicio para restaurantes miembros con acceso restringido a sus propias liquidaciones y métricas.',
+      'Analytics comparativos entre plazas de la misma organización (benchmarking cruzado de rendimiento).',
     ],
   },
   {
@@ -310,40 +340,48 @@ const modules: ModuleSection[] = [
     phase: 'Fase 1',
     phaseColor: '#10b981',
     icon: '🧾',
-    title: 'Facturación',
-    description: 'Módulo completo de facturación: cierre de mesas, registro de pagos, emisión de tickets térmicos y configuración fiscal por restaurante.',
+    title: 'Facturación & Pagos',
+    description: 'Módulo completo de facturación y cobros: cierre de mesas, división de cuenta (split bill), propina configurable, datáfonos físicos POS, pasarelas digitales QR, emisión de tickets térmicos, cotizaciones proforma, exportación masiva ZIP y configuración fiscal por restaurante.',
     routes: [
       { route: '/dashboard/billing', view: 'Hub: KPIs del día, facturas recientes, estado de mesas activas', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
-      { route: '/dashboard/billing/invoices', view: 'Listado de facturas con filtros por fecha, estado y método de pago', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
+      { route: '/dashboard/billing/invoices', view: 'Listado de facturas con filtros por fecha, estado, método de pago y botón de reimpresión térmica en 1 clic', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
       { route: '/dashboard/billing/invoices/[id]', view: 'Detalle de factura: ítems, pagos, anulación, impresión, emisión DIAN', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
-      { route: '/dashboard/billing/close-table/[tableId]', view: 'Wizard de cierre de mesa: resumen, método de pago, emisión', status: 'done', roles: 'ADMIN, MANAGER, WAITER' },
+      { route: '/dashboard/billing/close-table/[tableId]', view: 'Wizard de cierre de mesa: división de cuenta (Split Bill), propina voluntaria, múltiples medios de pago y emisión', status: 'done', roles: 'ADMIN, MANAGER, WAITER' },
       { route: '/dashboard/billing/config', view: 'Configuración fiscal: país, IVA, cargo por servicio, datos legales, formato de tickets', status: 'done', roles: 'ADMIN' },
       { route: '/api/invoices', view: 'GET (lista) + POST (crear factura desde tabla)', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
       { route: '/api/invoices/[id]', view: 'GET detalle + PATCH (registrar pago, anular)', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
       { route: '/api/invoices/[id]/notify', view: 'POST envío del comprobante de factura por correo electrónico', status: 'done', roles: 'ADMIN, WAITER, Sistema' },
+      { route: '/api/billing/proforma', view: 'GET/POST generación y descarga de factura proforma o cotización previa para eventos y grupos', status: 'done', roles: 'ADMIN, MANAGER' },
+      { route: '/api/billing/daily-summary', view: 'GET resumen consolidado de ventas, medios de pago y arqueo de caja del turno o día', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
+      { route: '/api/payments/split', view: 'POST procesamiento y distribución de pagos divididos por comensal o partes iguales', status: 'done', roles: 'ADMIN, WAITER' },
+      { route: '/api/hardware/pos-terminal', view: 'GET/POST integración y orquestación con datáfonos físicos POS (Ingenico, Verifone, Pax, Redeban, Credibanco)', status: 'done', roles: 'ADMIN, WAITER, Sistema' },
       { route: '/api/export/invoices', view: 'GET exportación de facturas a CSV/Excel con UTF-8 BOM y filtros de estado', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
+      { route: '/api/export/invoices/zip', view: 'GET descarga masiva en lote de facturas electrónicas y comprobantes en archivo comprimido ZIP', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
       { route: '/api/billing/tax-config', view: 'GET/PUT configuración fiscal del restaurante', status: 'done', roles: 'ADMIN' },
       { route: '/api/pdf', view: 'Generación de PDF de factura descargable', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
     ],
     observations: [
       'El IVA (19% por defecto en Colombia) se calcula automáticamente al crear la factura.',
-      'Exportación a Excel/CSV con BOM UTF-8 (\uFEFF) desde el listado de facturas para contabilidad.',
+      'División de cuenta (Split Bill): comensales pueden pagar por partes iguales o por ítems consumidos con cálculo automático de saldos restantes.',
+      'Propina voluntaria configurable (0%, 10%, 15%, 20% y monto personalizado) integrada directamente en el wizard de cierre.',
+      'Reimpresión rápida de tickets térmicos directamente desde la tabla de facturas cerradas con el botón TicketPrintButton.',
+      'Integración con datáfonos físicos POS (/api/hardware/pos-terminal): soporte para Ingenico, Verifone, Pax, Redeban y Credibanco vía TCP/Serial/Simulador.',
+      'Pasarelas de pago digitales (Wompi, Bold, MercadoPago, Stripe) soportadas para cobro con QR en mesa en SplitBillPaymentModal.',
+      'Emisión de facturas proforma y cotizaciones previas para eventos corporativos o reservas de grupos grandes.',
+      'Descarga masiva de facturas electrónicas y comprobantes en ZIP comprimido (/api/export/invoices/zip).',
+      'Exportación a Excel/CSV con BOM UTF-8 (\\uFEFF) desde el listado de facturas para contabilidad.',
       'Envío rápido de factura por WhatsApp (link wa.me con desglose estilizado) y por email desde el detalle.',
-      'La impresión térmica ESC/POS funciona vía WebUSB en Chrome/Edge. El fallback genera un PDF imprimible en cualquier navegador.',
-      'Los tickets son configurables: logo, header, footer, mostrar/ocultar IVA, mesa, mesero y propina sugerida.',
+      'La impresión térmica ESC/POS funciona vía WebUSB en Chrome/Edge o por red TCP directa al puerto 9100.',
       'El consecutivo de facturas (FV-0001) es auto-incremental por restaurante y se maneja atómicamente para evitar duplicados.',
       'La anulación de facturas requiere motivo y cambia el estado a VOID sin eliminar el registro.',
     ],
     missing: [
-      'Reimpresión de ticket para facturas ya cerradas desde el listado (sin necesidad de entrar al detalle).',
-      'Propina en el ticket: campo editable en el wizard de cierre.',
-      'División de cuenta entre varios comensales (split bill).',
-      'Generación masiva de comprobantes comprimidos en ZIP.',
+      'Múltiples cajas registradoras por sucursal con control independiente de prefijos y consecutivo DIAN asignado por terminal.',
+      'Retenciones fiscales aplicables a clientes corporativos (ReteFuente, ReteICA, ReteIVA) discriminadas en la factura.',
     ],
     opportunities: [
-      'Integración con pasarelas de pago digitales (Wompi, Bold, MercadoPago, Stripe) para cobro con QR directo en mesa.',
-      'Integración con POS físico como Ingenico o Verifone para confirmar cobros con tarjeta.',
-      'Factura proforma o presupuesto para eventos/grupos grandes.',
+      'Autopago biométrico y Apple Pay / Google Pay directo mediante Web Payments SDK en el navegador del comensal.',
+      'Emisión de billeteras de fidelización y gift cards recargables con saldo canjeable en el cierre de mesa.',
     ],
   },
   {
@@ -352,20 +390,31 @@ const modules: ModuleSection[] = [
     phaseColor: '#10b981',
     icon: '📦',
     title: 'Inventario',
-    description: 'Control de insumos, recetas por producto, compras a proveedores, ajustes manuales, mermas y alertas de stock bajo en tiempo real.',
+    description: 'Control de insumos, recetas por producto, compras a proveedores, ajustes manuales, mermas, auditoría de conteo físico, transferencias entre sedes y alertas de stock bajo en tiempo real.',
     routes: [
       { route: '/dashboard/inventory', view: 'Hub: stock actual, alertas de bajo inventario, movimientos recientes', status: 'done', roles: 'ADMIN, MANAGER' },
       { route: '/dashboard/inventory/[id]', view: 'Detalle de ítem: stock, movimientos, edición', status: 'done', roles: 'ADMIN, MANAGER' },
       { route: '/dashboard/inventory/movements', view: 'Historial completo de movimientos de inventario', status: 'done', roles: 'ADMIN, MANAGER' },
       { route: '/dashboard/inventory/new', view: 'Formulario de creación de nuevo ítem de inventario', status: 'done', roles: 'ADMIN, MANAGER' },
       { route: '/dashboard/inventory/recipes', view: 'Editor de recetas: asignar ingredientes y cantidades a cada producto', status: 'done', roles: 'ADMIN, MANAGER' },
+      { route: '/dashboard/inventory/suppliers', view: 'Gestión formal de proveedores, contactos comerciales y catálogos de insumos', status: 'done', roles: 'ADMIN, MANAGER' },
+      { route: '/dashboard/inventory/purchase-orders', view: 'Órdenes de compra: ciclo DRAFT→ORDERED→RECEIVED con actualización automática de stock', status: 'done', roles: 'ADMIN, MANAGER' },
+      { route: '/dashboard/inventory/physical-count', view: 'Auditoría de inventario físico: planilla de conteo ciego, registro de discrepancias y ajuste atómico', status: 'done', roles: 'ADMIN, MANAGER' },
+      { route: '/dashboard/inventory/transfers', view: 'Transferencias entre sucursales de la organización con tracking de despacho y recepción', status: 'done', roles: 'ADMIN, ORG_ADMIN' },
       { route: '/api/inventory', view: 'CRUD de ítems de inventario', status: 'done', roles: 'ADMIN, MANAGER' },
       { route: '/api/inventory/[id]', view: 'GET/PATCH/DELETE ítem individual', status: 'done', roles: 'ADMIN, MANAGER' },
       { route: '/api/inventory/movements', view: 'GET historial + POST ajuste/compra manual', status: 'done', roles: 'ADMIN, MANAGER' },
+      { route: '/api/suppliers', view: 'CRUD de proveedores con métricas de compras y catálogo asociado', status: 'done', roles: 'ADMIN, MANAGER' },
+      { route: '/api/purchase-orders', view: 'GET/POST/PATCH órdenes de compra a proveedores con recepción de insumos', status: 'done', roles: 'ADMIN, MANAGER' },
+      { route: '/api/inventory/physical-count', view: 'GET/POST conciliación de conteo físico vs stock teórico', status: 'done', roles: 'ADMIN, MANAGER' },
+      { route: '/api/inventory/transfers', view: 'GET/POST transferencias de insumos entre sedes con control de stock', status: 'done', roles: 'ADMIN, ORG_ADMIN' },
       { route: '/api/export/inventory', view: 'GET exportación completa de existencias, umbrales y valorización total a CSV/Excel', status: 'done', roles: 'ADMIN, MANAGER' },
     ],
     observations: [
       'El descuento de stock se ejecuta atómicamente en la misma transacción de base de datos que el cambio de estado de la orden a RECEIVED.',
+      'Módulo de Compras & Proveedores (Fase 7): ciclo formal de aprovisionamiento con órdenes de compra en estados DRAFT, ORDERED, RECEIVED y actualización automática de stock.',
+      'Conteo físico de inventario (Fase 7): planilla de verificación ciega para auditoría en bodega con cálculo de mermas y ajuste transaccional automático.',
+      'Transferencias multisede (Fase 7): traspaso controlado de materias primas entre sucursales de la misma organización con verificación de existencias.',
       'Exportación completa a Excel / CSV con BOM UTF-8 y cálculo automático de valorización total monetaria del stock.',
       'Alertas automáticas por correo electrónico a administradores y gerentes cuando el stock cae al mínimo de seguridad.',
       'Si el stock de un ingrediente llega a 0, el sistema calcula los productos afectados y emite product:unavailable por Socket.IO.',
@@ -373,15 +422,13 @@ const modules: ModuleSection[] = [
       'Las unidades soportadas: KG, GRAM, LITER, ML, UNIT, PORTION.',
     ],
     missing: [
-      'Módulo de compras/proveedores: registro formal de proveedores con historial de pedidos.',
-      'Inventario físico periódico: formulario para contar manualmente el stock y cuadrar diferencias.',
-      'Predicción de reposición: "En X días te quedarás sin Y insumo según tu consumo promedio".',
-      'Transferencias entre sucursales (contemplado en el roadmap como Fase 3 pero no implementado).',
+      'Predicción algorítmica de reposición basada en velocidad de rotación histórica de recetas.',
+      'Integración con lectores de código de barras / QR portátiles vía escáner Bluetooth o cámara de móvil.',
+      'Gestión avanzada de lotes de insumos y fechas de caducidad con alertas de perecibilidad (FIFO/PEPS).',
     ],
     opportunities: [
-      'Integración con proveedores para generar órdenes de compra directamente desde el sistema.',
-      'Alertas automáticas por WhatsApp al proveedor cuando el stock baja del mínimo.',
-      'Código de barras/QR en los insumos para agilizar conteos físicos con escáner.',
+      'Generación automática de sugerencias de compra cuando los insumos cruzan el umbral de reorden.',
+      'Envío automático de órdenes de compra en PDF formateado vía WhatsApp / Email al proveedor.',
     ],
   },
   {
@@ -389,40 +436,53 @@ const modules: ModuleSection[] = [
     phase: 'Fase 2',
     phaseColor: '#3b82f6',
     icon: '📊',
-    title: 'Contabilidad',
-    description: 'Módulo contable completo: gastos, cierre de caja, P&L mensual, reporte IVA DIAN y períodos contables con cierre formal.',
+    title: 'Contabilidad & Finanzas',
+    description: 'Módulo contable integral: gastos clasificados, cierre de caja diario, conciliación bancaria inteligente, planilla de nómina de personal, Estado de Resultados (P&L), reporte fiscal IVA Formulario 300 DIAN con exportación XML MUISCA, flujo de caja proyectado, control de activos fijos con depreciación y períodos protegidos.',
     routes: [
       { route: '/dashboard/accounting', view: 'Hub: P&L del mes, widget fiscal DIAN, arqueo del día, accesos rápidos', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
       { route: '/dashboard/accounting/expenses', view: 'Libro de gastos: tabla, búsqueda, filtros por categoría, modal de registro', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
       { route: '/dashboard/accounting/cash-register', view: 'Historial de arqueos y wizard de cierre de caja diario', status: 'done', roles: 'ADMIN, ACCOUNTANT, MANAGER' },
+      { route: '/dashboard/accounting/bank-reconciliation', view: 'Conciliación bancaria visual: carga de extractos (Bancolombia, Davivienda, CSV universal), auto-matching y conciliación manual', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
+      { route: '/dashboard/accounting/payroll', view: 'Planilla de nómina simplificada: liquidación de sueldos, aportes parafiscales, horas extra y conexión automática a gastos (LABOR)', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
       { route: '/dashboard/accounting/periods', view: 'Períodos contables: ver, cerrar mes, historial', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
-      { route: '/dashboard/accounting/reports', view: 'Hub de reportes contables', status: 'partial', roles: 'ADMIN, ACCOUNTANT', notes: 'Existe el directorio pero la ruta hub puede redirigir directamente a sub-reportes' },
-      { route: '/dashboard/accounting/reports/pl', view: 'Estado de Resultados P&L: ventas netas, COGS, gastos OPEX, margen neto', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
-      { route: '/dashboard/accounting/reports/vat', view: 'Reporte de IVA: formulario 300 DIAN, IVA generado vs descontable', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
+      { route: '/dashboard/accounting/reports', view: 'Hub de reportes contables: accesos directos a P&L, IVA, Flujo de Caja y Activos Fijos', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
+      { route: '/dashboard/accounting/reports/pl', view: 'Estado de Resultados P&L: ventas netas, COGS, gastos OPEX, margen neto con exportación CSV', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
+      { route: '/dashboard/accounting/reports/vat', view: 'Reporte de IVA: formulario 300 DIAN, IVA generado vs descontable con exportador XML MUISCA', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
+      { route: '/dashboard/accounting/reports/cashflow', view: 'Estado de Flujo de Caja (Cashflow): entradas operativas, egresos, inversión y saldo neto con exportación CSV', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
+      { route: '/dashboard/accounting/fixed-assets', view: 'Control de activos fijos, maquinaria gastronómica y tabla de depreciación en línea recta', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
       { route: '/api/accounting/expenses', view: 'GET lista + POST nuevo gasto', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
       { route: '/api/accounting/cash-register', view: 'GET historial + POST cierre de caja', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
+      { route: '/api/accounting/bank-reconciliation', view: 'GET/POST conciliación bancaria y auto-cruce transaccional de extractos bancarios vs facturación y gastos', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
+      { route: '/api/accounting/payroll', view: 'GET/POST liquidación de nómina de personal y contabilización automática en gastos operativos', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
       { route: '/api/accounting/periods', view: 'GET lista + POST cerrar período', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
       { route: '/api/accounting/reports/pl', view: 'GET cálculo P&L para un período dado', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
       { route: '/api/accounting/reports/vat', view: 'GET cálculo IVA para un mes dado', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
+      { route: '/api/accounting/reports/cashflow', view: 'GET cálculo estructurado de flujo de caja operativo y neto', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
+      { route: '/api/accounting/fixed-assets', view: 'GET/POST/DELETE activos fijos y cálculo automático de depreciación mensual', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
+      { route: '/api/export/accounting/form-300-xml', view: 'GET generación del archivo XML plano oficial del Formulario 300 DIAN para importación en el sistema MUISCA', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
+      { route: '/api/export/accounting/pl', view: 'GET exportación estructurada del Estado de Resultados (P&L) en CSV con BOM UTF-8', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
+      { route: '/api/export/accounting/vat', view: 'GET exportación del informe fiscal de IVA generado y descontable en CSV/Excel', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
+      { route: '/api/export/accounting/cashflow', view: 'GET exportación del Estado de Flujo de Caja en CSV/Excel con BOM UTF-8', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
     ],
     observations: [
       'El motor contable (lib/accounting/) tiene adaptadores por país: colombia.ts (predeterminado), generic.ts.',
-      'El Formulario 300 simulado es útil como guía, pero NO reemplaza la declaración oficial en el portal MUISCA.',
+      'Conciliación bancaria inteligente: parser de extractos bancarios para Bancolombia, Davivienda y CSV universal con algoritmo de matching automático por fecha e importe.',
+      'Módulo de nómina simplificada: liquidación de sueldos de personal con cálculo de seguridad social y registro automático en el libro de gastos bajo categoría LABOR.',
+      'Generador oficial de archivo plano XML para el Formulario 300 DIAN (/api/export/accounting/form-300-xml) compatible con la estructura de casillas requerida por MUISCA.',
+      'Flujo de caja dinámico: proyección de liquidez consolidada cruzando facturación cobrada, egresos pagados e inversiones de capital.',
+      'Gestión de activos fijos y depreciación: cálculo automatizado de depreciación mensual acumulada y valor residual según método de línea recta.',
+      'Exportaciones directas en un clic de P&L, IVA y Flujo de Caja a formato CSV/Excel con BOM UTF-8.',
       'Los gastos con IVA discriminan el 19% acreditable automáticamente al registrar el monto total.',
       'El cierre de caja permite detectar diferencias entre ventas electrónicas y conteo físico de gaveta.',
       'Los períodos contables cerrados bloquean modificaciones retroactivas de facturas y gastos.',
     ],
     missing: [
-      'Reporte de flujo de caja (cashflow) contemplado en el roadmap pero falta la ruta /dashboard/accounting/reports/cashflow.',
-      'Exportación de reportes P&L e IVA a Excel/PDF directamente desde la UI.',
-      'Integración real con MUISCA DIAN para pre-llenar el Formulario 300 (requiere credenciales del RUT).',
-      'Contabilidad de depreciación de activos fijos (equipos de cocina, etc.).',
-      'Manejo de retención en la fuente para clientes empresariales.',
+      'Generación de certificados de retención en la fuente e ICA para proveedores y clientes corporativos.',
+      'Generación de archivos planos para Medios Magnéticos e Información Exógena anual de la DIAN (Formatos 1001, 1003, 1007).',
     ],
     opportunities: [
-      'Generar el archivo plano (.xml) del Formulario 300 para importación directa en MUISCA.',
-      'Módulo de nómina simplificado para registrar salarios como gasto de LABOR.',
-      'Conciliación bancaria: importar extracto del banco y cruzarlo con los movimientos registrados.',
+      'Conexión bancaria en tiempo real vía Open Banking / APIs bancarias (FinAPI, Belvo, Prometeo) para descarga automática de extractos sin subir archivos.',
+      'Integración con software contables ERP de mercado (Siigo, World Office, Alegra) vía API REST bidireccional.',
     ],
   },
   {
@@ -431,16 +491,20 @@ const modules: ModuleSection[] = [
     phaseColor: '#8b5cf6',
     icon: '🏢',
     title: 'SaaS & Multi-sucursal',
-    description: 'Infraestructura SaaS: organizaciones, suscripciones con Stripe, roles de franquicia y panel de SUPERADMIN para gestión de la plataforma.',
+    description: 'Infraestructura SaaS: organizaciones, suscripciones con Stripe, roles de franquicia, automatización de onboarding, alertas preventivas de trial, gobernanza de límites de sedes y panel de SUPERADMIN para gestión de la plataforma.',
     routes: [
       { route: '/pricing', view: 'Página pública de precios: Basic, Pro, Enterprise con comparativa', status: 'done', roles: 'Público' },
       { route: '/dashboard/org', view: 'Hub de franquicia: monitoreo en vivo de sucursales, mesas y facturación', status: 'done', roles: 'ORG_ADMIN' },
       { route: '/dashboard/org/branches', view: 'Gestión de sucursales: crear nueva sede con control de límites del plan', status: 'done', roles: 'ORG_ADMIN' },
       { route: '/dashboard/org/reports', view: 'Reportes consolidados: ventas totales de la cadena, comparativa por sede', status: 'done', roles: 'ORG_ADMIN' },
       { route: '/dashboard/settings/billing', view: 'Facturación SaaS: plan actual, trial, upgrade mensual/anual', status: 'done', roles: 'ADMIN, ORG_ADMIN' },
+      { route: '/dashboard/settings/billing/success', view: 'Página de bienvenida y confirmación de suscripción tras pasar por Stripe Checkout', status: 'done', roles: 'ADMIN, ORG_ADMIN' },
+      { route: '/dashboard/settings/billing/cancel', view: 'Página de abandono de checkout con opciones de retención y asistencia', status: 'done', roles: 'ADMIN, ORG_ADMIN' },
       { route: '/dashboard/superadmin', view: 'Panel global: MRR, clientes activos, sedes, métricas de plataforma', status: 'done', roles: 'SUPERADMIN' },
       { route: '/dashboard/superadmin/organizations', view: 'Lista de organizaciones con modificación manual de plan', status: 'done', roles: 'SUPERADMIN' },
       { route: '/api/billing/subscription', view: 'GET estado suscripción + POST crear sesión de checkout Stripe', status: 'done', roles: 'ADMIN, ORG_ADMIN' },
+      { route: '/api/referrals', view: 'GET/POST validación de códigos de referido y aplicación de descuentos', status: 'done', roles: 'Público / Sistema' },
+      { route: '/api/cron/trial-alerts', view: 'Cron job automatizado para notificaciones de expiración de trial (3 días y 1 día antes) vía email', status: 'done', roles: 'Sistema (Cron)' },
       { route: '/api/webhooks/stripe', view: 'Handler de eventos Stripe: payment_succeeded, subscription.deleted', status: 'done', roles: 'Sistema (Stripe)' },
       { route: '/api/org/branches', view: 'GET/POST sucursales de la organización', status: 'done', roles: 'ORG_ADMIN' },
       { route: '/api/org/reports', view: 'GET métricas consolidadas de todas las sucursales', status: 'done', roles: 'ORG_ADMIN' },
@@ -449,21 +513,23 @@ const modules: ModuleSection[] = [
     observations: [
       'Los límites de sucursales por plan se validan al crear una nueva sede: BASIC=1, PRO=5, ENTERPRISE=ilimitado.',
       'El trial de 14 días se activa automáticamente al crear una organización. Al expirar, el acceso queda bloqueado hasta suscribirse.',
+      'Alertas cron de expiración de trial (/api/cron/trial-alerts): notificaciones automáticas por correo 3 días y 24 horas antes del vencimiento.',
+      'Email automatizado de bienvenida con diseño corporativo al registrarse el administrador (sendWelcomeEmail en lib/email.ts).',
+      'Revocación y bloqueo automático de sedes excedentes al degradar de plan (enforceBranchLimitOnDowngrade en lib/subscription.ts).',
       'El middleware verifica el estado de la suscripción en cada request a /dashboard.',
       'El descuento del 20% en plan anual se aplica en el precio del Stripe Checkout.',
       'El portal de cliente de Stripe permite al usuario autogestionar su suscripción (cancelar, actualizar tarjeta).',
+      'Páginas dedicadas de éxito y cancelación con feedback inmediato para el suscriptor tras pasar por Stripe Checkout.',
+      'Módulo de referidos con validación de códigos promocionales para captación de nuevas organizaciones.',
     ],
     missing: [
-      'Email de bienvenida al registrarse con instrucciones de onboarding.',
-      'Notificación de prueba por expirar (3 días antes, 1 día antes).',
-      'Facturación en moneda local (COP, MXN) en Stripe — actualmente puede estar en USD.',
-      'Página de éxito/error del checkout de Stripe con instrucciones claras.',
-      'Revocación automática de acceso a sucursales que exceden el plan al degradar.',
+      'Facturación en moneda local (COP, MXN) con selector dinámico y conversión de divisas en Stripe Checkout.',
+      'Débito automático bancario local (PSE recurrente, SPEI domiciliado) alternativo a tarjeta de crédito para cobros de suscripción.',
     ],
     opportunities: [
-      'Programa de referidos: código de descuento para nuevos clientes referidos.',
-      'API pública para integraciones de terceros (POS, sistemas de delivery).',
-      'White-label del producto: un restaurante puede vender iMenu como su propio producto a sus clientes.',
+      'Suscripciones corporativas y acuerdos anuales mediante facturación tradicional y transferencia bancaria.',
+      'Marketplace de integraciones y extensiones modulares de terceros (contabilidad externa, delivery).',
+      'Programa de partners y comisiones para agencias gastronómicas y consultores de restaurantes con tracking de referidos.',
     ],
   },
   {
@@ -472,29 +538,33 @@ const modules: ModuleSection[] = [
     phaseColor: '#f59e0b',
     icon: '📈',
     title: 'Analytics & Business Intelligence',
-    description: 'Dashboard de inteligencia de negocio con análisis de horas pico, tendencias semanales, rotación de mesas, análisis ABC de rentabilidad y exportación de datos.',
+    description: 'Dashboard de inteligencia de negocio: análisis de horas pico, tendencias semanales, rotación de mesas, análisis ABC de rentabilidad, mapa de calor (heatmap) de piso, predicción de demanda a 7 días, rendimiento de meseros, desglose por canal, pantalla ejecutiva Live TV y despacho de reportes por email.',
     routes: [
-      { route: '/dashboard/analytics', view: 'Dashboard BI: horas pico, ventas por día de semana, rotación, análisis ABC', status: 'done', roles: 'ADMIN, ACCOUNTANT, ORG_ADMIN' },
+      { route: '/dashboard/analytics', view: 'Dashboard BI: horas pico, ventas por día de semana, rotación, análisis ABC, heatmap de mesas, predicción y ranking de meseros', status: 'done', roles: 'ADMIN, ACCOUNTANT, ORG_ADMIN' },
+      { route: '/dashboard/analytics/live-tv', view: 'Dashboard ejecutivo Live TV Fullscreen de alto contraste para pantallas de sala o cocina con KPIs en tiempo real', status: 'done', roles: 'ADMIN, MANAGER, ORG_ADMIN' },
       { route: '/api/analytics/dashboard', view: 'GET métricas analíticas calculadas por el motor (lib/analytics/engine.ts)', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
+      { route: '/api/analytics/reports/email', view: 'POST despacho de reporte ejecutivo dominical y resumen semanal por correo electrónico', status: 'done', roles: 'ADMIN, ORG_ADMIN, Sistema' },
       { route: '/api/analytics/export', view: 'GET exportación CSV de facturas y libros contables', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
     ],
     observations: [
       'El motor de analytics (lib/analytics/engine.ts) calcula: ventas por hora, ventas por día de la semana, rotación de mesas y clasificación ABC.',
+      'Heatmap interactivo de piso (TableFloorPlanHeatmap): mapa de calor visual que refleja la ocupación, intensidad de rotación e ingresos por zona del restaurante.',
+      'Predicción de demanda a 7 días (DemandPredictionChart): proyección algorítmica de comensales y ventas esperadas basada en históricos recientes.',
+      'Gráfico de tendencias temporales (TrendAreaChart): comparación interactiva de períodos con cálculo de variaciones porcentuales de crecimiento.',
+      'Rendimiento de meseros (WaiterPerformanceTable): ranking de personal de sala por ticket promedio, cantidad de órdenes y propinas acumuladas.',
+      'Desglose por canales de servicio (ServiceChannelBreakdown): distribución porcentual de ventas entre mesas del salón, barra y pedidos para llevar/delivery.',
+      'Dashboard Live TV: pantalla optimizada para televisores y monitores con métricas clave del turno, alertas de pedidos retrasados y estado de aforo en tiempo real.',
+      'Envío automatizado de reporte ejecutivo por email (/api/analytics/reports/email) para dueños y gerentes.',
       'El análisis ABC clasifica productos por margen × volumen: A (top 20% en rentabilidad), B (siguiente 30%), C (resto).',
       'La exportación CSV genera archivos separados: facturas, ítems, gastos.',
     ],
     missing: [
-      'Comparativa temporal: mes vs mes anterior, año vs año anterior.',
-      'Gráficas visuales (actualmente los datos se calculan pero la UI puede ser tabular — verificar renderizado).',
-      'Análisis de ticket promedio por mesa, por día de semana y por mesero.',
-      'Heatmap visual de mesas por ocupación y rotación.',
-      'Predicción de demanda basada en histórico (ML o regresión simple).',
+      'Integración con Google Analytics 4 (GA4) o Mixpanel para tracking de eventos y embudo de conversión comensal en el menú QR.',
+      'Análisis de afinidad y canasta de compra (Market Basket Analysis) para identificar platos y bebidas frecuentemente ordenados juntos.',
     ],
     opportunities: [
-      'Dashboard ejecutivo en tiempo real con KPIs del día en una pantalla de TV del restaurante.',
-      'Reporte automático semanal/mensual enviado por email al ADMIN con los principales KPIs.',
-      'Integración con Google Analytics o Mixpanel para tracking del comportamiento en el menú QR.',
-      'Segmentación de ventas por tipo de cliente (mesa vs delivery vs barra).',
+      'Alertas tempranas push / WhatsApp ante anomalías de ventas (caídas súbitas de facturación o picos de retraso en comanda).',
+      'Benchmarking anónimo de rendimiento y ticket promedio contra restaurantes de la misma categoría gastronómica.',
     ],
   },
   {
@@ -502,30 +572,35 @@ const modules: ModuleSection[] = [
     phase: 'Fase 4',
     phaseColor: '#f59e0b',
     icon: '⚡',
-    title: 'Factura Electrónica DIAN',
-    description: 'Integración SOAP directa con la DIAN de Colombia para emisión de facturas electrónicas UBL 2.1 sin dependencia de PTH externo.',
+    title: 'Factura Electrónica DIAN & Fiscal Multi-país',
+    description: 'Integración SOAP directa con la DIAN de Colombia para emisión de facturas electrónicas UBL 2.1, set de pruebas automatizado, notas crédito, cancelación formal, consulta de estado sin PTH externo y motores fiscales internacionales para SAT México (CFDI 4.0) y SII Chile (DTE).',
     routes: [
       { route: '/dashboard/settings/electronic-invoicing', view: 'Wizard de habilitación DIAN: Software ID, PIN, clave técnica, resolución, certificado .p12', status: 'done', roles: 'ADMIN' },
       { route: '/api/billing/electronic-invoicing/config', view: 'GET/PUT configuración DIAN del restaurante', status: 'done', roles: 'ADMIN' },
       { route: '/api/billing/electronic-invoicing/send', view: 'POST envío de factura a DIAN (SendBillAsync)', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
+      { route: '/api/billing/electronic-invoicing/test-set', view: 'POST ejecución automatizada del set de pruebas DIAN (SendTestSetAsync) para habilitación', status: 'done', roles: 'ADMIN' },
+      { route: '/api/billing/electronic-invoicing/status', view: 'GET/POST consulta y sincronización de estado de facturas y paquetes ZIP ante la DIAN (GetStatusZip)', status: 'done', roles: 'ADMIN, ACCOUNTANT, Sistema' },
+      { route: '/api/billing/electronic-invoicing/credit-note', view: 'POST generación y transmisión de Notas Crédito UBL 2.1 ante la DIAN para corrección o devolución', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
+      { route: '/api/billing/electronic-invoicing/cancel', view: 'POST anulación formal de factura electrónica emitiendo Nota Crédito UBL 2.1 con motivo estandarizado', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
+      { route: '/api/billing/electronic-invoicing/events', view: 'POST transmisión de eventos de acuse de recibo y recepción de bienes/servicios', status: 'done', roles: 'ADMIN, ACCOUNTANT' },
     ],
     observations: [
       'La librería lib/dian/ implementa: generador UBL 2.1, firmador XML (node-forge), calculador CUFE SHA-384, cliente SOAP y empaquetado ZIP.',
+      'Implementación completa del ciclo UBL 2.1 DIAN: emisión (SendBillAsync), habilitación (SendTestSetAsync), consulta de estado (GetStatusZip), notas crédito y eventos de factura.',
+      'Adaptadores fiscales internacionales ya integrados en el motor: SAT México CFDI 4.0 (lib/fiscal/sat-mexico.ts) y SII Chile DTE (lib/fiscal/sii-chile.ts).',
       'El certificado .p12 se almacena cifrado con AES-256 en Vercel Blob en un bucket privado.',
       'El sistema soporta ambientes de habilitación y producción.',
-      'El widget DianInvoiceAction integrado en /dashboard/billing/invoices/[id] muestra el estado del envío y el CUFE.',
+      'El widget DianInvoiceAction integrado en /dashboard/billing/invoices/[id] muestra el estado del envío, CUFE y enlace directo a la DIAN.',
+      'Mecanismo de contingencia por indisponibilidad de servicios DIAN con cola de reintentos.',
     ],
     missing: [
-      'Proceso de set de pruebas (SendTestSetAsync) para habilitación automática ante la DIAN — actualmente el admin debe hacerlo manualmente.',
-      'Polling automático del estado de facturas enviadas (GetStatusZip) — el estado puede quedar "pending" si no se revisa manualmente.',
-      'Cancelación electrónica de facturas ante la DIAN (SendEventUpdateStatus con código de anulación).',
-      'Nota débito y nota crédito electrónicas.',
-      'Manejo de acuse de recibo del comprador (obligatorio en algunas transacciones B2B).',
+      'Nómina Electrónica formal DIAN: transmisión y validación previa de comprobantes XML de nómina ante los servidores de la DIAN.',
+      'Documento Soporte en adquisiciones efectuadas a sujetos no obligados a expedir factura de venta con numeración autorizada.',
+      'Eventos RADIAN para registro de facturas electrónicas de venta como título valor para operaciones de factoring.',
     ],
     opportunities: [
-      'Verificación pública de CUFE en el portal DIAN integrada como botón en la factura.',
-      'Soporte para factura contingencia cuando el servicio DIAN no está disponible.',
-      'Extensión a México (SAT/CFDI 4.0) y Chile (SII/DTE) usando los adaptadores contemplados en el roadmap.',
+      'Integración con buzón tributario para recepción, validación UBL y contabilización automática de facturas de proveedores.',
+      'Módulo de contingencia Tipo 4 (inconvenientes tecnológicos del emisor) con emisión de comprobantes talonario y retransmisión asíncrona masiva.',
     ],
   },
   {
@@ -538,6 +613,8 @@ const modules: ModuleSection[] = [
     routes: [
       { route: 'lib/storage.ts', view: 'Servicio unificado de almacenamiento con uploadBlob y deleteBlob (Vercel Blob + fallback local)', status: 'done', roles: 'Sistema' },
       { route: '/api/pdf/upload', view: 'POST/DELETE subida y gestión del PDF del menú en Vercel Blob con borrado de páginas hijas', status: 'done', roles: 'ADMIN, SUPERADMIN, ORG_ADMIN' },
+      { route: '/api/pdf/jobs', view: 'POST/GET cola de procesamiento asíncrono para renderizado de cartas PDF extensas en segundo plano', status: 'done', roles: 'ADMIN, Sistema' },
+      { route: '/api/storage/purge-cache', view: 'POST purga inmediata de caché en Edge CDN de Vercel Blob ante actualizaciones de menú', status: 'done', roles: 'ADMIN, Sistema' },
       { route: '/api/menu/upload', view: 'POST subida y optimización de fotos de platillos a Vercel Blob (restaurants/{id}/products/...)', status: 'done', roles: 'ADMIN, MANAGER' },
       { route: 'scripts/migrate_assets_to_vercel_blob.js', view: 'CLI de migración masiva de activos locales hacia Vercel Blob y actualización MySQL', status: 'done', roles: 'DevOps / Admin' },
       { route: 'scripts/prerender_menu_pdf.js', view: 'CLI de pre-renderizado automático de menús PDF a páginas WebP optimizadas (~41 KB/pág)', status: 'done', roles: 'DevOps / Admin' },
@@ -548,14 +625,16 @@ const modules: ModuleSection[] = [
       'Configuración de Next.js Image Optimization en next.config.ts con remotePatterns para *.public.blob.vercel-storage.com.',
       'Eliminación de la sobrecarga del sistema de archivos local en producción: previene errores EROFS (Read-Only File System) en entornos serverless.',
       'Pre-renderizado WebP que reduce el consumo de datos móviles en más del 85% comparado con la descarga del PDF completo en el cliente.',
+      'Procesamiento en segundo plano de PDFs pesados mediante Background Worker para evitar timeouts en Edge/Serverless.',
+      'Purga instantánea de CDN ante actualizaciones de carta desde el panel de control (/api/storage/purge-cache).',
     ],
     missing: [
-      'Procesamiento en segundo plano mediante Background Workers para PDFs extremadamente extensos (>50 páginas).',
-      'Generación automática de variantes en miniatura (thumbnails) en resoluciones móviles adicionales (150px, 300px, 600px).',
+      'Soporte para formato de imagen de próxima generación AVIF y compresión WebP progresiva.',
+      'Copia de seguridad geográfica secundaria (multi-cloud backup) de comprobantes fiscales y contratos.',
     ],
     opportunities: [
-      'Compresión y recorte inteligente por IA centrado en el platillo (Smart Crop) al momento de subir la imagen.',
-      'Purga instantánea de CDN ante actualizaciones de carta desde el panel de control.',
+      'Auto-optimización cromática de fotos gastronómicas mediante visión computacional.',
+      'Recorte inteligente centrado en el platillo (Smart Crop) al momento de subir la imagen.',
     ],
   },
 ]
@@ -832,7 +911,7 @@ export default function DocsPage() {
         {/* ── Overall Summary ── */}
         <section className="mt-20 border-t border-zinc-800 pt-16">
           <h2 className="text-3xl font-bold mb-2">Resumen del estado actual</h2>
-          <p className="text-zinc-400 mb-10">Evaluación honesta del producto y prioridades de próximo desarrollo.</p>
+          <p className="text-zinc-400 mb-10">Evaluación honesta del producto y prioridades de próximo desarrollo para las siguientes iteraciones.</p>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Strengths */}
@@ -840,16 +919,18 @@ export default function DocsPage() {
               <h3 className="text-lg font-bold text-emerald-400 mb-4">✅ Fortalezas del producto</h3>
               <ul className="space-y-3">
                 {[
-                  'Stack moderno y escalable: Next.js 16 App Router + Prisma + Socket.IO + Redis.',
-                  'Ciclo operativo completo: QR → Pedido → Inventario → Factura → Contabilidad.',
-                  'KDS Fullscreen dedicado para tablets de cocina y Web Push API para comensales en vivo.',
-                  'Facturación electrónica DIAN sin PTH externo, reduciendo costos por factura.',
-                  'Exportación a Excel / CSV con UTF-8 BOM en facturas e inventario valorizado.',
-                  'Notificaciones multicanal transaccionales: WhatsApp (wa.me) y correo electrónico.',
-                  'Multi-tenant real con organizaciones, roles granulares y Stripe integrado.',
-                  'Tiempo real en toda la plataforma: pedidos, stock, estados de mesa.',
-                  'Motor contable con adaptadores multi-país (Colombia, México, Chile).',
-                  'Analytics BI con análisis ABC y detección de horas pico.',
+                  'Stack moderno y escalable: Next.js 16 App Router + Prisma + Socket.IO + Redis + Vercel Blob.',
+                  'Ciclo operativo 360° completo: QR → Comanda → Cocina KDS → Inventario → Facturación → Contabilidad.',
+                  'Impresión térmica ESC/POS de red nativa (puerto TCP 9100) con gestor visual de impresoras por estación.',
+                  'Facturación electrónica DIAN UBL 2.1 completa: emisión, habilitación automática (Test Set), notas crédito y eventos.',
+                  'Cobros flexibles y Datáfonos POS: división de cuenta (Split Bill), propinas, pasarelas QR e integración de datáfonos físicos (Ingenico, Verifone, Pax).',
+                  'Gestión integral de abastecimiento: catálogo de proveedores, órdenes de compra, conteo físico y transferencias multisede.',
+                  'Módulo contable avanzado: Estado P&L, Formulario 300 IVA con XML oficial para MUISCA, conciliación bancaria y nómina de personal.',
+                  'Reservas inteligentes: Table Turnover Predictor (7 etapas), confirmación WhatsApp/SMS y pre-orden con auto-KDS.',
+                  'KDS Fullscreen independiente para tablets de cocina y pantalla ejecutiva Live TV en tiempo real.',
+                  'Business Intelligence avanzado: mapa de calor (Heatmap) de mesas, predicción de demanda a 7 días y rendimiento de meseros.',
+                  'Brand Studio integral con Caddy On-Demand TLS automático, generación de Brand Kit en PDF y paquetes de iconos PWA.',
+                  'Multi-tenant real con organizaciones, franquicias, food courts multi-restaurante, roles granulares y Stripe SaaS.',
                 ].map((s, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-zinc-300">
                     <span className="text-emerald-500 mt-0.5">✓</span> {s}
@@ -860,14 +941,15 @@ export default function DocsPage() {
 
             {/* Critical gaps */}
             <div className="bg-zinc-900 border border-red-500/20 rounded-2xl p-8">
-              <h3 className="text-lg font-bold text-red-400 mb-4">🚨 Gaps críticos para producción</h3>
+              <h3 className="text-lg font-bold text-red-400 mb-4">🚨 Gaps críticos para producción (Próximas Iteraciones)</h3>
               <ul className="space-y-3">
                 {[
-                  'Cancelación electrónica y notas de crédito ante DIAN (SendEventUpdateStatus).',
-                  'Set de pruebas DIAN automatizado: ejecución automática de los 87 casos requeridos por la DIAN.',
-                  'Reporte de flujo de caja (Cashflow) y estado P&L exportable a PDF con marca de agua.',
-                  'Emisión y renovación automática de certificados SSL delegados para dominios personalizados de restaurantes.',
-                  'Pasarelas de pago digitales (Wompi, MercadoPago, Bold) integradas directamente en el menú comensal.',
+                  'Nómina Electrónica formal DIAN: transmisión y validación de comprobantes XML ante el webservice DIAN.',
+                  'Documento Soporte en compras efectuadas a sujetos no obligados a expedir factura con numeración autorizada.',
+                  'Múltiples cajas registradoras por sucursal con control independiente de prefijos y consecutivo DIAN asignado por terminal.',
+                  'Spooler de impresión local offline con almacenamiento en búfer para tolerancia a caídas temporales de red local.',
+                  'Integración de webhooks bidireccionales con agregadores de delivery (Rappi, Uber Eats, Didi Food).',
+                  'Dispersión y liquidación bancaria automatizada (Escrow / Split Payout) a cuentas de inquilinos en Food Courts.',
                 ].map((g, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-zinc-300">
                     <span className="text-red-500 mt-0.5">✗</span> {g}
@@ -881,7 +963,7 @@ export default function DocsPage() {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-amber-400">⚡ Quick wins de alto impacto</h3>
                 <span className="text-[10px] uppercase tracking-wider font-extrabold bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/30">
-                  7 Completados
+                  20 Completados
                 </span>
               </div>
 
@@ -893,31 +975,51 @@ export default function DocsPage() {
                   <ul className="space-y-1.5 text-xs text-zinc-300">
                     <li className="flex items-center gap-1.5">
                       <span className="text-emerald-400 font-bold">✓</span>
-                      <span>Envío de factura por WhatsApp (enlace wa.me con desglose formateado).</span>
+                      <span>División de cuenta (Split Bill) por comensal o partes iguales y múltiples medios de pago.</span>
                     </li>
                     <li className="flex items-center gap-1.5">
                       <span className="text-emerald-400 font-bold">✓</span>
-                      <span>Notificación Web Push al cliente cuando su comanda pasa a READY (Web Push API).</span>
+                      <span>Reimpresión rápida de tickets térmicos desde el listado de facturas en 1 clic y exportación masiva ZIP.</span>
                     </li>
                     <li className="flex items-center gap-1.5">
                       <span className="text-emerald-400 font-bold">✓</span>
-                      <span>Email transaccional: facturas digitales, bienvenida y alertas de stock bajo.</span>
+                      <span>Conciliación bancaria (Bancolombia, Davivienda, CSV) y nómina de personal integrada a contabilidad.</span>
                     </li>
                     <li className="flex items-center gap-1.5">
                       <span className="text-emerald-400 font-bold">✓</span>
-                      <span>KDS Fullscreen dedicado para tablets de cocina (ruta /kds + modo overlay).</span>
+                      <span>Exportador oficial del Formulario 300 DIAN en XML estructurado para importación en MUISCA.</span>
                     </li>
                     <li className="flex items-center gap-1.5">
                       <span className="text-emerald-400 font-bold">✓</span>
-                      <span>Historial de pedidos y tracking con stepper visible para el comensal.</span>
+                      <span>Exportación directa de liquidaciones en Food Courts a CSV con BOM UTF-8 y fórmulas netas.</span>
                     </li>
                     <li className="flex items-center gap-1.5">
                       <span className="text-emerald-400 font-bold">✓</span>
-                      <span>Exportación a Excel/CSV de facturas e inventario con BOM UTF-8 y valorización.</span>
+                      <span>Hook Caddy On-Demand TLS para emisión automática de certificados SSL Let’s Encrypt.</span>
                     </li>
                     <li className="flex items-center gap-1.5">
                       <span className="text-emerald-400 font-bold">✓</span>
-                      <span>Previsualización en tiempo real del menú QR en el Studio de Marca.</span>
+                      <span>Generador oficial de Brand Kit en HTML/PDF y editor visual de favicons e iconos PWA.</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <span className="text-emerald-400 font-bold">✓</span>
+                      <span>Heatmap visual de mesas, predicción de demanda a 7 días y ranking de meseros en Analytics.</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <span className="text-emerald-400 font-bold">✓</span>
+                      <span>Traducción multilingüe asistida por IA del menú comensal a inglés y portugués.</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <span className="text-emerald-400 font-bold">✓</span>
+                      <span>Adaptadores fiscales internacionales para SAT México (CFDI 4.0) y SII Chile (DTE).</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <span className="text-emerald-400 font-bold">✓</span>
+                      <span>Impresión térmica ESC/POS por red TCP al puerto 9100 con gestor de impresoras por estación.</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <span className="text-emerald-400 font-bold">✓</span>
+                      <span>Predicción de rotación de mesas (Table Turnover Predictor) en 7 etapas operativas.</span>
                     </li>
                   </ul>
                 </div>
@@ -929,19 +1031,19 @@ export default function DocsPage() {
                   <ul className="space-y-1.5 text-xs text-zinc-300">
                     <li className="flex items-center gap-1.5">
                       <span className="text-amber-400 font-bold">→</span>
-                      <span>Reimpresión rápida de ticket térmico desde el listado de facturas.</span>
+                      <span>Buscador de insumos con lectura de código de barras / QR desde la cámara del móvil.</span>
                     </li>
                     <li className="flex items-center gap-1.5">
                       <span className="text-amber-400 font-bold">→</span>
-                      <span>Campo de propina sugerida y voluntaria en el wizard de cierre de mesa.</span>
+                      <span>Certificados de retención en la fuente e ICA para proveedores y clientes corporativos.</span>
                     </li>
                     <li className="flex items-center gap-1.5">
                       <span className="text-amber-400 font-bold">→</span>
-                      <span>Filtro dinámico de comandas por zona de mesas en el KDS de cocina.</span>
+                      <span>Alertas tempranas de stock perecedero y lotes con vencimiento próximo (FIFO/PEPS).</span>
                     </li>
                     <li className="flex items-center gap-1.5">
                       <span className="text-amber-400 font-bold">→</span>
-                      <span>Exportación de liquidaciones de Food Courts a Excel / CSV.</span>
+                      <span>Envío automático de órdenes de compra en PDF formateado vía WhatsApp / Email al proveedor.</span>
                     </li>
                     <li className="flex items-center gap-1.5">
                       <span className="text-amber-400 font-bold">→</span>
@@ -957,13 +1059,13 @@ export default function DocsPage() {
               <h3 className="text-lg font-bold text-violet-400 mb-4">🚀 Oportunidades estratégicas</h3>
               <ul className="space-y-3">
                 {[
-                  'Auto-pago desde la mesa con pasarelas de pago digitales (Wompi, MercadoPago, Bold, Stripe).',
+                  'Autopago biométrico y Apple Pay / Google Pay directo mediante Web Payments SDK en el navegador del comensal.',
                   'Integración con plataformas de delivery (Rappi, Uber Eats) para inyección directa al KDS.',
-                  'Motor de recomendaciones y upselling inteligente impulsado por IA según los ítems del pedido.',
-                  'Expansión fiscal multi-país (CFDI 4.0 SAT México, DTE SII Chile) reutilizando los adaptadores.',
+                  'Conexión bancaria en tiempo real vía Open Banking (Belvo, Prometeo) para extractos directos sin archivos.',
                   'App nativa (React Native / Expo) para meseros con soporte offline y comanderos Bluetooth.',
-                  'Módulo de reservaciones propio con listas de espera digitales y turnos por SMS/WhatsApp.',
-                  'Marketplace de iMenu: catálogo unificado de restaurantes para descubrimiento de usuarios.',
+                  'Motor de recomendaciones, maridaje y upselling inteligente impulsado por IA según comanda.',
+                  'Marketplace de iMenu: catálogo unificado de restaurantes para descubrimiento de comensales.',
+                  'Programa de partners y comisiones para agencias gastronómicas y consultores de restaurantes.',
                 ].map((so, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-zinc-300">
                     <span className="text-violet-500 mt-0.5">◆</span> {so}
@@ -983,41 +1085,81 @@ export default function DocsPage() {
             {[
               { path: '/api/auth/[...nextauth]', tag: 'Auth' },
               { path: '/api/menu/[slug]', tag: 'Público' },
+              { path: '/api/menu', tag: 'CRUD' },
+              { path: '/api/menu/upload', tag: 'Media' },
+              { path: '/api/menu/translate', tag: 'AI' },
+              { path: '/api/menu/purge-cache', tag: 'CDN' },
               { path: '/api/orders', tag: 'RT' },
               { path: '/api/orders/[id]', tag: 'RT' },
               { path: '/api/push/subscribe', tag: 'Push' },
               { path: '/api/tables', tag: 'CRUD' },
               { path: '/api/tables/[id]/session', tag: 'Session' },
-              { path: '/api/menu', tag: 'CRUD' },
+              { path: '/api/reservations/notify', tag: 'Notify' },
+              { path: '/api/reservations/reminders', tag: 'Cron' },
+              { path: '/api/hardware/printers', tag: 'Hardware' },
+              { path: '/api/hardware/print-escpos', tag: 'Print' },
+              { path: '/api/hardware/pos-terminal', tag: 'Hardware' },
               { path: '/api/additions', tag: 'CRUD' },
               { path: '/api/special-offers', tag: 'CRUD' },
               { path: '/api/brand', tag: 'Config' },
+              { path: '/api/brand/domain', tag: 'Config' },
+              { path: '/api/brand/domain/check-tls', tag: 'TLS' },
+              { path: '/api/brand/icons', tag: 'PWA' },
+              { path: '/api/brand/brand-kit', tag: 'Export' },
               { path: '/api/food-courts', tag: 'CRUD' },
               { path: '/api/food-courts/[id]/memberships', tag: 'CRUD' },
               { path: '/api/food-courts/[id]/reports', tag: 'Report' },
+              { path: '/api/food-courts/[id]/payments', tag: 'Billing' },
+              { path: '/api/food-courts/[id]/settlements/export', tag: 'Export' },
               { path: '/api/invoices', tag: 'Billing' },
               { path: '/api/invoices/[id]', tag: 'Billing' },
               { path: '/api/invoices/[id]/notify', tag: 'Email' },
+              { path: '/api/billing/proforma', tag: 'Billing' },
+              { path: '/api/billing/daily-summary', tag: 'Billing' },
+              { path: '/api/payments/split', tag: 'Billing' },
               { path: '/api/export/invoices', tag: 'Export' },
+              { path: '/api/export/invoices/zip', tag: 'Export' },
               { path: '/api/export/inventory', tag: 'Export' },
               { path: '/api/pdf', tag: 'PDF' },
+              { path: '/api/pdf/jobs', tag: 'Worker' },
+              { path: '/api/storage/purge-cache', tag: 'CDN' },
               { path: '/api/billing/tax-config', tag: 'Config' },
               { path: '/api/billing/subscription', tag: 'Stripe' },
+              { path: '/api/referrals', tag: 'SaaS' },
+              { path: '/api/cron/trial-alerts', tag: 'Cron' },
               { path: '/api/billing/electronic-invoicing/config', tag: 'DIAN' },
               { path: '/api/billing/electronic-invoicing/send', tag: 'DIAN' },
+              { path: '/api/billing/electronic-invoicing/test-set', tag: 'DIAN' },
+              { path: '/api/billing/electronic-invoicing/status', tag: 'DIAN' },
+              { path: '/api/billing/electronic-invoicing/credit-note', tag: 'DIAN' },
+              { path: '/api/billing/electronic-invoicing/cancel', tag: 'DIAN' },
+              { path: '/api/billing/electronic-invoicing/events', tag: 'DIAN' },
               { path: '/api/inventory', tag: 'CRUD' },
               { path: '/api/inventory/[id]', tag: 'CRUD' },
               { path: '/api/inventory/movements', tag: 'CRUD' },
+              { path: '/api/suppliers', tag: 'Inventory' },
+              { path: '/api/purchase-orders', tag: 'Inventory' },
+              { path: '/api/inventory/physical-count', tag: 'Inventory' },
+              { path: '/api/inventory/transfers', tag: 'Inventory' },
               { path: '/api/accounting/expenses', tag: 'Contab.' },
               { path: '/api/accounting/cash-register', tag: 'Contab.' },
+              { path: '/api/accounting/bank-reconciliation', tag: 'Contab.' },
+              { path: '/api/accounting/payroll', tag: 'Contab.' },
               { path: '/api/accounting/periods', tag: 'Contab.' },
               { path: '/api/accounting/reports/pl', tag: 'Report' },
               { path: '/api/accounting/reports/vat', tag: 'Report' },
+              { path: '/api/accounting/reports/cashflow', tag: 'Contab.' },
+              { path: '/api/accounting/fixed-assets', tag: 'Contab.' },
+              { path: '/api/export/accounting/form-300-xml', tag: 'Export' },
+              { path: '/api/export/accounting/pl', tag: 'Export' },
+              { path: '/api/export/accounting/vat', tag: 'Export' },
+              { path: '/api/export/accounting/cashflow', tag: 'Export' },
               { path: '/api/org/branches', tag: 'SaaS' },
               { path: '/api/org/reports', tag: 'SaaS' },
               { path: '/api/superadmin/organizations', tag: 'Admin' },
               { path: '/api/webhooks/stripe', tag: 'Webhook' },
               { path: '/api/analytics/dashboard', tag: 'BI' },
+              { path: '/api/analytics/reports/email', tag: 'BI' },
               { path: '/api/analytics/export', tag: 'Export' },
             ].map((api) => (
               <div key={api.path} className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5 flex items-center gap-2">
