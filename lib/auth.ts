@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import * as OTPAuth from 'otpauth'
+import { recordAuditLog } from '@/lib/audit'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
@@ -57,16 +58,37 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (!user) {
           console.log('[Auth authorize] User not found for email:', email)
+          await recordAuditLog({
+            event: 'LOGIN_FAILED',
+            userEmail: email,
+            details: { reason: 'USER_NOT_FOUND' },
+          })
           return null
         }
         if (!user.passwordHash) {
           console.log('[Auth authorize] User has no passwordHash:', email)
+          await recordAuditLog({
+            event: 'LOGIN_FAILED',
+            userId: user.id,
+            userEmail: email,
+            details: { reason: 'NO_PASSWORD_HASH' },
+          })
           return null
         }
 
         const isValid = await bcrypt.compare(parsed.data.password, user.passwordHash)
         console.log('[Auth authorize] bcrypt.compare result for', email, ':', isValid)
-        if (!isValid) return null
+        if (!isValid) {
+          await recordAuditLog({
+            event: 'LOGIN_FAILED',
+            userId: user.id,
+            userEmail: email,
+            organizationId: user.organizationId,
+            restaurantId: user.restaurantId,
+            details: { reason: 'INVALID_PASSWORD' },
+          })
+          return null
+        }
 
         // Si tiene 2FA activado, verificar TOTP
         if (user.twoFactorEnabled && user.twoFactorSecret) {
@@ -87,9 +109,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const delta = totp.validate({ token: totpToken, window: 1 })
           if (delta === null) {
             console.log('[Auth authorize] 2FA validation failed for', email)
+            await recordAuditLog({
+              event: '2FA_FAILED',
+              userId: user.id,
+              userEmail: email,
+              organizationId: user.organizationId,
+              restaurantId: user.restaurantId,
+            })
             throw new Error('INVALID_2FA_CODE')
           }
         }
+
+        // Registrar inicio de sesión exitoso en Auditoría
+        await recordAuditLog({
+          event: 'LOGIN_SUCCESS',
+          userId: user.id,
+          userEmail: user.email,
+          organizationId: user.organizationId,
+          restaurantId: user.restaurantId,
+          details: { role: user.role },
+        })
 
         return {
           id: user.id,

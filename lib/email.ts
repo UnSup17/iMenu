@@ -287,3 +287,101 @@ export async function sendLowStockAlertEmail(
   )
 }
 
+/* ── Email: Bienvenida y Onboarding de 3 Pasos (Fase 9) ────────────────── */
+
+export async function sendOnboardingWelcomeEmail(
+  to: string,
+  restaurantName: string,
+  adminName: string
+) {
+  const url = `${APP_URL}/dashboard`
+  await sendMail(
+    to,
+    `¡Bienvenido a iMenu, ${restaurantName}! 🚀 Tu guía de primeros pasos`,
+    baseTemplate(`
+      <div style="display:inline-block;background:#f59e0b20;border:1px solid #f59e0b50;color:#f59e0b;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:700;margin-bottom:12px;">
+        🎉 Bienvenida a iMenu
+      </div>
+      <h2 style="margin:0 0 12px;font-size:22px;font-weight:800;color:#ffffff;">
+        ¡Hola, ${adminName}! Tu restaurante está listo para despegar 🚀
+      </h2>
+      <p style="margin:0 0 20px;font-size:14px;color:#a1a1aa;line-height:1.6;">
+        Estamos emocionados de acompañar a <strong style="color:#f59e0b;">${restaurantName}</strong> en su transformación digital. Para poner en marcha tu establecimiento en menos de 10 minutos, sigue estos 3 simples pasos:
+      </p>
+
+      <div style="background:#09090b;border:1px solid #27272a;border-radius:14px;padding:20px;margin-bottom:24px;">
+        <div style="display:flex;margin-bottom:16px;">
+          <div style="font-size:18px;margin-right:12px;">📋</div>
+          <div>
+            <strong style="color:#ffffff;font-size:14px;display:block;margin-bottom:2px;">Paso 1: Carga tu Menú o Sube tu PDF</strong>
+            <span style="color:#71717a;font-size:13px;line-height:1.4;">Crea tus categorías y platos estrella, o sube tu PDF y conviértelo en una carta táctil interactiva.</span>
+          </div>
+        </div>
+
+        <div style="display:flex;margin-bottom:16px;">
+          <div style="font-size:18px;margin-right:12px;">🪑</div>
+          <div>
+            <strong style="color:#ffffff;font-size:14px;display:block;margin-bottom:2px;">Paso 2: Distribuye tus Mesas</strong>
+            <span style="color:#71717a;font-size:13px;line-height:1.4;">Organiza tu salón por zonas (Terraza, Salón, Barra) con el diseñador 2D interactivo.</span>
+          </div>
+        </div>
+
+        <div style="display:flex;">
+          <div style="font-size:18px;margin-right:12px;">📱</div>
+          <div>
+            <strong style="color:#ffffff;font-size:14px;display:block;margin-bottom:2px;">Paso 3: Descarga e Imprime tus QR</strong>
+            <span style="color:#71717a;font-size:13px;line-height:1.4;">Imprime los identificadores QR con tu logotipo oficial y colócalos en cada mesa para recibir comandas en tiempo real.</span>
+          </div>
+        </div>
+      </div>
+
+      <p style="margin:0 0 24px;font-size:13px;color:#71717a;">
+        Tienes <strong>14 días de prueba gratuita</strong> con acceso completo a todas las herramientas profesionales.
+      </p>
+
+      ${btn(url, 'Iniciar Configuración en mi Panel →')}
+    `)
+  )
+}
+
+/* ── Email: Alerta de Expiración de Prueba Gratuita (Fase 9) ────────────── */
+
+export async function sendTrialExpiringEmail(
+  to: string,
+  restaurantName: string,
+  daysLeft: number,
+  upgradeUrl?: string
+) {
+  const url = upgradeUrl || `${APP_URL}/dashboard/settings/billing`
+  const urgencyTitle = daysLeft <= 1 ? '¡Tu prueba de iMenu expira MAÑANA! ⏳' : `Tu prueba gratuita de iMenu finaliza en ${daysLeft} días ⏳`
+
+  await sendMail(
+    to,
+    urgencyTitle,
+    baseTemplate(`
+      <div style="display:inline-block;background:#ef444420;border:1px solid #ef444450;color:#f87171;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:700;margin-bottom:12px;">
+        ⏳ Notificación de Suscripción
+      </div>
+      <h2 style="margin:0 0 12px;font-size:22px;font-weight:800;color:#ffffff;">
+        ${urgencyTitle}
+      </h2>
+      <p style="margin:0 0 16px;font-size:14px;color:#a1a1aa;line-height:1.6;">
+        El período de prueba de 14 días para <strong style="color:#f59e0b;">${restaurantName}</strong> está por culminar. Para garantizar que tus clientes sigan ordenando mediante los códigos QR de mesa sin interrupciones, actualiza a cualquiera de nuestros planes comerciales:
+      </p>
+
+      <ul style="background:#09090b;border:1px solid #27272a;border-radius:12px;padding:16px 20px 16px 36px;margin:0 0 24px 0;font-size:13px;color:#d4d4d8;line-height:1.6;">
+        <li>✨ <strong>Menú QR ilimitado</strong> y pedidos directos a cocina (KDS).</li>
+        <li>📊 <strong>Control de inventario y mermas</strong> con costeo de recetas.</li>
+        <li>📑 <strong>Facturación electrónica</strong> directa (DIAN Colombia / CFDI México).</li>
+        <li>🎨 <strong>Estudio de marca con White-Label</strong> y dominio propio.</li>
+      </ul>
+
+      ${btn(url, 'Elegir Plan y Mantener mi Menú Activo →')}
+      <p style="margin:16px 0 0;font-size:12px;color:#52525b;text-align:center;">
+        Sin contratos forzosos. Puedes cambiar de plan o cancelar en cualquier momento.
+      </p>
+    `)
+  )
+}
+
+

@@ -1,8 +1,9 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
-import { sendVerificationEmail } from '@/lib/email'
+import { sendVerificationEmail, sendOnboardingWelcomeEmail } from '@/lib/email'
 import { getOrCreateOrganizationSubscription } from '@/lib/subscription'
+import { applyReferralCodeToRegistration } from '@/lib/referrals'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { randomUUID } from 'crypto'
@@ -20,6 +21,7 @@ const registerSchema = z.object({
   adminName: z.string().min(2, 'Tu nombre debe tener al menos 2 caracteres').max(80),
   email: z.string().email('Email inválido'),
   password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
+  referralCode: z.string().optional().nullable(),
 })
 
 export type RegisterResult = { error?: string; field?: string }
@@ -35,6 +37,7 @@ export async function registerRestaurant(
     adminName: formData.get('adminName'),
     email: formData.get('email'),
     password: formData.get('password'),
+    referralCode: formData.get('referralCode') ? String(formData.get('referralCode')).trim() : undefined,
   }
 
   const parsed = registerSchema.safeParse(raw)
@@ -43,7 +46,7 @@ export async function registerRestaurant(
     return { error: first.message, field: String(first.path[0]) }
   }
 
-  const { restaurantName, slug, currency, adminName, email, password } = parsed.data
+  const { restaurantName, slug, currency, adminName, email, password, referralCode } = parsed.data
   const normalizedEmail = email.trim().toLowerCase()
 
   // Verificar unicidad
@@ -57,6 +60,8 @@ export async function registerRestaurant(
   const verificationToken = randomUUID()
   const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000) // +24h
 
+  let createdOrgId = ''
+
   // Transacción: Organization → Restaurant → User → TaxConfig → VerificationToken
   await prisma.$transaction(async (tx) => {
     const org = await tx.organization.create({
@@ -65,6 +70,7 @@ export async function registerRestaurant(
         slug: `org-${slug}-${Date.now()}`,
       },
     })
+    createdOrgId = org.id
 
     const restaurant = await tx.restaurant.create({
       data: {
@@ -123,11 +129,21 @@ export async function registerRestaurant(
     })
   })
 
+  // Aplicar código de referido si fue suministrado
+  if (referralCode && createdOrgId) {
+    try {
+      await applyReferralCodeToRegistration(createdOrgId, referralCode)
+    } catch (refErr) {
+      console.warn('[Register] No se pudo aplicar código de referido:', refErr)
+    }
+  }
+
   // Enviar email (o loguearlo en consola si no hay SMTP)
   try {
     await sendVerificationEmail(normalizedEmail, verificationToken)
+    await sendOnboardingWelcomeEmail(normalizedEmail, restaurantName, adminName)
   } catch (emailErr) {
-    console.error('[Register] Error al enviar email de verificación:', emailErr)
+    console.error('[Register] Error al enviar email de verificación/onboarding:', emailErr)
     // No bloqueamos el registro si el email falla
   }
 

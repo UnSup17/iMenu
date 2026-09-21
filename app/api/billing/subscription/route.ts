@@ -9,6 +9,7 @@ import { z } from 'zod'
 const checkoutSchema = z.object({
   tier: z.nativeEnum(PlanTier),
   interval: z.enum(['monthly', 'yearly']).default('monthly'),
+  currency: z.enum(['COP', 'MXN', 'USD']).optional(),
   directUpgrade: z.boolean().optional(), // Para pruebas / bypass
 })
 
@@ -94,10 +95,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: parsed.error.format() }, { status: 400 })
     }
 
-    const { tier, interval, directUpgrade } = parsed.data
+    const { tier, interval, currency, directUpgrade } = parsed.data
 
-    // Si se solicita simulación directa o upgrade en ambiente local
-    if (directUpgrade || process.env.NODE_ENV === 'development') {
+    // Si se solicita simulación directa o bypass
+    if (directUpgrade) {
       await handleSubscriptionUpgrade(orgId, tier)
       return NextResponse.json({ success: true, message: `Plan actualizado a ${tier} exitosamente` })
     }
@@ -107,8 +108,9 @@ export async function POST(req: Request) {
       organizationId: orgId,
       tier,
       interval,
-      successUrl: `${origin}/dashboard/settings/billing?success=true`,
-      cancelUrl: `${origin}/dashboard/settings/billing?canceled=true`,
+      currency,
+      successUrl: `${origin}/dashboard/settings/billing/success?tier=${tier}&interval=${interval}`,
+      cancelUrl: `${origin}/dashboard/settings/billing/cancel?tier=${tier}`,
       customerEmail: user.email || undefined,
     })
 

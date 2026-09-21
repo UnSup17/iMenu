@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import React, { useState, useTransition, Suspense } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { registerRestaurant, type RegisterResult } from './actions'
 
 const CURRENCIES = [
@@ -23,7 +24,10 @@ function slugify(text: string) {
     .slice(0, 40)
 }
 
-export default function RegisterPage() {
+function RegisterContent() {
+  const searchParams = useSearchParams()
+  const refParam = searchParams.get('ref') || ''
+
   const [step, setStep] = useState<1 | 2 | 3>(1)
   const [pending, startTransition] = useTransition()
   const [result, setResult] = useState<RegisterResult | null>(null)
@@ -33,6 +37,7 @@ export default function RegisterPage() {
   const [slug, setSlug] = useState('')
   const [currency, setCurrency] = useState('COP')
   const [slugEdited, setSlugEdited] = useState(false)
+  const [referralCode, setReferralCode] = useState(refParam.toUpperCase())
 
   // Step 2 fields
   const [adminName, setAdminName] = useState('')
@@ -74,6 +79,9 @@ export default function RegisterPage() {
     fd.append('adminName', adminName)
     fd.append('email', email)
     fd.append('password', password)
+    if (referralCode.trim()) {
+      fd.append('referralCode', referralCode.trim())
+    }
 
     startTransition(async () => {
       const res = await registerRestaurant(fd)
@@ -167,6 +175,27 @@ export default function RegisterPage() {
                     <option key={c.code} value={c.code}>{c.label}</option>
                   ))}
                 </select>
+              </Field>
+
+              <Field
+                label="Código de Invitación / Referido (Opcional)"
+                id="referralCode"
+                hint="Si fuiste invitado por otro restaurante, ingresa su código para obtener 20% de descuento en tu plan."
+              >
+                <div className="relative">
+                  <input
+                    id="referralCode"
+                    value={referralCode}
+                    onChange={e => setReferralCode(e.target.value.toUpperCase())}
+                    placeholder="IMENU-1234"
+                    className={inputCls}
+                  />
+                  {referralCode.trim().length >= 4 && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
+                      🎁 20% OFF
+                    </span>
+                  )}
+                </div>
               </Field>
 
               <button type="submit" className={btnCls}>
@@ -265,6 +294,7 @@ export default function RegisterPage() {
                   ['Restaurante', restaurantName],
                   ['Identificador', slug],
                   ['Moneda', currency],
+                  ['Código de Invitación', referralCode.trim() ? `🎁 ${referralCode.trim()} (20% OFF)` : 'Ninguno'],
                   ['Administrador', adminName],
                   ['Email', email],
                   ['Contraseña', '••••••••'],
@@ -308,6 +338,14 @@ export default function RegisterPage() {
         </p>
       </div>
     </div>
+  )
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-500 text-sm">Cargando registro...</div>}>
+      <RegisterContent />
+    </Suspense>
   )
 }
 

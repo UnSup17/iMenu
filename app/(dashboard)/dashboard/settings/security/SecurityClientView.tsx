@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 
@@ -25,6 +25,29 @@ export default function SecurityClientView({
   const [error, setError] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+
+  // Audit Logs (Fase 9)
+  const [auditLogs, setAuditLogs] = useState<any[]>([])
+  const [loadingLogs, setLoadingLogs] = useState(false)
+
+  async function fetchAuditLogs() {
+    setLoadingLogs(true)
+    try {
+      const res = await fetch('/api/security/audit-logs?limit=25')
+      if (res.ok) {
+        const json = await res.json()
+        setAuditLogs(json.logs || [])
+      }
+    } catch (err) {
+      console.error('Error al cargar logs:', err)
+    } finally {
+      setLoadingLogs(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchAuditLogs()
+  }, [])
 
   async function startSetup() {
     setError(null)
@@ -319,6 +342,120 @@ export default function SecurityClientView({
           </div>
         </div>
       )}
+
+      {/* Auditoría de Seguridad & Accesos (Fase 9) */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 sm:p-7 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🛡️</span>
+              <h2 className="text-base font-bold text-white">Registro de Auditoría & Accesos (Audit Log)</h2>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                Fase 9
+              </span>
+            </div>
+            <p className="text-xs text-zinc-400 mt-0.5">
+              Monitoreo en tiempo real de inicios de sesión, IPs de origen y eventos de seguridad de tu organización.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={fetchAuditLogs}
+            disabled={loadingLogs}
+            className="px-3.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold transition-all flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+          >
+            <span className={loadingLogs ? 'animate-spin' : ''}>🔄</span>
+            <span>Actualizar</span>
+          </button>
+        </div>
+
+        {loadingLogs && auditLogs.length === 0 ? (
+          <div className="py-8 text-center text-xs text-zinc-500">
+            Cargando registros de auditoría...
+          </div>
+        ) : auditLogs.length === 0 ? (
+          <div className="p-8 text-center bg-zinc-950/60 rounded-2xl border border-zinc-800/80 space-y-1">
+            <span className="text-2xl block">📋</span>
+            <p className="text-xs font-semibold text-zinc-300">Sin eventos de auditoría registrados</p>
+            <p className="text-[11px] text-zinc-500">
+              Los nuevos inicios de sesión y validaciones de seguridad aparecerán aquí automáticamente.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-2xl border border-zinc-800/80 bg-zinc-950/70">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-zinc-900/80 text-[11px] text-zinc-400 border-b border-zinc-800 font-semibold uppercase tracking-wider">
+                <tr>
+                  <th className="py-3 px-4">Evento</th>
+                  <th className="py-3 px-4">Usuario / Email</th>
+                  <th className="py-3 px-4">Dirección IP</th>
+                  <th className="py-3 px-4">Dispositivo</th>
+                  <th className="py-3 px-4 text-right">Fecha & Hora</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/60 font-mono text-[11px]">
+                {auditLogs.map((log) => {
+                  const isSuccess = log.event === 'LOGIN_SUCCESS'
+                  const isFailed = log.event.includes('FAILED')
+                  const isLogout = log.event === 'LOGOUT'
+
+                  return (
+                    <tr key={log.id} className="hover:bg-zinc-900/40 transition-colors">
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold font-sans ${
+                            isSuccess
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                              : isFailed
+                              ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
+                              : isLogout
+                              ? 'bg-zinc-800 text-zinc-300 border border-zinc-700'
+                              : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                          }`}
+                        >
+                          <span>{isSuccess ? '✓' : isFailed ? '✕' : isLogout ? '🚪' : 'ℹ'}</span>
+                          <span>{log.event}</span>
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-zinc-200 font-sans">
+                        <div className="font-semibold">{log.user?.name || log.userEmail || 'Desconocido'}</div>
+                        {log.user?.email && log.user?.name && (
+                          <div className="text-[10px] text-zinc-500">{log.user.email}</div>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-zinc-400">
+                        {log.ip || '127.0.0.1'}
+                      </td>
+                      <td className="py-3 px-4 text-zinc-400 max-w-xs truncate" title={log.userAgent || ''}>
+                        {log.userAgent
+                          ? log.userAgent.includes('Mobile')
+                            ? '📱 Móvil'
+                            : log.userAgent.includes('Chrome')
+                            ? '💻 Chrome'
+                            : log.userAgent.includes('Firefox')
+                            ? '🦊 Firefox'
+                            : log.userAgent.includes('Safari')
+                            ? '🧭 Safari'
+                            : '🖥️ Navegador Web'
+                          : '—'}
+                      </td>
+                      <td className="py-3 px-4 text-right text-zinc-400 whitespace-nowrap">
+                        {new Date(log.createdAt).toLocaleString('es-CO', {
+                          day: '2-digit',
+                          month: 'short',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

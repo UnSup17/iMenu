@@ -257,23 +257,35 @@ graph TD
 
 ---
 
-### Fase 9: SaaS Multitenant, Onboarding & Facturación Stripe
+### Fase 9: SaaS Multitenant, Onboarding & Facturación Stripe ✅ (Completada)
 **Objetivo**: Robustecer la plataforma SaaS para la adquisición, retención y administración de clientes.
 
-1. **Registro de auditoría de accesos (Audit Log)**:
-   - Crear modelo `AuditLog` en Prisma (`userId`, `restaurantId`, `event`, `ip`, `userAgent`, `createdAt`).
-   - Registrar cada inicio de sesión exitoso o fallido en [auth.ts](file:///c:/Users/colla/Documents/git/projects/happyfox/iMenu/lib/auth.ts) capturando IP y User-Agent desde headers de Next.js.
-2. **Emails de onboarding y alertas de trial**:
-   - Enviar email de bienvenida al registrarse con guía de primeros 3 pasos (1: Subir Menú, 2: Crear Mesas, 3: Imprimir QR).
-   - Cron o comprobación periódica para notificar por email 3 días y 1 día antes de que expire el trial de 14 días.
-3. **Facturación en moneda local (COP, MXN) en Stripe**:
-   - Parametrizar en [stripe.ts](file:///c:/Users/colla/Documents/git/projects/happyfox/iMenu/lib/stripe.ts) la moneda según el país de la organización (`cop` o `mxn`), evitando cobros forzados en USD.
-4. **Páginas de éxito y error de checkout Stripe**:
-   - Crear rutas `/dashboard/settings/billing/success` y `/dashboard/settings/billing/cancel` con tarjetas de estado, felicitaciones de activación del plan y siguientes pasos.
-5. **Revocación automática de sedes excedentes al degradar plan**:
-   - Al recibir webhook `customer.subscription.updated` o degradar de ENTERPRISE/PRO a BASIC, deshabilitar automáticamente (`isActive: false`) las sucursales que sobrepasen el límite permitido.
-6. **Programa de referidos**:
-   - Permitir a los restaurantes generar un código de invitación para nuevos clientes con descuento en suscripción SaaS.
+1. **Registro de auditoría de accesos (Audit Log)** ✅:
+   - Modelo `AuditLog` en Prisma y base de datos con índices de consulta por usuario, organización, restaurante y evento.
+   - Módulo `lib/audit.ts` con helpers `recordAuditLog` y `getRecentAuditLogs` extrayendo automáticamente IP (`x-forwarded-for`, `x-real-ip`, Cloudflare) y User-Agent vía headers de Next.js.
+   - Integrado en `lib/auth.ts` para registrar `LOGIN_SUCCESS`, `LOGIN_FAILED` y `2FA_FAILED`.
+   - Endpoint `/api/security/audit-logs` y tabla visual en `/dashboard/settings/security` con badges de eventos, badges de dispositivos (Chrome/Safari/Firefox/Móvil), IP y refresco en tiempo real.
+2. **Emails de onboarding y alertas de trial** ✅:
+   - Plantillas visuales en `lib/email.ts`: `sendOnboardingWelcomeEmail` (guía de 3 pasos: 1: Menú Digital, 2: Mesas, 3: QR) y `sendTrialExpiringEmail` (alertas de urgencia 3 días y 1 día antes con botón directo a facturación).
+   - `app/register/actions.ts` envía automáticamente la bienvenida al registrarse.
+   - Endpoint `/api/cron/trial-alerts` para ejecución programada con inspección de fechas de corte y registro en `AuditLog`.
+3. **Facturación en moneda local (COP, MXN, USD) en Stripe** ✅:
+   - Matriz multidivisa en `lib/subscription.ts` con función `getPlanPrice(tier, interval, currency)`.
+   - Configuración en `lib/stripe.ts` para inferir o recibir la moneda local del restaurante/organización y pasarla a Stripe Checkout (`currency: 'cop' | 'mxn' | 'usd'`).
+   - Selector visual de divisa en `/dashboard/settings/billing` con cálculo reactivo de tarifas.
+4. **Páginas de éxito y cancelación de checkout Stripe** ✅:
+   - Pantalla de éxito en `/dashboard/settings/billing/success` con confirmación, badges de beneficios desbloqueados y accesos directos al panel.
+   - Pantalla de cancelación en `/dashboard/settings/billing/cancel` con explicación de no cargo, preservación de datos y botones de reintento y soporte WhatsApp.
+   - Endpoint `/api/billing/subscription` conectado con ambos destinos.
+5. **Revocación automática de sedes excedentes al degradar plan** ✅:
+   - Función `enforceBranchLimitOnDowngrade` en `lib/subscription.ts` que conserva activas las sucursales más antiguas según el cupo del nuevo plan y desactiva las excedentes (`isActive: false`), registrando auditoría `BRANCHES_DEACTIVATED`.
+   - Integrado en `lib/stripe.ts` (`handleSubscriptionUpgrade`) y en los webhooks de Stripe `app/api/webhooks/stripe/route.ts` ante `customer.subscription.updated` y `customer.subscription.deleted`.
+6. **Programa de referidos** ✅:
+   - Modelo `ReferralCode` en Prisma con unicidad de códigos, conteo de usos y porcentajes de descuento.
+   - Biblioteca `lib/referrals.ts` (`getOrCreateReferralCode`, `validateReferralCode`, `applyReferralCodeToRegistration`, `getReferralStats`).
+   - Endpoint `/api/referrals` para estadísticas de referidos y validación pública de códigos.
+   - Campo de código de referido en `/register` (con detección automática vía URL `?ref=XYZ` y badge de 20% OFF) procesado en `registerRestaurant`.
+   - Dashboard de referidos en `/dashboard/settings/billing` con código de invitación, botón de copiado al portapapeles, botón de compartir en WhatsApp y métricas en vivo.
 
 ---
 

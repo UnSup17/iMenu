@@ -7,6 +7,10 @@ export interface PlanDetails {
   description: string
   priceMonthlyCOP: number
   priceYearlyCOP: number
+  priceMonthlyMXN: number
+  priceYearlyMXN: number
+  priceMonthlyUSD: number
+  priceYearlyUSD: number
   maxBranches: number // -1 = ilimitado
   features: string[]
   stripePriceIdMonthly?: string
@@ -20,6 +24,10 @@ export const PLAN_CONFIGS: Record<PlanTier, PlanDetails> = {
     description: 'Ideal para 1 restaurante o cafetería que inicia con menú digital y facturación.',
     priceMonthlyCOP: 99000,
     priceYearlyCOP: 990000,
+    priceMonthlyMXN: 499,
+    priceYearlyMXN: 4990,
+    priceMonthlyUSD: 29,
+    priceYearlyUSD: 290,
     maxBranches: 1,
     features: [
       '1 Restaurante / Sucursal',
@@ -35,6 +43,10 @@ export const PLAN_CONFIGS: Record<PlanTier, PlanDetails> = {
     description: 'Para cadenas y restaurantes en crecimiento con control contable e inventario avanzado.',
     priceMonthlyCOP: 249000,
     priceYearlyCOP: 2490000,
+    priceMonthlyMXN: 1199,
+    priceYearlyMXN: 11990,
+    priceMonthlyUSD: 69,
+    priceYearlyUSD: 690,
     maxBranches: 5,
     features: [
       'Hasta 5 Restaurantes / Sucursales',
@@ -51,6 +63,10 @@ export const PLAN_CONFIGS: Record<PlanTier, PlanDetails> = {
     description: 'Para grandes cadenas, hoteles y operaciones a gran escala con integración DIAN directa.',
     priceMonthlyCOP: 499000,
     priceYearlyCOP: 4990000,
+    priceMonthlyMXN: 2499,
+    priceYearlyMXN: 24990,
+    priceMonthlyUSD: 139,
+    priceYearlyUSD: 1390,
     maxBranches: 999,
     features: [
       'Sucursales y restaurantes ilimitados',
@@ -60,6 +76,47 @@ export const PLAN_CONFIGS: Record<PlanTier, PlanDetails> = {
       'Gerente de cuenta y SLA 99.9%',
     ],
   },
+}
+
+export type SupportedBillingCurrency = 'COP' | 'MXN' | 'USD'
+
+export function getPlanPrice(
+  tier: PlanTier,
+  interval: 'monthly' | 'yearly',
+  currency: SupportedBillingCurrency = 'COP'
+): { amount: number; currency: string; formatted: string } {
+  const plan = PLAN_CONFIGS[tier]
+  const isYearly = interval === 'yearly'
+
+  const curr = (currency || 'COP').toUpperCase() as SupportedBillingCurrency
+
+  switch (curr) {
+    case 'MXN': {
+      const amount = isYearly ? plan.priceYearlyMXN : plan.priceMonthlyMXN
+      return {
+        amount,
+        currency: 'mxn',
+        formatted: `$${amount.toLocaleString('es-MX')} MXN`,
+      }
+    }
+    case 'USD': {
+      const amount = isYearly ? plan.priceYearlyUSD : plan.priceMonthlyUSD
+      return {
+        amount,
+        currency: 'usd',
+        formatted: `$${amount.toLocaleString('en-US')} USD`,
+      }
+    }
+    case 'COP':
+    default: {
+      const amount = isYearly ? plan.priceYearlyCOP : plan.priceMonthlyCOP
+      return {
+        amount,
+        currency: 'cop',
+        formatted: `$${amount.toLocaleString('es-CO')} COP`,
+      }
+    }
+  }
 }
 
 /**
@@ -138,4 +195,64 @@ export async function checkBranchLimit(organizationId: string): Promise<{
     maxAllowed: plan.maxBranches,
     tier: sub.tier,
   }
+}
+
+/**
+ * Deshabilita automáticamente las sucursales excedentes al degradar plan.
+ */
+export async function enforceBranchLimitOnDowngrade(
+  organizationId: string,
+  newTier: PlanTier
+): Promise<{ deactivatedCount: number; activeCount: number }> {
+  const plan = PLAN_CONFIGS[newTier]
+  if (plan.maxBranches === -1 || plan.maxBranches >= 999) {
+    return { deactivatedCount: 0, activeCount: 0 }
+  }
+
+  // Obtener sucursales ordenadas por fecha de creación (las más antiguas se conservan)
+  const branches = await prisma.restaurant.findMany({
+    where: { organizationId },
+    orderBy: { createdAt: 'asc' },
+  })
+
+  let activeCount = 0
+  let deactivatedCount = 0
+
+  for (let i = 0; i < branches.length; i++) {
+    const branch = branches[i]
+    if (i < plan.maxBranches) {
+      // Conservar activa
+      if (!branch.isActive) {
+        await prisma.restaurant.update({
+          where: { id: branch.id },
+          data: { isActive: true },
+        })
+      }
+      activeCount++
+    } else {
+      // Excedente -> Desactivar
+      if (branch.isActive) {
+        await prisma.restaurant.update({
+          where: { id: branch.id },
+          data: { isActive: false },
+        })
+        deactivatedCount++
+      }
+    }
+  }
+
+  if (deactivatedCount > 0) {
+    const { recordAuditLog } = await import('@/lib/audit')
+    await recordAuditLog({
+      organizationId,
+      event: 'BRANCHES_DEACTIVATED',
+      details: {
+        newTier,
+        maxAllowed: plan.maxBranches,
+        deactivatedCount,
+      },
+    })
+  }
+
+  return { deactivatedCount, activeCount }
 }

@@ -156,11 +156,14 @@ model Organization {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
-  restaurants  Restaurant[]
-  foodCourts   FoodCourt[]
-  users        User[]
-  subscription Subscription?
-  brandTheme   BrandTheme?
+  restaurants   Restaurant[]
+  foodCourts    FoodCourt[]
+  users         User[]
+  subscription  Subscription?
+  brandTheme    BrandTheme?
+  referredByCode String?
+  referralCodes ReferralCode[]
+  auditLogs     AuditLog[]
 
   @@map("organizations")
 }
@@ -177,6 +180,7 @@ model Subscription {
   stripeCustomerId   String?
   stripeSubId        String?      @unique
   cancelAtPeriodEnd  Boolean      @default(false)
+  discountPercent    Int          @default(0)
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
 
@@ -231,6 +235,7 @@ model Restaurant {
   suppliers               Supplier[]               // Proveedores (Fase 3)
   purchaseOrders          PurchaseOrder[]          // Órdenes de compra (Fase 3)
   fixedAssets             FixedAsset[]             // Activos fijos y depreciación (Fase 4)
+  auditLogs               AuditLog[]
 
   @@map("restaurants")
 }
@@ -316,6 +321,7 @@ model User {
   cashRegisterCloses      CashRegisterClose[] @relation("CashRegisterCloser")
   accountingPeriodsClosed AccountingPeriod[]  @relation("PeriodCloser")
   purchaseOrdersCreated   PurchaseOrder[]     @relation("PurchaseOrderCreator")
+  auditLogs               AuditLog[]
 
   @@map("users")
 }
@@ -1266,4 +1272,51 @@ model FoodCourtTablePayment {
   @@index([restaurantId])
   @@index([sessionId])
   @@map("food_court_table_payments")
+}
+
+// ============================================================
+// Auditoría de Seguridad & Acceso (Fase 9)
+// ============================================================
+
+model AuditLog {
+  id             String        @id @default(uuid())
+  userId         String?
+  user           User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userEmail      String?
+  restaurantId   String?
+  restaurant     Restaurant?   @relation(fields: [restaurantId], references: [id], onDelete: SetNull)
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  event          String        // LOGIN_SUCCESS, LOGIN_FAILED, LOGOUT, 2FA_ENABLED, 2FA_FAILED, PLAN_UPGRADE, PLAN_DOWNGRADE, BRANCHES_DEACTIVATED
+  ip             String?
+  userAgent      String?
+  details        String?       @db.Text
+  createdAt      DateTime      @default(now())
+
+  @@index([userId, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([restaurantId, createdAt])
+  @@index([event, createdAt])
+  @@map("audit_logs")
+}
+
+// ============================================================
+// Programa de Referidos y Códigos Promocionales (Fase 9)
+// ============================================================
+
+model ReferralCode {
+  id              String       @id @default(uuid())
+  code            String       @unique
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  discountPercent Int          @default(20)
+  uses            Int          @default(0)
+  maxUses         Int?
+  isActive        Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@index([code])
+  @@map("referral_codes")
 }
